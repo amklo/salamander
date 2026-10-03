@@ -1,0 +1,33 @@
+apply plugin: 'application'
+
+// Assets live in the root /assets folder and are added to the classpath,
+// so Gdx.files.internal() works from IntelliJ, Gradle and the packaged jar.
+sourceSets.main.resources.srcDirs = [rootProject.file('assets').path]
+
+application {
+    mainClass = 'com.example.salamander.lwjgl3.Lwjgl3Launcher'
+}
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:$gdxControllersVersion"
+}
+
+tasks.named('run') {
+    workingDir = rootProject.file('assets')
+    ignoreExitValue = true
+    if (System.getProperty('os.name').toLowerCase().contains('mac')) {
+        jvmArgs += '-XstartOnFirstThread'
+    }
+}
+
+tasks.register('dist', Jar) {
+    dependsOn classes
+    archiveFileName = "${appName}-${version}.jar"
+    from { configurations.runtimeClasspath.collect { zipTree(it) } }
+    from sourceSets.main.output
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': application.mainClass }
+}

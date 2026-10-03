@@ -1,0 +1,2 @@
+rootProject.name = 'salamander'
+include 'core', 'lwjgl3'

@@ -1,0 +1,22 @@
+allprojects {
+    apply plugin: 'idea'
+    version = '1.0.0'
+    ext {
+        appName = 'salamander'
+        gdxVersion = '1.12.1'
+        gdxControllersVersion = '2.2.3'
+    }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        google()
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+    tasks.withType(JavaCompile).configureEach {
+        options.release = 11
+        options.encoding = 'UTF-8'
+    }
+}
