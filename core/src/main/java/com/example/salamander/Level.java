@@ -1,297 +1,380 @@
 package com.example.salamander;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Random;
+import java.util.function.Function;
 
 /**
- * A level is a strip of 16px columns, each with a floor height and a ceiling height (in tiles).
- * Terrain is assembled from segments (open, hills, tunnel, peak, crusher tunnel); hazards and
- * enemy waves are then generated on top of it. Tweak the segment lists in l1()/l2()/l3() to
- * redesign a stage.
+ * One stage, loaded from a Tiled map: assets/maps/stage1.tmx, stage2.tmx, stage3.tmx.
+ * See the README ("Editing levels in Tiled") for how the layers and objects are used.
+ *
+ * World coordinates: pixels, origin at the bottom-left of the map, y pointing up (Tiled's y points down;
+ * the conversion happens here). Collision is a grid with one cell per map tile.
  */
 public class Level {
-    public static final int ROWS = SalamanderGame.H / SalamanderGame.T;   // 17
-    private static final String[] NAMES = {"CAVERN RUN", "MAGMA RIDGE", "IRON CITADEL"};
-    private static final float[] SPEEDS = {46f, 52f, 56f};
-
     public static class Spawn {
         public float x, y, phase;
         public Enemy.Type type;
         public int group, groupSize;
         public boolean carrier;
+        /** Walkers: walks upside down on the ceiling / runs in from behind (left edge). */
+        public boolean ceiling, behind;
+        /** Spawns when the camera's right edge reaches this x (spawns are sorted by it). */
+        public float trigger;
     }
 
-    public final int index;
-    public final String name;
-    public final float baseSpeed;
-    public int cols;
-    public int[] floor, ceil;
-    public float[] speedMul;
-    public float stopX;                 // scrolling stops here; the boss arena starts
-    public float[] checkpoints;
-    public final ArrayList<Spawn> spawns = new ArrayList<>();
-    public final ArrayList<float[]> rocks = new ArrayList<>();       // {x}
-    public final ArrayList<float[]> volcanoes = new ArrayList<>();   // {x}
-    public final ArrayList<float[]> crushers = new ArrayList<>();    // {x, fromCeil, phase, minLen, maxLen, speed}
+    /** A background picture from an image layer (the stage art), bottom-left corner in world coordinates. */
+    public static class Art { public String image; public float x, y, w, h; }
 
-    private final ArrayList<Integer> fl = new ArrayList<>(), ce = new ArrayList<>();
-    private final ArrayList<Float> sm = new ArrayList<>();
-    private int minGap = 7;
-    private float curMul = 1f;
+    /** Stage 1 teeth: position when fully out, size, picture and timing. */
+    public static class Tooth { public float x, y, w, h, delay, period; public boolean ceiling; public String image; }
+
+    /** Floating shootable rock: bottom-left corner, size, picture. */
+    public static class Asteroid { public float x, y, w, h; public String image; }
+
+    /** Piston crusher: left x, the surface it is mounted on (ceiling underside or floor top), motion. */
+    public static class Crusher { public float x, baseY, phase, minLen, maxLen, speed; public boolean ceiling; }
+
+    private static final int W = SalamanderGame.W, H = SalamanderGame.H;
+
+    public final int index;
+    public String name = "", music, bossMusic = "boss.mid", background;
+    public float baseSpeed = 46f;
+    public float worldW, worldH;
+
+    // ---- collision grid (one cell per map tile), row 0 = bottom
+    public float cell;
+    public int gCols, gRows;
+    private byte[] grid;
+
+    // ---- drawing
+    public TiledMap tiled;
+    public final ArrayList<Art> art = new ArrayList<>();
+    /** Visible terrain tiles (layer "terrain"), gid per cell, row 0 = bottom; null if the map has none. */
+    public int[] terrain;
+
+    // ---- destructible bricks (layer "bricks"): one per cell, row 0 = bottom
+    public boolean[] bricks;
+    /** Seconds until a shot-away brick grows back (0 = it stays as it is). */
+    public float[] brickRegrow;
+    public static final float BRICK_REGROW_TIME = 3f;
+
+    // ---- objects
+    public final ArrayList<Spawn> spawns = new ArrayList<>();
+    public final ArrayList<Asteroid> asteroids = new ArrayList<>();
+    public final ArrayList<Tooth> teeth = new ArrayList<>();
+    public final ArrayList<float[]> rocks = new ArrayList<>();       // {left x, bottom y}
+    public final ArrayList<float[]> volcanoes = new ArrayList<>();   // {centre x, floor y}
+    public final ArrayList<Crusher> crushers = new ArrayList<>();
+
+    // ---- camera path: points {left x, bottom y, speed multiplier for the segment starting there}
+    private float[][] path;
+    private float[] pathT;
+    /** Distance along the path where scrolling stops and the boss arena starts. */
+    public float stopT;
+    /** Checkpoints as distance travelled along the path. */
+    public float[] checkpoints;
 
     public static Level build(int idx) {
+        return load(idx, "maps/stage" + (idx + 1) + ".tmx", p -> com.badlogic.gdx.Gdx.files.internal(p).readBytes());
+    }
+
+    /** Loads a stage; reader reads files relative to the assets folder (so tools and tests can use it too). */
+    public static Level load(int idx, String path, Function<String, byte[]> reader) {
+        TiledMap m = TiledMap.load(path, reader);
         Level l = new Level(idx);
-        switch (idx) {
-            case 0: l.l1(); break;
-            case 1: l.l2(); break;
-            default: l.l3(); break;
+        l.tiled = m;
+        if (m.tileWidth != m.tileHeight) throw new IllegalArgumentException(path + ": tiles must be square");
+        l.cell = m.tileWidth;
+        l.gCols = m.width;
+        l.gRows = m.height;
+        l.worldW = l.gCols * l.cell;
+        l.worldH = l.gRows * l.cell;
+        l.name = m.props.getOrDefault("name", "STAGE " + (idx + 1));
+        l.baseSpeed = Float.parseFloat(m.props.getOrDefault("speed", "46"));
+        l.music = m.props.get("music");
+        l.bossMusic = m.props.getOrDefault("bossMusic", "boss.mid");
+        l.background = m.props.get("background");
+
+        // tile layers: terrain (drawn + solid), collision (solid, not drawn), bricks (destructible)
+        l.grid = new byte[l.gCols * l.gRows];
+        for (TiledMap.TileLayer tl : m.tileLayers) {
+            String n = tl.name.toLowerCase();
+            boolean isTerrain = n.equals("terrain"), isCollision = n.equals("collision"), isBricks = n.equals("bricks");
+            if (!isTerrain && !isCollision && !isBricks) continue;
+            if (isTerrain) l.terrain = new int[l.gCols * l.gRows];
+            if (isBricks) { l.bricks = new boolean[l.gCols * l.gRows]; l.brickRegrow = new float[l.bricks.length]; }
+            for (int tr = 0; tr < l.gRows; tr++) {
+                int r = l.gRows - 1 - tr;   // Tiled row 0 is the top
+                for (int c = 0; c < l.gCols; c++) {
+                    int gid = tl.gids[tr * l.gCols + c];
+                    if ((gid & TiledMap.GID_MASK) == 0) continue;
+                    int i = r * l.gCols + c;
+                    if (isTerrain) { l.terrain[i] = gid; l.grid[i] = 1; }
+                    if (isCollision) l.grid[i] = 1;
+                    if (isBricks) l.bricks[i] = true;
+                }
+            }
         }
-        l.finish();
+        for (TiledMap.ImageLayer il : m.imageLayers) {
+            if (!il.visible) continue;
+            Art a = new Art();
+            a.image = il.image;
+            a.w = il.width; a.h = il.height;
+            a.x = il.offsetX;
+            a.y = l.worldH - il.offsetY - il.height;
+            l.art.add(a);
+        }
+        l.readObjects();
         return l;
     }
 
-    private Level(int idx) {
-        index = idx;
-        name = NAMES[idx];
-        baseSpeed = SPEEDS[idx];
-    }
+    private Level(int idx) { index = idx; }
 
-    // ---------------------------------------------------------------- terrain queries
+    // ---------------------------------------------------------------- objects
 
-    private int colAt(float wx) {
-        int c = (int) Math.floor(wx / SalamanderGame.T);
-        return c < 0 ? 0 : (c >= cols ? cols - 1 : c);
-    }
+    private void readObjects() {
+        ArrayList<float[]> cpPoints = new ArrayList<>();
+        int group = 1;
+        for (TiledMap.ObjectLayer layer : tiled.objectLayers) {
+            for (TiledMap.MapObject o : layer.objects) {
+                TiledMap.Tile tile = o.gid != 0 ? tiled.tile(o.gid) : null;
+                String type = !o.type.isEmpty() ? o.type : (tile != null ? tile.type : "");
+                if (type.isEmpty()) type = o.name;
+                type = type.toLowerCase();
+                // tile properties are the defaults, the object's own properties win
+                TiledMap.MapObject p = new TiledMap.MapObject();
+                if (tile != null) p.props.putAll(tile.props);
+                p.props.putAll(o.props);
+                boolean flippedV = (o.gid & TiledMap.FLIP_V) != 0;
 
-    public float floorTop(float wx) { return floor[colAt(wx)] * (float) SalamanderGame.T; }
+                float w = o.width, h = o.height;
+                if (o.gid != 0 && tile != null && w == 0) { w = tile.width; h = tile.height; }
+                // bottom-left corner in world coordinates (tile objects are anchored bottom-left in Tiled)
+                float left = o.x;
+                float bottom = o.gid != 0 ? worldH - o.y : worldH - o.y - h;
+                float top = bottom + h;
 
-    public float ceilBottom(float wx) { return SalamanderGame.H - ceil[colAt(wx)] * (float) SalamanderGame.T; }
-
-    public float speedAt(float wx) { return speedMul[colAt(wx)]; }
-
-    /** True if the rectangle touches floor or ceiling terrain. */
-    public boolean hits(float x, float y, float w, float h) {
-        int c0 = colAt(x), c1 = colAt(x + w);
-        for (int c = c0; c <= c1; c++) {
-            if (floor[c] * 16f > y || SalamanderGame.H - ceil[c] * 16f < y + h) return true;
-        }
-        return false;
-    }
-
-    /** Open vertical range {lo, hi} (pixels) that is free across columns c0..c1. */
-    private float[] openRange(int c0, int c1) {
-        c0 = Math.max(0, c0);
-        c1 = Math.min(cols - 1, c1);
-        int f = 0, c = 0;
-        for (int i = c0; i <= c1; i++) { f = Math.max(f, floor[i]); c = Math.max(c, ceil[i]); }
-        return new float[]{f * 16f, SalamanderGame.H - c * 16f};
-    }
-
-    // ---------------------------------------------------------------- segment builders
-
-    private void col(int tf, int tc) {
-        if (!fl.isEmpty()) {   // limit slope to one tile per column so terrain stays flyable
-            int pf = fl.get(fl.size() - 1), pc = ce.get(ce.size() - 1);
-            tf = Math.max(pf - 1, Math.min(pf + 1, tf));
-            tc = Math.max(pc - 1, Math.min(pc + 1, tc));
-        }
-        tf = Math.max(0, tf);
-        tc = Math.max(0, tc);
-        int limit = ROWS - minGap;
-        while (tf + tc > limit) { if (tf >= tc) tf--; else tc--; }
-        fl.add(tf); ce.add(tc); sm.add(curMul);
-    }
-
-    private void open(int len, int f, int c) {
-        minGap = 7;
-        for (int i = 0; i < len; i++) col(f, c);
-    }
-
-    private void hills(int len, int fb, int fa, int cb, int ca, int period, double ph) {
-        minGap = 7;
-        for (int i = 0; i < len; i++) {
-            double a = 2 * Math.PI * i / period;
-            col((int) Math.round(fb + fa * Math.sin(a + ph)),
-                (int) Math.round(cb + ca * Math.sin(a * 0.7 + ph + 1.3)));
-        }
-    }
-
-    private void tunnel(int len, int gap, int amp, int period, float mul) {
-        minGap = gap;
-        curMul = mul;
-        double mid = ROWS / 2.0;
-        for (int i = 0; i < len; i++) {
-            double c = mid + amp * Math.sin(2 * Math.PI * i / period);
-            col((int) Math.round(c - gap / 2.0), (int) Math.round(ROWS - (c + gap / 2.0)));
-        }
-        curMul = 1f;
-        minGap = 7;
-    }
-
-    private void peak(int len, int base, int height, boolean volcano) {
-        minGap = 7;
-        int start = fl.size();
-        for (int i = 0; i < len; i++) {
-            double tri = 1.0 - Math.abs(2.0 * i / (len - 1) - 1.0);
-            col(base + (int) Math.round(height * Math.min(1.0, tri * 1.25)), 1);
-        }
-        if (volcano) volcanoes.add(new float[]{(start + len / 2) * 16f + 8f});
-    }
-
-    private void crushTunnel(int len, int gap, int spacing, float mul) {
-        minGap = gap;
-        curMul = mul;
-        int f = (ROWS - gap) / 2, c = ROWS - gap - f;
-        int start = fl.size();
-        for (int i = 0; i < len; i++) col(f, c);
-        int k = 0;
-        for (int i = 5; i < len - 4; i += spacing) {
-            crushers.add(new float[]{(start + i) * 16f, k % 2 == 0 ? 1f : 0f, k * 1.7f, 12f, gap * 16f - 26f, 1.6f});
-            k++;
-        }
-        curMul = 1f;
-        minGap = 7;
-    }
-
-    private void rocks(int fromCol, int toCol, int spacing) {
-        for (int c = fromCol + 3; c < toCol - 2; c += spacing) rocks.add(new float[]{c * 16f});
-    }
-
-    // ---------------------------------------------------------------- the three stages
-
-    private void l1() {
-        open(24, 1, 1);
-        hills(40, 2, 2, 1, 1, 28, 0);
-        int s = fl.size(); tunnel(28, 9, 1, 22, 1f); rocks(s, fl.size(), 6);
-        peak(26, 1, 6, false);
-        hills(36, 3, 2, 2, 2, 22, 1.0);
-        s = fl.size(); tunnel(34, 7, 2, 17, 1f); rocks(s, fl.size(), 5);
-        open(16, 2, 2);
-        hills(32, 2, 3, 2, 2, 18, 0.5);
-        peak(24, 2, 5, false);
-        open(14, 1, 1);
-    }
-
-    private void l2() {
-        open(20, 1, 2);
-        peak(28, 1, 7, true);
-        hills(28, 3, 3, 1, 1, 16, 0);
-        peak(30, 2, 7, true);
-        peak(26, 1, 6, true);
-        int s = fl.size(); tunnel(28, 8, 2, 14, 1f); rocks(s, fl.size(), 5);
-        hills(26, 3, 3, 2, 2, 12, 0.4);
-        peak(30, 2, 6, true);
-        hills(24, 3, 3, 2, 2, 12, 0.7);
-        peak(34, 1, 8, true);
-        open(14, 1, 1);
-    }
-
-    private void l3() {
-        open(20, 2, 2);
-        tunnel(30, 7, 2, 16, 1.25f);
-        open(8, 4, 5);
-        crushTunnel(48, 8, 10, 1f);
-        open(8, 4, 5);
-        tunnel(36, 6, 2, 12, 1.3f);
-        open(8, 5, 5);
-        crushTunnel(40, 7, 9, 1f);
-        open(10, 2, 2);
-        hills(30, 3, 3, 3, 3, 14, 0);
-        int s = fl.size(); tunnel(32, 6, 3, 10, 1.35f); rocks(s, fl.size(), 6);
-        open(16, 1, 1);
-    }
-
-    // ---------------------------------------------------------------- finishing: arena, checkpoints, waves
-
-    private void finish() {
-        open(10, 1, 1);
-        int arenaStart = fl.size();
-        open(40, 1, 1);          // flat boss arena
-        cols = fl.size();
-        floor = new int[cols]; ceil = new int[cols]; speedMul = new float[cols];
-        for (int i = 0; i < cols; i++) { floor[i] = fl.get(i); ceil[i] = ce.get(i); speedMul[i] = sm.get(i); }
-        stopX = arenaStart * 16f;
-        checkpoints = new float[]{0f, stopX * 0.28f, stopX * 0.52f, stopX * 0.76f, stopX - 640f};
-        genSpawns();
-    }
-
-    private int nearestFlat(int col, boolean onFloor) {
-        for (int d = 0; d < 14; d++) {
-            for (int s = -1; s <= 1; s += 2) {
-                int c = col + d * s;
-                if (c < 2 || c >= cols - 2) continue;
-                int[] a = onFloor ? floor : ceil;
-                if (a[c] == a[c - 1] && a[c] == a[c + 1]) return c;
+                if (o.polyline != null && (type.equals("path") || o.name.equalsIgnoreCase("path"))) {
+                    readPath(o);
+                    continue;
+                }
+                switch (type) {
+                    case "fan":
+                    case "rusher": {
+                        boolean fan = type.equals("fan");
+                        int n = p.prop("count", fan ? 5 : 3);
+                        float phase = p.prop("phase", (o.id * 2.39996f) % 6.2832f);
+                        for (int i = 0; i < n; i++) {
+                            Spawn s = spawn(fan ? Enemy.Type.FAN : Enemy.Type.RUSHER, left + i * (fan ? 18f : 40f),
+                                    bottom + h / 2f, group, n, p.prop("drop", true));
+                            s.phase = phase;
+                        }
+                        group++;
+                        break;
+                    }
+                    case "walker": {
+                        boolean ceiling = p.prop("ceiling", flippedV);
+                        Spawn s = spawn(Enemy.Type.WALKER, left, ceiling ? top - 4f : bottom + 4f, group++, 1, p.prop("drop", true));
+                        s.ceiling = ceiling;
+                        s.behind = p.prop("behind", false);
+                        if (s.behind) s.trigger = left + 20f + W + 40f;   // runs in once the camera's left edge passes it
+                        break;
+                    }
+                    case "turret": {
+                        boolean ceiling = p.prop("ceiling", flippedV);
+                        spawn(ceiling ? Enemy.Type.TURRET_CEIL : Enemy.Type.TURRET_FLOOR, left,
+                                ceiling ? top - 4f : bottom + 4f, group++, 1, p.prop("drop", false));
+                        break;
+                    }
+                    case "asteroid": {
+                        Asteroid a = new Asteroid();
+                        a.x = left; a.y = bottom; a.w = w; a.h = h;
+                        a.image = tile != null && tile.image != null ? tile.image : "sprites/asteroid_big.png";
+                        asteroids.add(a);
+                        break;
+                    }
+                    case "tooth": {
+                        Tooth t = new Tooth();
+                        t.x = left; t.y = bottom; t.w = w; t.h = h;
+                        t.ceiling = p.prop("ceiling", true);
+                        t.delay = p.prop("delay", 1f);
+                        t.period = Math.max(0.5f, p.prop("period", 3.5f));
+                        t.image = tile != null ? tile.image : null;
+                        if (t.image != null) teeth.add(t);
+                        break;
+                    }
+                    case "rock": rocks.add(new float[]{left, bottom}); break;
+                    case "volcano": volcanoes.add(new float[]{left + w / 2f, bottom}); break;
+                    case "crusher": {
+                        Crusher c = new Crusher();
+                        c.x = left;
+                        c.ceiling = p.prop("ceiling", true);
+                        c.baseY = c.ceiling ? top : bottom;
+                        c.phase = p.prop("phase", 0f);
+                        c.minLen = p.prop("minLen", 12f);
+                        c.maxLen = p.prop("maxLen", 102f);
+                        c.speed = p.prop("speed", 1.6f);
+                        crushers.add(c);
+                        break;
+                    }
+                    case "checkpoint": cpPoints.add(new float[]{o.x + w / 2f, worldH - o.y - (o.gid != 0 ? -h / 2f : h / 2f)}); break;
+                    default: break;   // anything else is a note for the level designer
+                }
             }
         }
-        return Math.max(2, Math.min(cols - 3, col));
-    }
-
-    private void genSpawns() {
-        Random r = new Random(77 + index * 31L);
-        int[][] weights = {{6, 3, 2, 3}, {4, 2, 3, 4}, {4, 2, 3, 4}};   // FAN, WALKER, TURRET, RUSHER
-        int[] w = weights[index];
-        int total = w[0] + w[1] + w[2] + w[3];
-        float x = 560f;
-        int gid = 1, wave = 0;
-        while (x < stopX - 420f) {
-            int col = Math.min(cols - 1, (int) ((x + SalamanderGame.W) / 16f));
-            float[] gap = openRange(col - 6, col + 24);
-            float lo = gap[0], hi = gap[1], span = hi - lo;
-            float mid = (lo + hi) / 2f;
-            int pick = r.nextInt(total), kind = 0;
-            while (pick >= w[kind]) { pick -= w[kind]; kind++; }
-            boolean forced = wave++ % 3 == 0;               // turrets: a steady share carry capsules
-
-            if (kind == 0) {                                   // sine-wave fan formation
-                flyingWave(r, x + 520f, false, lo, hi, gid++);
-            } else if (kind == 3) {                            // rushers
-                flyingWave(r, x + 520f, true, lo, hi, gid++);
-            } else {                                           // ground / ceiling emplacement
-                addGround(r, x + 520f, kind == 1, kind == 2 && r.nextBoolean(), gid++, forced || r.nextInt(4) == 0);
-                // ...always escorted by a flying wave
-                flyingWave(r, x + 520f + 110f, r.nextInt(3) == 0, lo, hi, gid++);
-            }
-            // companion emplacement a little further on, so there is always something on the terrain
-            if ((kind == 0 || kind == 3) && r.nextInt(3) != 0) {
-                addGround(r, x + 520f + 230f, r.nextBoolean(), r.nextBoolean(), gid++, r.nextInt(4) == 0);
-            }
-            x += (index == 2 ? 200f : 240f) + r.nextInt(160);
+        if (path == null) {   // no path drawn: scroll straight along the middle of the map
+            setPath(new float[][]{{0f, Math.max(0f, (worldH - H) / 2f), 1f}, {Math.max(0f, worldW - W), Math.max(0f, (worldH - H) / 2f), 0f}});
         }
-        Collections.sort(spawns, (p, q) -> Float.compare(p.x, q.x));
-    }
-
-    /** A flying wave (5 sine-wave fans or 3 rushers). Destroying the whole wave always drops a capsule. */
-    private void flyingWave(Random r, float worldX, boolean rushers, float lo, float hi, int gid) {
-        float span = hi - lo, mid = (lo + hi) / 2f;
-        if (rushers) {
-            for (int i = 0; i < 3; i++) {
-                float y = lo + 12f + r.nextFloat() * Math.max(1f, hi - lo - 40f);
-                spawn(Enemy.Type.RUSHER, worldX + i * 40f, y, gid, 3, true);
-            }
-        } else {
-            float y = clamp(mid + (r.nextFloat() - 0.5f) * 50f, lo + Math.min(40f, span * 0.3f), hi - Math.min(56f, span * 0.4f));
-            float ph = r.nextFloat() * 6f;
-            for (int i = 0; i < 5; i++) {
-                Spawn s = spawn(Enemy.Type.FAN, worldX + i * 18f, y, gid, 5, true);
-                s.phase = ph;
-            }
+        ArrayList<Float> cps = new ArrayList<>();
+        cps.add(0f);                                  // the start is always a checkpoint
+        for (float[] pt : cpPoints) {
+            float t = project(pt[0] - W / 2f, pt[1] - H / 2f);
+            if (t > 1f) cps.add(t);
         }
+        cps.sort(Float::compare);
+        checkpoints = new float[cps.size()];
+        for (int i = 0; i < cps.size(); i++) checkpoints[i] = cps.get(i);
+        spawns.sort((a, b) -> Float.compare(a.trigger, b.trigger));
     }
 
-    private void addGround(Random r, float worldX, boolean walker, boolean ceilTurret, int gid, boolean carrier) {
-        int c = nearestFlat((int) (worldX / 16f), !ceilTurret || walker);
-        Enemy.Type t = walker ? Enemy.Type.WALKER : (ceilTurret ? Enemy.Type.TURRET_CEIL : Enemy.Type.TURRET_FLOOR);
-        spawn(t, c * 16f, 0f, gid, 1, carrier || walker);   // walkers always drop a capsule
-    }
-
-    private Spawn spawn(Enemy.Type t, float x, float y, int gid, int size, boolean carrier) {
+    private Spawn spawn(Enemy.Type t, float x, float y, int group, int size, boolean carrier) {
         Spawn s = new Spawn();
-        s.type = t; s.x = x; s.y = y; s.group = gid; s.groupSize = size; s.carrier = carrier;
+        s.type = t; s.x = x; s.y = y; s.group = group; s.groupSize = size; s.carrier = carrier; s.trigger = x;
         spawns.add(s);
         return s;
     }
 
-    private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
+    /** The polyline marks the centre of the screen; property "speeds" = multiplier per segment, e.g. "1,0.8,1". */
+    private void readPath(TiledMap.MapObject o) {
+        int n = o.polyline.length / 2;
+        String[] sp = o.prop("speeds", "").split(",");
+        float[][] p = new float[n][3];
+        for (int i = 0; i < n; i++) {
+            float cx = o.x + o.polyline[i * 2], cy = worldH - (o.y + o.polyline[i * 2 + 1]);
+            p[i][0] = cx - W / 2f;
+            p[i][1] = cy - H / 2f;
+            float mul = 1f;
+            if (i < sp.length && !sp[i].trim().isEmpty()) mul = Float.parseFloat(sp[i].trim());
+            p[i][2] = i == n - 1 ? 0f : mul;
+        }
+        setPath(p);
+    }
+
+    private void setPath(float[][] p) {
+        path = p;
+        pathT = new float[p.length];
+        for (int i = 1; i < p.length; i++) {
+            float dx = p[i][0] - p[i - 1][0], dy = p[i][1] - p[i - 1][1];
+            pathT[i] = pathT[i - 1] + (float) Math.sqrt(dx * dx + dy * dy);
+        }
+        stopT = pathT[p.length - 1];
+    }
+
+    /** Distance along the path of the path point closest to camera position (x, y). */
+    private float project(float x, float y) {
+        float bestT = 0f, bestD = Float.MAX_VALUE;
+        for (int i = 1; i < path.length; i++) {
+            float ax = path[i - 1][0], ay = path[i - 1][1], bx = path[i][0], by = path[i][1];
+            float dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+            float f = len2 == 0f ? 0f : Math.max(0f, Math.min(1f, ((x - ax) * dx + (y - ay) * dy) / len2));
+            float px = ax + f * dx - x, py = ay + f * dy - y, d = px * px + py * py;
+            if (d < bestD) { bestD = d; bestT = pathT[i - 1] + f * (pathT[i] - pathT[i - 1]); }
+        }
+        return bestT;
+    }
+
+    /** Camera bottom-left at distance t along the path -> out[0] = x, out[1] = y. */
+    public void camAt(float t, float[] out) {
+        if (path.length == 1) { out[0] = path[0][0]; out[1] = path[0][1]; return; }
+        for (int i = 1; i < path.length; i++) {
+            if (t <= pathT[i] || i == path.length - 1) {
+                float len = pathT[i] - pathT[i - 1];
+                float f = len <= 0f ? 1f : Math.max(0f, Math.min(1f, (t - pathT[i - 1]) / len));
+                out[0] = path[i - 1][0] + f * (path[i][0] - path[i - 1][0]);
+                out[1] = path[i - 1][1] + f * (path[i][1] - path[i - 1][1]);
+                return;
+            }
+        }
+    }
+
+    /** Scroll-speed multiplier at distance t (from the path's "speeds"). */
+    public float speedAtT(float t) {
+        for (int i = 1; i < path.length; i++) if (t < pathT[i]) return path[i - 1][2];
+        return 0f;
+    }
+
+    /** Width of one terrain column (crawlers stop at column edges). */
+    public float colWidth() { return cell; }
+
+    // ---------------------------------------------------------------- terrain queries
+
+    /**
+     * Height of the ground surface at column wx, seen from height wy: if wy is inside solid ground
+     * this is the top of that ground, otherwise the top of the first ground below wy.
+     */
+    public float floorTop(float wx, float wy) {
+        int c = (int) Math.floor(wx / cell), r = (int) Math.floor(wy / cell);
+        if (solidCell(c, r)) {
+            while (r < gRows + 1 && solidCell(c, r + 1)) r++;
+            return (r + 1) * cell;
+        }
+        while (r >= 0 && !solidCell(c, r)) r--;
+        return (r + 1) * cell;
+    }
+
+    /**
+     * Height of the ceiling's underside at column wx, seen from height wy: if wy is inside solid
+     * ground this is the bottom of that ground, otherwise the underside of the first ground above wy.
+     */
+    public float ceilBottom(float wx, float wy) {
+        int c = (int) Math.floor(wx / cell), r = (int) Math.floor(wy / cell);
+        if (solidCell(c, r)) {
+            while (r > -1 && solidCell(c, r - 1)) r--;
+            return r * cell;
+        }
+        while (r <= gRows && !solidCell(c, r)) r++;
+        return r * cell;
+    }
+
+    /** Is grid cell (c, r) solid (terrain, collision or a brick)? Outside the map counts as solid. */
+    private boolean solidCell(int c, int r) {
+        if (c < 0 || r < 0 || c >= gCols || r >= gRows) return true;
+        int i = r * gCols + c;
+        return grid[i] != 0 || (bricks != null && bricks[i]);
+    }
+
+    /** True if the rectangle touches terrain (or a brick). */
+    public boolean hits(float x, float y, float w, float h) {
+        int c0 = (int) Math.floor(x / cell), c1 = (int) Math.floor((x + w - 0.001f) / cell);
+        int r0 = (int) Math.floor(y / cell), r1 = (int) Math.floor((y + h - 0.001f) / cell);
+        for (int r = r0; r <= r1; r++)
+            for (int c = c0; c <= c1; c++)
+                if (solidCell(c, r)) return true;
+        return false;
+    }
+
+    /** Is there a solid map cell (not a brick) at cell (c, r)? For the debug overlay. */
+    public boolean solidTerrainCell(int c, int r) {
+        return c >= 0 && r >= 0 && c < gCols && r < gRows && grid[r * gCols + c] != 0;
+    }
+
+    /** Destroys the bricks the rectangle (plus a little blast radius) touches; returns how many. */
+    public int breakBricks(float x, float y, float w, float h) {
+        if (bricks == null) return 0;
+        float m = 4f;
+        int c0 = Math.max(0, (int) Math.floor((x - m) / cell)), c1 = Math.min(gCols - 1, (int) Math.floor((x + w + m) / cell));
+        int r0 = Math.max(0, (int) Math.floor((y - m) / cell)), r1 = Math.min(gRows - 1, (int) Math.floor((y + h + m) / cell));
+        boolean touched = false;
+        for (int r = r0; r <= r1 && !touched; r++)
+            for (int c = c0; c <= c1; c++)
+                if (bricks[r * gCols + c] && x < (c + 1) * cell && x + w > c * cell && y < (r + 1) * cell && y + h > r * cell) { touched = true; break; }
+        if (!touched) return 0;
+        int n = 0;
+        for (int r = r0; r <= r1; r++)
+            for (int c = c0; c <= c1; c++) {
+                int i = r * gCols + c;
+                if (bricks[i]) { bricks[i] = false; brickRegrow[i] = BRICK_REGROW_TIME; n++; }
+            }
+        return n;
+    }
 }

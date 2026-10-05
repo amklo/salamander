@@ -17,6 +17,11 @@ public class Enemy {
     public boolean dead;
     /** Walkers: FloorCrawler.LEVEL / CLIMBING / DROPPING (drawn tilted 45 degrees). */
     public int climb;
+    /** Walkers: hangs upside down from the ceiling. */
+    public boolean ceiling;
+    /** Walkers: seconds spent chasing since it came on screen (-1 = not on screen yet). */
+    public float chaseT = -1f;
+    public static final float CHASE_TIME = 10f, CHASE_SPEED = 120f, LEAVE_SPEED = 60f;
     private final float[] pos = new float[2];
     public Group group;
 
@@ -46,9 +51,29 @@ public class Enemy {
                     if (Math.abs(dy) > 2f) y += Math.signum(dy) * 60f * dt;
                 }
                 break;
-            case WALKER: {   // walks left along the floor, climbing / dropping straight at steps
+            case WALKER: {   // walks along the floor (or ceiling), climbing / dropping straight at steps
+                // Once on screen it chases the nearest ship for CHASE_TIME seconds, then gives up and
+                // walks off the left edge. Before that it keeps its starting direction.
+                boolean onScreen = x + w > g.scrollX && x < g.scrollX + SalamanderGame.W;
+                if (chaseT < 0f && onScreen) chaseT = 0f;
+                if (chaseT >= 0f) chaseT += dt;
+                int dir = vx < 0f ? -1 : 1;
+                float speed = Math.abs(vx);
+                if (chaseT >= CHASE_TIME) {                       // give up: leave the screen
+                    dir = -1;
+                    speed = LEAVE_SPEED;
+                } else if (chaseT >= 0f) {                        // chase the nearest ship along the floor
+                    Player target = g.target(x + w / 2f, y + h / 2f);
+                    if (target != null) {
+                        float dx = (target.x + Player.W / 2f) - (x + w / 2f);
+                        if (Math.abs(dx) < 6f) speed = 0f;        // right underneath / above it: wait
+                        else { dir = dx < 0f ? -1 : 1; speed = CHASE_SPEED; }
+                    }
+                }
+                vx = dir * Math.max(speed, 0.01f);                // keeps the facing even when standing still
                 pos[0] = x; pos[1] = y;
-                int r = FloorCrawler.step(g.level, pos, w, h, -1, -vx, 40f, 999f, dt);
+                int r = ceiling ? FloorCrawler.stepCeiling(g.level, pos, w, h, dir, speed, 40f, 999f, dt)
+                                : FloorCrawler.step(g.level, pos, w, h, dir, speed, 40f, 999f, dt);
                 if (r != FloorCrawler.BLOCKED) { x = pos[0]; y = pos[1]; climb = r; }
                 else climb = FloorCrawler.LEVEL;
                 fireAimed(g, dt, 2.0f, 105f);
@@ -64,7 +89,8 @@ public class Enemy {
         shootT -= dt;
         if (shootT <= 0f) {
             shootT = interval + MathUtils.random(0f, 0.8f);
-            if (x > g.scrollX + 24f && x < g.scrollX + SalamanderGame.W - 24f) {
+            if (x > g.scrollX + 24f && x < g.scrollX + SalamanderGame.W - 24f
+                    && y > g.scrollY - 8f && y < g.scrollY + SalamanderGame.H + 8f) {
                 g.aimedShot(x + w / 2, y + h / 2, speed, 0f);
             }
         }

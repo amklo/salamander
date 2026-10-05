@@ -40,6 +40,17 @@ public class Assets {
         return t;
     }
 
+    /** Texture by path inside the assets folder (e.g. "sprites/stage1_t0.png"), loaded once. */
+    public Texture texFile(String path) {
+        Texture t = textures.get(path);
+        if (t == null) {
+            t = new Texture(Gdx.files.internal(path));
+            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            textures.put(path, t);
+        }
+        return t;
+    }
+
     public TextureRegion[] strip(String name, int frameW) {
         String key = name + ":" + frameW;
         TextureRegion[] r = strips.get(key);

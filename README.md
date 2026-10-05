@@ -71,24 +71,69 @@ core/src/main/java/com/example/salamander/
   SalamanderGame   entry Game class, virtual resolution (480x272)
   TitleScreen     title / attract screen
   GameScreen      scrolling, spawning, collisions, power-up meter, HUD, state machine
-  Level           terrain segments, hazard placement, enemy wave generator  <-- design stages here
+  Level           loads a stage from its Tiled map; terrain / collision queries
+  TiledMap        reader for Tiled .tmx / .tsx files
   Enemy, Boss, Hazard, Bullet, Player   entities
   Assets          lazy sprite/sound loader
 lwjgl3/…/Lwjgl3Launcher.java      desktop launcher
 assets/sprites, assets/sfx        art and sound (classpath resources)
+assets/maps                       the stages as Tiled maps + tilesets  <-- design stages here
 tools/generate_assets.py          regenerates all assets (needs Python + Pillow)
 ```
 
-## Designing / tuning stages (Level.java)
-`l1()`, `l2()`, `l3()` are lists of terrain segments:
-* `open(len, floor, ceil)` – flat corridor (heights in 16px tiles; the screen is 17 tiles tall)
-* `hills(len, floorBase, floorAmp, ceilBase, ceilAmp, period, phase)` – rolling cave
-* `tunnel(len, gap, amplitude, period, scrollSpeedMultiplier)` – narrow snaking corridor
-* `peak(len, base, height, volcano)` – mountain; `volcano=true` makes it erupt
-* `crushTunnel(len, gap, spacing, speedMul)` – corridor with alternating piston crushers
-* `rocks(startCol, endCol, spacing)` – stalactites that fall when you pass under
-Terrain slope is limited to one tile per column so everything stays flyable. Base scroll speeds are in
-`SPEEDS`, wave mixes in `genSpawns()` (`weights`), boss HP in `GameScreen.spawnBoss()`, boss patterns in `Boss.update()`.
+## Editing levels in Tiled
+All three stages are [Tiled](https://www.mapeditor.org) maps: `assets/maps/stage1.tmx`, `stage2.tmx`, `stage3.tmx`.
+Open one in Tiled (File ▸ Open), edit, save (Ctrl/Cmd+S) and run the game – nothing needs converting.
+The tilesets next to them (`collision.tsx`, `bricks.tsx`, `terrain.tsx`, `objects.tsx`) are shared by all stages.
+
+**Map grid:** 8×8 px tiles; one tile = one collision cell. The screen is 480×272 px (60×34 tiles).
+Keep the map *not* infinite and keep layers at the top level (no layer groups).
+
+### Map properties (Map ▸ Map Properties)
+| Property | Meaning |
+|---|---|
+| `name` | stage title shown in the intro and HUD |
+| `speed` | base scroll speed in px/s |
+| `music`, `bossMusic` | MIDI files in `assets/bgm/` |
+| `background` | parallax backdrop sprite (`bg1`, `bg2`; leave it out for plain black space) |
+
+### Layers (names matter, upper/lower case doesn't)
+| Layer | Kind | What it does |
+|---|---|---|
+| `art 0` … `art 6` | image layers | stage 1's picture (the cleaned-up original map). Only drawn, never solid |
+| `terrain` | tile layer, `terrain` tileset | stages 2–3: drawn **and** solid. Each 16 px rock tile is four 8 px pieces – paint them as 2×2 stamps |
+| `collision` | tile layer, `collision` tileset | solid but invisible (red in Tiled). Paint it over the art in stage 1, or to add invisible walls |
+| `bricks` | tile layer, `bricks` tileset | destructible bricks: every shot breaks them, each grows back after 3 s. In game they show the brick pattern |
+| `enemies`, `hazards`, `camera` | object layers | see below. Any object layer works; the game goes by each object's kind |
+
+### Objects (drag them from the `objects` tileset; set options in the Properties panel)
+| Object | Placement | Options |
+|---|---|---|
+| `fan` / `rusher` | where the wave enters the screen (its height = the wave's height) | `count` (5 / 3), `drop` (capsule when the whole wave is shot) |
+| `walker` | standing on the floor – or flip it vertically (Y) to hang it from the ceiling | `ceiling`, `behind` (runs in from the left edge once the screen has passed this spot), `drop` |
+| `turret` | on the floor, or flipped vertically under the ceiling | `ceiling`, `drop` |
+| `asteroid` (big / small) | anywhere; resize it to change its size | – |
+| `tooth` (fang0–5) | where it is when fully out, its root at the floor or ceiling | `ceiling`, `delay` (s before the first bite), `period` (s per cycle) |
+| `rock` | hanging under the ceiling; falls when a ship flies underneath | – |
+| `volcano` | on the floor | – |
+| `crusher` | on the ceiling or floor surface it pushes out from | `ceiling`, `minLen`, `maxLen`, `speed`, `phase` |
+
+**Camera** (`camera` layer):
+* `path` – a polyline drawn through the **centre of the screen**. The game scrolls along it, so a diagonal or
+  vertical stretch scrolls the screen diagonally or up/down (as in stage 1). It must stay at least half a screen
+  (240 px / 136 px) inside the map edges. Its `speeds` property lists a speed multiplier per segment,
+  e.g. `1,0.8,1,0.45,0.8`. Where the path ends, scrolling stops and the boss arrives.
+* `checkpoint` – point objects on (or near) the path; when every ship is down, the stage restarts from the last one passed.
+
+Tip: in the game, **H** shows the solid cells of the map in red, to check your collision painting.
+
+### Stage 1 art
+`tools/stage1_build.py` recreates stage 1's pictures (terrain strips, teeth, asteroids, the brain boss) from
+`reference matterial/salamanderstage1.png` (needs numpy, scipy, pillow). Normally you edit the art PNGs
+directly (e.g. in GIMP) and adjust the `collision` layer in Tiled to match.
+
+### Other tuning
+Boss HP: `GameScreen.spawnBoss()`; boss attack patterns: `Boss.update()`; enemy behaviour: `Enemy.java`.
 
 ## Swapping the art
 Overwrite any PNG in `assets/sprites/` keeping the same frame size (animated sprites are horizontal strips):
@@ -106,8 +151,8 @@ Overwrite any PNG in `assets/sprites/` keeping the same frame size (animated spr
 | shot / laser / missile / ebullet | 12×4 / 40×4 / 8×6 / 6×6 | 1 |
 | lava | 16×8 | 2 × 8×8 |
 | shield | 40×32 | 1 |
-| boss0, boss1, boss2 | 64×64 | 1 (the whole 64×64 is the hitbox) |
-| tiles | 48×48 | 3×3 grid: row = stage, columns = fill / floor surface / ceiling underside |
+| boss0, boss1, boss2 | any | 1 (the boss's size and hit shape come from the picture) |
+| tiles | 48×48 | terrain tileset for Tiled (8×8 pieces): row pair = stage, column pair = fill / floor surface / ceiling underside |
 | bg0–bg2 | 480×272 | parallax backdrop, must tile horizontally |
 | stars | 480×272 | transparent star layer |
 

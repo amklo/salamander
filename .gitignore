@@ -21,3 +21,6 @@ reference matterial/
 # Logs / crash dumps
 *.log
 hs_err_pid*
+
+# Intermediate output of tools/stage1_build.py
+tools/stage1_out/
