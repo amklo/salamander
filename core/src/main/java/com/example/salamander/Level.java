@@ -18,6 +18,9 @@ public class Level {
         public boolean carrier;
         /** Walkers: walks upside down on the ceiling / runs in from behind (left edge). */
         public boolean ceiling, behind;
+        /** Celtic Frost: flies the Z mirrored (starts in the upper half); seconds it waits behind the one in front. */
+        public boolean upper;
+        public float delay;
         /** Spawns when the camera's right edge reaches this x (spawns are sorted by it). */
         public float trigger;
     }
@@ -29,7 +32,7 @@ public class Level {
     public static class Tooth { public float x, y, w, h, delay, period; public boolean ceiling; public String image; }
 
     /** Floating shootable rock: bottom-left corner, size, picture. */
-    public static class Asteroid { public float x, y, w, h; public String image; }
+    public static class Bamda { public float x, y, w, h; public String image; }
 
     /** Piston crusher: left x, the surface it is mounted on (ceiling underside or floor top), motion. */
     public static class Crusher { public float x, baseY, phase, minLen, maxLen, speed; public boolean ceiling; }
@@ -39,6 +42,11 @@ public class Level {
     public final int index;
     public String name = "", music, bossMusic = "boss.mid", background;
     public float baseSpeed = 46f;
+    /**
+     * Height of the "lane" the level was laid out for (map property "lane", default 272). When it is taller
+     * than the 168px view, the camera drifts up and down within it to follow the ships.
+     */
+    public float laneH = SalamanderGame.LANE_H;
     public float worldW, worldH;
 
     // ---- collision grid (one cell per map tile), row 0 = bottom
@@ -57,14 +65,26 @@ public class Level {
     /** Seconds until a shot-away brick grows back (0 = it stays as it is). */
     public float[] brickRegrow;
     public static final float BRICK_REGROW_TIME = 3f;
+    /**
+     * A regrowing brick first materializes over BRICK_GROW_TIME seconds (brickGrow counts 0 -> 1). While it does,
+     * it is harmless and not solid, but shots still blast it away again.
+     */
+    public float[] brickGrow;
+    public static final float BRICK_GROW_TIME = 1f;
 
     // ---- objects
     public final ArrayList<Spawn> spawns = new ArrayList<>();
-    public final ArrayList<Asteroid> asteroids = new ArrayList<>();
+    public final ArrayList<Bamda> bamdas = new ArrayList<>();
     public final ArrayList<Tooth> teeth = new ArrayList<>();
     public final ArrayList<float[]> rocks = new ArrayList<>();       // {left x, bottom y}
     public final ArrayList<float[]> volcanoes = new ArrayList<>();   // {centre x, floor y}
     public final ArrayList<Crusher> crushers = new ArrayList<>();
+    /** Stage 1 claw arms: bottom-left of the resting picture (64x40), hanging from the ceiling or standing on the floor. */
+    public static class Arm { public float x, y; public boolean ceiling; }
+    public final ArrayList<Arm> arms = new ArrayList<>();
+    /** Stage 1 green-tipped towers: where the picture is when fully grown, and whether it hangs from the ceiling. */
+    public static class Tower { public float x, y, w, h; public boolean ceiling, flip; public String image; }
+    public final ArrayList<Tower> towers = new ArrayList<>();
 
     // ---- camera path: points {left x, bottom y, speed multiplier for the segment starting there}
     private float[][] path;
@@ -91,6 +111,7 @@ public class Level {
         l.worldH = l.gRows * l.cell;
         l.name = m.props.getOrDefault("name", "STAGE " + (idx + 1));
         l.baseSpeed = Float.parseFloat(m.props.getOrDefault("speed", "46"));
+        l.laneH = Float.parseFloat(m.props.getOrDefault("lane", String.valueOf(SalamanderGame.LANE_H)));
         l.music = m.props.get("music");
         l.bossMusic = m.props.getOrDefault("bossMusic", "boss.mid");
         l.background = m.props.get("background");
@@ -102,7 +123,7 @@ public class Level {
             boolean isTerrain = n.equals("terrain"), isCollision = n.equals("collision"), isBricks = n.equals("bricks");
             if (!isTerrain && !isCollision && !isBricks) continue;
             if (isTerrain) l.terrain = new int[l.gCols * l.gRows];
-            if (isBricks) { l.bricks = new boolean[l.gCols * l.gRows]; l.brickRegrow = new float[l.bricks.length]; }
+            if (isBricks) { l.bricks = new boolean[l.gCols * l.gRows]; l.brickRegrow = new float[l.bricks.length]; l.brickGrow = new float[l.bricks.length]; }
             for (int tr = 0; tr < l.gRows; tr++) {
                 int r = l.gRows - 1 - tr;   // Tiled row 0 is the top
                 for (int c = 0; c < l.gCols; c++) {
@@ -172,6 +193,23 @@ public class Level {
                         group++;
                         break;
                     }
+                    case "rugal":                                // Rugal: enters at the right edge, at this height
+                        spawn(Enemy.Type.RUGAL, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
+                        break;
+                    case "link":                                 // Missing Link: a single enemy (y = the middle of its bob)
+                        spawn(Enemy.Type.LINK, left, bottom + h / 2f, group++, 1, p.prop("drop", false)).phase = (o.id * 2.39996f) % 6.2832f;
+                        break;
+                    case "frost": {                              // Celtic Frost: a group flying a "Z" across the screen
+                        int n = p.prop("count", 6);
+                        boolean upper = flippedV || p.prop("upper", false);
+                        for (int i = 0; i < n; i++) {
+                            Spawn s = spawn(Enemy.Type.FROST, left, bottom + h / 2f, group, n, p.prop("drop", true));   // y: entry line
+                            s.upper = upper;
+                            s.delay = i * Enemy.FROST_GAP;
+                        }
+                        group++;
+                        break;
+                    }
                     case "walker": {
                         boolean ceiling = p.prop("ceiling", flippedV);
                         Spawn s = spawn(Enemy.Type.WALKER, left, ceiling ? top - 4f : bottom + 4f, group++, 1, p.prop("drop", true));
@@ -180,17 +218,17 @@ public class Level {
                         if (s.behind) s.trigger = left + 20f + W + 40f;   // runs in once the camera's left edge passes it
                         break;
                     }
-                    case "turret": {
-                        boolean ceiling = p.prop("ceiling", flippedV);
+                    case "turret": {                             // bio turret; "drop" = red one that leaves a capsule
+                        boolean ceiling = flippedV || p.prop("ceiling", false);
                         spawn(ceiling ? Enemy.Type.TURRET_CEIL : Enemy.Type.TURRET_FLOOR, left,
                                 ceiling ? top - 4f : bottom + 4f, group++, 1, p.prop("drop", false));
                         break;
                     }
-                    case "asteroid": {
-                        Asteroid a = new Asteroid();
+                    case "bamda": case "asteroid": {           // ("asteroid" = its old name)
+                        Bamda a = new Bamda();
                         a.x = left; a.y = bottom; a.w = w; a.h = h;
-                        a.image = tile != null && tile.image != null ? tile.image : "sprites/asteroid_big.png";
-                        asteroids.add(a);
+                        a.image = tile != null && tile.image != null ? tile.image : "sprites/bamda.png";
+                        bamdas.add(a);
                         break;
                     }
                     case "tooth": {
@@ -205,6 +243,23 @@ public class Level {
                     }
                     case "rock": rocks.add(new float[]{left, bottom}); break;
                     case "volcano": volcanoes.add(new float[]{left + w / 2f, bottom}); break;
+                    case "tower": {                              // the object marks the fully grown tower
+                        Tower tw = new Tower();
+                        tw.x = left; tw.y = bottom; tw.w = w; tw.h = h;
+                        // the tile's "ceiling" property says which way its picture points; flipping the object
+                        // vertically in Tiled turns it over (a floor tower becomes a ceiling tower and back)
+                        tw.flip = flippedV;
+                        tw.ceiling = p.prop("ceiling", false) != flippedV;
+                        tw.image = tile != null ? tile.image : null;
+                        if (tw.image != null) towers.add(tw);
+                        break;
+                    }
+                    case "arm": {                                // tile picture = floor arm; flip it (Y) to hang it from the ceiling
+                        Arm a = new Arm();
+                        a.x = left; a.y = bottom; a.ceiling = flippedV || p.prop("ceiling", false);
+                        arms.add(a);
+                        break;
+                    }
                     case "crusher": {
                         Crusher c = new Crusher();
                         c.x = left;
@@ -314,13 +369,19 @@ public class Level {
      */
     public float floorTop(float wx, float wy) {
         int c = (int) Math.floor(wx / cell), r = (int) Math.floor(wy / cell);
-        if (solidCell(c, r)) {
-            while (r < gRows + 1 && solidCell(c, r + 1)) r++;
+        if (groundCell(c, r)) {
+            while (groundCell(c, r + 1)) r++;
             return (r + 1) * cell;
         }
-        while (r >= 0 && !solidCell(c, r)) r--;
-        return (r + 1) * cell;
+        while (r >= 0 && !groundCell(c, r)) r--;
+        return r < 0 ? NO_FLOOR : (r + 1) * cell;   // nothing below: open space, not ground
     }
+
+    /** floorTop() when there is no ground below; ceilBottom() when there is nothing above. */
+    public static final float NO_FLOOR = -100000f, NO_CEILING = 100000f;
+
+    /** A cell that can be walked on / hung from: only real map cells (above and below the map is open space). */
+    private boolean groundCell(int c, int r) { return r >= 0 && r < gRows && solidCell(c, r); }
 
     /**
      * Height of the ceiling's underside at column wx, seen from height wy: if wy is inside solid
@@ -328,12 +389,12 @@ public class Level {
      */
     public float ceilBottom(float wx, float wy) {
         int c = (int) Math.floor(wx / cell), r = (int) Math.floor(wy / cell);
-        if (solidCell(c, r)) {
-            while (r > -1 && solidCell(c, r - 1)) r--;
+        if (groundCell(c, r)) {
+            while (groundCell(c, r - 1)) r--;
             return r * cell;
         }
-        while (r <= gRows && !solidCell(c, r)) r++;
-        return r * cell;
+        while (r < gRows && !groundCell(c, r)) r++;
+        return r >= gRows ? NO_CEILING : r * cell;   // nothing above: open space, not a ceiling
     }
 
     /** Is grid cell (c, r) solid (terrain, collision or a brick)? Outside the map counts as solid. */
@@ -367,13 +428,13 @@ public class Level {
         boolean touched = false;
         for (int r = r0; r <= r1 && !touched; r++)
             for (int c = c0; c <= c1; c++)
-                if (bricks[r * gCols + c] && x < (c + 1) * cell && x + w > c * cell && y < (r + 1) * cell && y + h > r * cell) { touched = true; break; }
+                if ((bricks[r * gCols + c] || brickGrow[r * gCols + c] > 0f) && x < (c + 1) * cell && x + w > c * cell && y < (r + 1) * cell && y + h > r * cell) { touched = true; break; }
         if (!touched) return 0;
         int n = 0;
         for (int r = r0; r <= r1; r++)
             for (int c = c0; c <= c1; c++) {
                 int i = r * gCols + c;
-                if (bricks[i]) { bricks[i] = false; brickRegrow[i] = BRICK_REGROW_TIME; n++; }
+                if (bricks[i] || brickGrow[i] > 0f) { bricks[i] = false; brickGrow[i] = 0f; brickRegrow[i] = BRICK_REGROW_TIME; n++; }
             }
         return n;
     }

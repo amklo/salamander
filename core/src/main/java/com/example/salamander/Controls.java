@@ -19,11 +19,11 @@ import java.util.Arrays;
  * Gamepad layout (standard / Xbox naming):
  *   left stick or d-pad = move, A or X = fire, B / Y = activate power-up,
  *   R1 (hold) + direction = aim the DOUBLE shot,
- *   Start = pause / start, A = confirm on menus,
+ *   Start = pause / start, A = confirm on menus, B = cancel / back on menus,
  *   Back/Select + d-pad up/down = music volume, Back/Select + d-pad left/right = SFX volume.
  */
 public final class Controls {
-    public enum Action { UP, DOWN, LEFT, RIGHT, FIRE, POWER, AIM, PAUSE, CONFIRM, DEBUG, MUSIC_DOWN, MUSIC_UP, SFX_DOWN, SFX_UP }
+    public enum Action { UP, DOWN, LEFT, RIGHT, FIRE, POWER, AIM, PAUSE, CONFIRM, CANCEL, DEBUG, MUSIC_DOWN, MUSIC_UP, SFX_DOWN, SFX_UP }
 
     public static final int PLAYERS = 2;
     private static final int N = Action.values().length;
@@ -95,6 +95,7 @@ public final class Controls {
         set(pl, Action.AIM, key(Keys.ENTER));
         set(pl, Action.PAUSE, key(Keys.P) || key(Keys.ESCAPE));
         set(pl, Action.CONFIRM, key(Keys.ENTER) || key(Keys.SPACE));
+        set(pl, Action.CANCEL, key(Keys.X) || key(Keys.BACKSPACE));   // menus: back one step
         set(pl, Action.DEBUG, key(Keys.H) || key(Keys.F1));
         set(pl, Action.MUSIC_DOWN, key(Keys.NUM_1));
         set(pl, Action.MUSIC_UP, key(Keys.NUM_2));
@@ -125,6 +126,7 @@ public final class Controls {
         set(pl, Action.AIM, btn(c, m.buttonR1));
         set(pl, Action.PAUSE, btn(c, m.buttonStart));
         set(pl, Action.CONFIRM, btn(c, m.buttonStart) || btn(c, m.buttonA));
+        set(pl, Action.CANCEL, btn(c, m.buttonB));                    // menus: back one step
     }
 
     /** OR-merges, so the keyboard and pad #1 can both drive player 1. */

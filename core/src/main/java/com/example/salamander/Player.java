@@ -6,6 +6,8 @@ public class Player {
     /** Collision box, centred on the sprite. */
     public static final float HIT_W = 4, HIT_H = 4;
     public static final float HIT_OX = (W - HIT_W) / 2f, HIT_OY = (H - HIT_H) / 2f;
+    /** Where the ship's picture is inside its 32x16 frame (x 7..22, y 2..13 from the bottom): it may touch the screen edges. */
+    public static final float ART_L = 7, ART_R = 23, ART_B = 2, ART_T = 14;
     public static final int START_LIVES = 3;
 
     public float hitX() { return x + HIT_OX; }
@@ -35,6 +37,12 @@ public class Player {
     public static final int MAX_OPTIONS = 4;
     public int options;              // 0..MAX_OPTIONS
     public int shield;               // remaining hits
+    public int ffield;               // F.FIELD: enemy shots it can still block (0 = none)
+    public float ffieldHitT;         // > 0 just after the force field blocked a shot (it flickers)
+    /** Shots an F.FIELD blocks before it is used up. */
+    public static final int FFIELD_HITS = 10;
+    /** With this many hits left or fewer, the F.FIELD turns red (sprites/ffield_red.png). */
+    public static final int FFIELD_LOW = 3;
 
     // Ring buffer of screen-relative positions; options replay it with a delay
     private final float[] tx = new float[64], ty = new float[64];
@@ -42,20 +50,23 @@ public class Player {
 
     // ---- ship types: each one orders the power-up meter differently
     /** Power-ups, as stored in {@link #slots}. */
-    public static final int SPEED = 1, MISSILE = 2, DOUBLE = 3, LASER = 4, OPTION = 5, SHIELD = 6, RIPPLE = 7, TWO_WAY = 8;
-    public static final String[] POWER_NAMES = {"", "SPEED", "MISSILE", "DOUBLE", "LASER", "OPTION", "SHIELD", "RIPPLE", "2-WAY"};
+    public static final int SPEED = 1, MISSILE = 2, DOUBLE = 3, LASER = 4, OPTION = 5, SHIELD = 6, RIPPLE = 7, TWO_WAY = 8, EXTRA = 9, FFIELD = 10;
+    /** Number of slots in the power-up meter (the 7th is "!" on every ship). */
+    public static final int SLOT_COUNT = 7;
+    public static final int MAX_LIVES = 9;
+    public static final String[] POWER_NAMES = {"", "SPEED", "MISSILE", "DOUBLE", "LASER", "OPTION", "SHIELD", "RIPPLE", "2-WAY", "!", "F.FIELD"};
     /** Values of {@link #weapon}. */
     public static final int W_NORMAL = 0, W_DOUBLE = 1, W_LASER = 2, W_RIPPLE = 3;
     public static final int SHIP_TYPES = 4;
     /** Meter order per ship type (index 0 = type 1). Each type swaps two slots of the classic order. */
     private static final int[][] TYPE_SLOTS = {
-            {SPEED, MISSILE, LASER, DOUBLE, OPTION, SHIELD},   // type 1: DOUBLE <-> LASER
-            {SPEED, OPTION, RIPPLE, LASER, TWO_WAY, SHIELD},   // type 2: MISSILE <-> OPTION, RIPPLE instead of DOUBLE, 2-WAY instead of MISSILE
-            {SPEED, LASER, DOUBLE, MISSILE, OPTION, SHIELD},   // type 3: MISSILE <-> LASER
-            {SPEED, MISSILE, SHIELD, LASER, OPTION, RIPPLE},   // type 4: DOUBLE <-> SHIELD, RIPPLE instead of DOUBLE
+            {SPEED, MISSILE, LASER, DOUBLE, OPTION, SHIELD, EXTRA},   // type 1: DOUBLE <-> LASER
+            {SPEED, OPTION, RIPPLE, LASER, TWO_WAY, SHIELD, EXTRA},   // type 2: MISSILE <-> OPTION, RIPPLE instead of DOUBLE, 2-WAY instead of MISSILE
+            {SPEED, LASER, DOUBLE, MISSILE, OPTION, SHIELD, EXTRA},   // type 3: MISSILE <-> LASER
+            {SPEED, MISSILE, FFIELD, LASER, OPTION, RIPPLE, EXTRA},   // type 4: DOUBLE <-> SHIELD, RIPPLE instead of DOUBLE, F.FIELD instead of SHIELD
     };
     /** The classic order, for showing which slots a type moved. */
-    public static final int[] CLASSIC_SLOTS = {SPEED, MISSILE, DOUBLE, LASER, OPTION, SHIELD};
+    public static final int[] CLASSIC_SLOTS = {SPEED, MISSILE, DOUBLE, LASER, OPTION, SHIELD, EXTRA};
 
     /** Meter order for ship type 0..SHIP_TYPES-1. */
     public static int[] slotsFor(int shipType) { return TYPE_SLOTS[shipType]; }
@@ -83,6 +94,11 @@ public class Player {
         return 0;
     }
 
+    /** F.FIELD: the force field sits right in front of the ship's nose (8x16). */
+    public static final float FFIELD_W = 8, FFIELD_H = 16;
+    public float ffieldX() { return x + ART_R + 1f; }
+    public float ffieldY() { return y; }
+
     /** In play right now (joined, has ships, not exploding). */
     public boolean alive() { return !dead && !out; }
 
@@ -90,13 +106,13 @@ public class Player {
     public void applyDebugLoadout() {
         options = MAX_OPTIONS;
         missile = true;
-        shield = 5;
+        if (slotOf(FFIELD) > 0) ffield = FFIELD_HITS; else shield = 5;
         weapon = slotOf(DOUBLE) > 0 ? W_DOUBLE : W_RIPPLE;   // ripple ships get RIPPLE instead
         meter = slotOf(LASER);       // LASER slot highlighted: press power-up to switch straight to it
     }
 
     public void resetPowerups() {
-        meter = 0; speedLvl = 0; missile = false; weapon = 0; options = 0; shield = 0; doubleDir = 1;
+        meter = 0; speedLvl = 0; missile = false; weapon = 0; options = 0; shield = 0; ffield = 0; ffieldHitT = 0f; doubleDir = 1;
     }
 
     public void fillTrail(float sx, float sy) {

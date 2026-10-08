@@ -7,8 +7,18 @@ import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 public class SalamanderGame extends Game {
-    /** Virtual resolution: 30 x 17 tiles of 16px. */
-    public static final int W = 480, H = 272, T = 16;
+    /** Virtual screen: the MSX resolution, 256 x 192. */
+    public static final int SCREEN_W = 256, SCREEN_H = 192;
+    /** Score / power meter strip along the bottom of the screen, as in the original. */
+    public static final int HUD_H = 24;
+    /** The playfield (what the game camera shows) sits above the HUD: 256 x 168. */
+    public static final int W = SCREEN_W, H = SCREEN_H - HUD_H, T = 16;
+    /**
+     * Stages 2 and 3 were laid out for a 272px tall view. The camera shows 168px of that "lane" and drifts
+     * up and down to follow the ships, so the whole lane can still be reached. A map can set its own
+     * lane height with the property "lane" (stage 1 uses 168: it is the original MSX map, no drift).
+     */
+    public static final int LANE_H = 272;
 
     public SpriteBatch batch;
     public Assets assets;

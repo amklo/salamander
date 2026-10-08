@@ -9,6 +9,8 @@ public class Bullet {
     public final Kind kind;
     public float x, y, w, h, vx, vy, gravity, t;
     public int dmg = 1;
+    /** Damage of one laser beam. It hits each target once, but hard: tough enemies go down in fewer beams. */
+    public static final int LASER_DAMAGE = 7;
     public boolean dead, grounded;
     /** Skip movement on the frame the bullet is created, so it is first drawn where it was fired. */
     public boolean fresh = true;
@@ -28,7 +30,13 @@ public class Bullet {
         if (kind == Kind.LASER) hits = new ArrayList<>();
     }
 
-    private static final float CRAWL_SPEED = 170f, CLIMB_SPEED = 140f;
+    /**
+     * Missile speed in px/s, the one number to tune: used for flying forward and down / up (a 45 degree dive),
+     * for crawling along the floor / ceiling, and for climbing / dropping at steps.
+     */
+    public static final float MISSILE_SPEED = 100f;
+    /** Speed of the normal shot and of DOUBLE's angled shot (px/s). */
+    public static final float SHOT_SPEED = 400f;
     /** Laser: fired short, its front races ahead while its tail lags until it is this long. */
     public static final float LASER_START_LEN = 8f, LASER_MAX_LEN = 320f, LASER_GROW = 320f;
 
@@ -97,7 +105,7 @@ public class Bullet {
     /** Missile crawling along the floor (see FloorCrawler): climbs / drops straight at steps. */
     private void crawl(float dt, Level lv) {
         pos[0] = x; pos[1] = y;
-        int r = FloorCrawler.step(lv, pos, w, h, +1, CRAWL_SPEED, CLIMB_SPEED, 48f, dt);
+        int r = FloorCrawler.step(lv, pos, w, h, +1, MISSILE_SPEED, MISSILE_SPEED, 48f, dt);
         if (r == FloorCrawler.BLOCKED) { dead = true; return; }   // wall too tall / no room
         x = pos[0]; y = pos[1];
         climb = r;
@@ -106,7 +114,7 @@ public class Bullet {
     /** Upward missile hanging from the ceiling, crawling along it (see FloorCrawler.stepCeiling). */
     private void crawlCeiling(float dt, Level lv) {
         pos[0] = x; pos[1] = y;
-        int r = FloorCrawler.stepCeiling(lv, pos, w, h, +1, CRAWL_SPEED, CLIMB_SPEED, 48f, dt);
+        int r = FloorCrawler.stepCeiling(lv, pos, w, h, +1, MISSILE_SPEED, MISSILE_SPEED, 48f, dt);
         if (r == FloorCrawler.BLOCKED) { dead = true; return; }
         x = pos[0]; y = pos[1];
         climb = r;

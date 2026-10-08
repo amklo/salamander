@@ -22,6 +22,13 @@ public final class PixelMask {
         return new PixelMask(w, h, s);
     }
 
+    /** The same mask upside down (for sprites drawn flipped vertically). */
+    public PixelMask flippedV() {
+        boolean[] s = new boolean[w * h];
+        for (int y = 0; y < h; y++) System.arraycopy(solid, y * w, s, (h - 1 - y) * w, w);
+        return new PixelMask(w, h, s);
+    }
+
     /** Does the rectangle (rx, ry, rw, rh) touch a solid pixel of the mask drawn with its bottom-left at (mx, my)? */
     public boolean overlaps(float mx, float my, float rx, float ry, float rw, float rh) {
         int x0 = Math.max(0, (int) Math.floor(rx - mx)), x1 = Math.min(w - 1, (int) Math.ceil(rx + rw - mx) - 1);
