@@ -1,6 +1,7 @@
 package com.example.salamander;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.Music;
 
 import javax.sound.midi.MidiMessage;
 import javax.sound.midi.MidiSystem;
@@ -13,9 +14,9 @@ import java.io.BufferedInputStream;
 import java.io.InputStream;
 
 /**
- * Background music player for MIDI files in assets/bgm, using the JDK's built-in
- * MIDI sequencer and synthesizer (desktop only). Loops the current song until stopped.
- * If MIDI is unavailable the game simply stays silent.
+ * Background music player for the files in assets/bgm: MP3 / OGG / WAV through libGDX's Music, MIDI through the
+ * JDK's built-in sequencer and synthesizer (desktop only). Loops the current song until stopped (play(name, false)
+ * plays it once). If a song can't be played the game simply stays silent.
  */
 public class Bgm {
     private Sequencer seq;
@@ -24,12 +25,30 @@ public class Bgm {
     private String current;
     private boolean broken;
     private float volume = 1f;
+    /** The song playing when it is an MP3 / OGG / WAV (null for MIDI). */
+    private Music music;
 
-    /** Starts NAME (e.g. "Starfield_3.mid") from the beginning, unless it is already the current song. */
-    public void play(String name) {
-        if (broken) return;
+    /** Starts NAME (e.g. "02. Power of Anger.mp3") from the beginning and loops it, unless it is already playing. */
+    public void play(String name) { play(name, true); }
+
+    /** Starts NAME from the beginning (looping or once), unless it is already the current song. */
+    public void play(String name, boolean loop) {
         if (name.equals(current)) { resume(); return; }
         stop();
+        if (!name.toLowerCase().endsWith(".mid")) {
+            try {
+                music = Gdx.audio.newMusic(Gdx.files.internal("bgm/" + name));
+                music.setLooping(loop);
+                music.setVolume(volume);
+                music.play();
+                current = name;
+            } catch (Exception e) {
+                Gdx.app.error("Bgm", "Cannot play bgm/" + name, e);
+                music = null;
+            }
+            return;
+        }
+        if (broken) return;
         try {
             if (seq == null) open();
             try (InputStream in = new BufferedInputStream(Gdx.files.internal("bgm/" + name).read())) {
@@ -37,7 +56,7 @@ public class Bgm {
             }
             seq.setLoopStartPoint(0);
             seq.setLoopEndPoint(-1);
-            seq.setLoopCount(Sequencer.LOOP_CONTINUOUSLY);
+            seq.setLoopCount(loop ? Sequencer.LOOP_CONTINUOUSLY : 0);
             seq.setTickPosition(0);
             filter.resetChannels();
             seq.start();
@@ -69,25 +88,30 @@ public class Bgm {
     public void setVolume(float v) {
         volume = Math.max(0f, Math.min(1f, v));
         if (filter != null) filter.applyAll();
+        if (music != null) music.setVolume(volume);
     }
 
     /** Pauses the current song (keeps its position). */
     public void pause() {
+        if (music != null) { music.pause(); return; }
         if (seq != null && seq.isOpen() && seq.isRunning()) seq.stop();
     }
 
     /** Continues the current song after pause(). */
     public void resume() {
+        if (music != null) { if (!music.isPlaying() && music.isLooping()) music.play(); return; }
         if (seq != null && seq.isOpen() && current != null && !seq.isRunning()) seq.start();
     }
 
     /** Stops the music; the next play() starts from the beginning. */
     public void stop() {
+        if (music != null) { music.stop(); music.dispose(); music = null; }
         if (seq != null && seq.isOpen() && seq.isRunning()) seq.stop();
         current = null;
     }
 
     public void dispose() {
+        if (music != null) { music.dispose(); music = null; }
         if (seq != null) seq.close();
         if (synth != null) synth.close();
         seq = null;

@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="28" columns="0">
+<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="54" columns="0">
  <grid orientation="orthogonal" width="1" height="1" />
  <tile id="0" class="fan">
   <properties>
@@ -58,7 +58,7 @@
    <property name="delay" type="float" value="1.0" />
    <property name="period" type="float" value="3.5" />
   </properties>
-  <image source="../sprites/fang0.png" width="72" height="100" />
+  <image source="../sprites/fang full.png" width="45" height="160"/>
  </tile>
  <tile id="10" class="tooth">
   <properties>
@@ -66,7 +66,7 @@
    <property name="delay" type="float" value="1.0" />
    <property name="period" type="float" value="3.5" />
   </properties>
-  <image source="../sprites/fang1.png" width="45" height="80" />
+  <image source="../sprites/fang full.png" width="45" height="160"/>
  </tile>
  <tile id="11" class="tooth">
   <properties>
@@ -74,7 +74,7 @@
    <property name="delay" type="float" value="1.0" />
    <property name="period" type="float" value="3.5" />
   </properties>
-  <image source="../sprites/fang2.png" width="45" height="104" />
+  <image source="../sprites/fang full.png" width="45" height="160"/>
  </tile>
  <tile id="12" class="tooth">
   <properties>
@@ -82,7 +82,7 @@
    <property name="delay" type="float" value="1.0" />
    <property name="period" type="float" value="3.5" />
   </properties>
-  <image source="../sprites/fang3.png" width="72" height="100" />
+  <image source="../sprites/fang full.png" width="45" height="160"/>
  </tile>
  <tile id="13" class="tooth">
   <properties>
@@ -90,7 +90,7 @@
    <property name="delay" type="float" value="1.0" />
    <property name="period" type="float" value="3.5" />
   </properties>
-  <image source="../sprites/fang4.png" width="45" height="104" />
+  <image source="../sprites/fang full.png" width="45" height="160"/>
  </tile>
  <tile id="14" class="tooth">
   <properties>
@@ -98,7 +98,7 @@
    <property name="delay" type="float" value="1.0" />
    <property name="period" type="float" value="3.5" />
   </properties>
-  <image source="../sprites/fang5.png" width="45" height="90" />
+  <image source="../sprites/fang full.png" width="45" height="160"/>
  </tile>
  <tile id="15" class="arm">
   <properties>
@@ -184,5 +184,98 @@
    <property name="drop" type="bool" value="false"/>
   </properties>
   <image source="icons/rugal.png" width="16" height="16"/>
+ </tile>
+ <tile id="28" class="wallturret">
+  <properties>
+   <property name="drop" type="bool" value="false"/>
+   <property name="diag" type="bool" value="false"/>
+  </properties>
+  <image source="icons/wall_turret_green.png" width="16" height="16"/>
+ </tile>
+ <tile id="29" class="wallturret">
+  <properties>
+   <property name="drop" type="bool" value="true"/>
+   <property name="diag" type="bool" value="false"/>
+  </properties>
+  <image source="icons/wall_turret_red.png" width="16" height="16"/>
+ </tile>
+ <tile id="30" class="dome">
+  <image source="icons/dome.png" width="18" height="32"/>
+ </tile>
+ <tile id="31" class="eye">
+  <image source="icons/rock_eye.png" width="32" height="32"/>
+ </tile>
+ <tile id="32" class="legacy">
+  <properties>
+   <property name="count" type="int" value="4"/>
+   <property name="drop" type="bool" value="true"/>
+  </properties>
+  <image source="icons/legacy.png" width="16" height="16"/>
+ </tile>
+ <tile id="33" class="rugal">
+  <properties>
+   <property name="drop" type="bool" value="true"/>
+  </properties>
+  <image source="icons/rugal_red.png" width="16" height="16"/>
+ </tile>
+ <tile id="34" class="boss">
+  <image source="icons/boss.png" width="16" height="16"/>
+ </tile>
+ <tile id="35" class="hatch">
+  <image source="../sprites/hatch.png" width="32" height="16"/>
+ </tile>
+ <tile id="36" class="pod">
+  <image source="../sprites/pod.png" width="32" height="16"/>
+ </tile>
+ <tile id="37" class="jumper">
+  <image source="../sprites/jumper.png" width="26" height="34"/>
+ </tile>
+ <tile id="38" class="dart">
+  <image source="../sprites/dart.png" width="22" height="19"/>
+ </tile>
+ <tile id="39" class="dart_side">
+  <image source="../sprites/dart_side.png" width="22" height="18"/>
+ </tile>
+ <tile id="40" class="spark">
+  <image source="../sprites/spark.png" width="16" height="16"/>
+ </tile>
+ <tile id="41" class="laser">
+  <image source="icons/laser.png" width="16" height="4"/>
+ </tile>
+ <tile id="42" class="spider">
+  <image source="../sprites/spider.png" width="22" height="22"/>
+ </tile>
+ <tile id="43" class="nest">
+  <image source="../sprites/nest.png" width="38" height="22"/>
+ </tile>
+ <tile id="44" class="chain">
+  <image source="../sprites/ball.png" width="12" height="12"/>
+ </tile>
+ <tile id="45" class="seed">
+  <image source="../sprites/seed.png" width="44" height="48"/>
+ </tile>
+ <tile id="46" class="bluedome">
+  <image source="../sprites/bluedome.png" width="14" height="38"/>
+ </tile>
+ <tile id="47" class="cluster">
+  <image source="../sprites/cluster.png" width="32" height="31"/>
+ </tile>
+ <tile id="48" class="mine">
+  <image source="../sprites/mine.png" width="16" height="18"/>
+ </tile>
+ <tile id="49" class="crab">
+  <image source="../sprites/crab.png" width="50" height="36"/>
+ </tile>
+ <tile id="50" class="gunpod">
+  <image source="../sprites/gunpod.png" width="42" height="74"/>
+ </tile>
+ <tile id="51" class="orb">
+  <image source="../sprites/orb.png" width="18" height="18"/>
+ </tile>
+ <tile id="52" class="vent">
+  <image source="../sprites/vent_red.png" width="16" height="10"/>
+ </tile>
+ <tile id="53" class="coregate">
+  <image source="../sprites/coregate.png" width="64" height="51"/>
  </tile>
 </tileset>

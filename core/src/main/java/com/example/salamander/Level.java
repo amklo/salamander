@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.function.Function;
 
 /**
- * One stage, loaded from a Tiled map: assets/maps/stage1.tmx, stage2.tmx, stage3.tmx.
+ * One stage, loaded from a Tiled map: assets/maps/stage1.tmx ... stage7.tmx.
  * See the README ("Editing levels in Tiled") for how the layers and objects are used.
  *
  * World coordinates: pixels, origin at the bottom-left of the map, y pointing up (Tiled's y points down;
@@ -21,7 +21,17 @@ public class Level {
         /** Celtic Frost: flies the Z mirrored (starts in the upper half); seconds it waits behind the one in front. */
         public boolean upper;
         public float delay;
-        /** Spawns when the camera's right edge reaches this x (spawns are sorted by it). */
+        /** Stage 2 wall turrets: mounted on a wall to their right (they face left); barrel starts diagonal (up / down). */
+        public boolean right, diag, diagUp;
+        /**
+         * Vertical stages: fans and rushers of a wave come in one after another, this far apart (the first at 0); a
+         * Celtic Frost wave enters along the column through midX (the middle of the object).
+         */
+        public float gap, midX;
+        /**
+         * Spawns when the camera's right edge reaches this x (spawns are sorted by it). Vertical stages: when the
+         * camera's top edge reaches this y.
+         */
         public float trigger;
     }
 
@@ -41,7 +51,18 @@ public class Level {
 
     public final int index;
     public String name = "", music, bossMusic = "boss.mid", background;
+    /**
+     * Map property "bossMusicAt": the boss music already starts when the middle of the screen reaches this x (stage 1:
+     * the brick maze). -1 = only when the boss comes.
+     */
+    public float bossMusicAt = -1f;
     public float baseSpeed = 46f;
+    /**
+     * Map object "boss" (optional): where the boss picture is in the map (bottom-left, world coordinates) and its size.
+     * With "fixed" on, the boss stays there instead of flying in, and wakes up once it comes on screen.
+     */
+    public boolean bossFixed;
+    public float bossX, bossY, bossW, bossH;
     /**
      * Height of the "lane" the level was laid out for (map property "lane", default 272). When it is taller
      * than the 168px view, the camera drifts up and down within it to follow the ships.
@@ -65,6 +86,8 @@ public class Level {
     /** Seconds until a shot-away brick grows back (0 = it stays as it is). */
     public float[] brickRegrow;
     public static final float BRICK_REGROW_TIME = 3f;
+    /** This stage's regrow time (map property "brickRegrow"; 0 = shot-away bricks are gone for good). */
+    public float brickRegrowTime = BRICK_REGROW_TIME;
     /**
      * A regrowing brick first materializes over BRICK_GROW_TIME seconds (brickGrow counts 0 -> 1). While it does,
      * it is harmless and not solid, but shots still blast it away again.
@@ -85,6 +108,22 @@ public class Level {
     /** Stage 1 green-tipped towers: where the picture is when fully grown, and whether it hangs from the ceiling. */
     public static class Tower { public float x, y, w, h; public boolean ceiling, flip; public String image; }
     public final ArrayList<Tower> towers = new ArrayList<>();
+    /** Stage 2 domes on the side walls (bottom-left of the picture, 18x32; right = on the right wall, facing left). */
+    public static class Dome { public float x, y; public boolean right; }
+    public final ArrayList<Dome> domes = new ArrayList<>();
+    /** Stage 2 eye rocks: bottom-left of the 32x32 rock with the eye. */
+    public final ArrayList<float[]> eyes = new ArrayList<>();
+
+    /**
+     * Vertical stage (map property "vertical"): the camera path runs upward, the ships fly up and fire upward,
+     * and spawns / activation go by the top edge of the screen instead of the right edge.
+     */
+    public boolean vertical;
+    /**
+     * Picture of the bricks (map property "brickArt", same size as the map): each standing brick shows its own
+     * 8x8 piece of it. Without it the bricks use the repeating sprites/brick_pattern.png.
+     */
+    public String brickArt;
 
     // ---- camera path: points {left x, bottom y, speed multiplier for the segment starting there}
     private float[][] path;
@@ -114,7 +153,11 @@ public class Level {
         l.laneH = Float.parseFloat(m.props.getOrDefault("lane", String.valueOf(SalamanderGame.LANE_H)));
         l.music = m.props.get("music");
         l.bossMusic = m.props.getOrDefault("bossMusic", "boss.mid");
+        l.bossMusicAt = Float.parseFloat(m.props.getOrDefault("bossMusicAt", "-1"));
         l.background = m.props.get("background");
+        l.vertical = Boolean.parseBoolean(m.props.getOrDefault("vertical", "false"));
+        l.brickArt = m.props.get("brickArt");
+        l.brickRegrowTime = Float.parseFloat(m.props.getOrDefault("brickRegrow", String.valueOf(BRICK_REGROW_TIME)));
 
         // tile layers: terrain (drawn + solid), collision (solid, not drawn), bricks (destructible)
         l.grid = new byte[l.gCols * l.gRows];
@@ -167,6 +210,7 @@ public class Level {
                 if (tile != null) p.props.putAll(tile.props);
                 p.props.putAll(o.props);
                 boolean flippedV = (o.gid & TiledMap.FLIP_V) != 0;
+                boolean flippedH = (o.gid & TiledMap.FLIP_H) != 0;
 
                 float w = o.width, h = o.height;
                 if (o.gid != 0 && tile != null && w == 0) { w = tile.width; h = tile.height; }
@@ -181,14 +225,17 @@ public class Level {
                 }
                 switch (type) {
                     case "fan":
+                    case "legacy":                               // Legacy: flies like a fan (a wave of 4 by default)
                     case "rusher": {
-                        boolean fan = type.equals("fan");
-                        int n = p.prop("count", fan ? 5 : 3);
+                        boolean legacy = type.equals("legacy"), fan = legacy || type.equals("fan");
+                        int n = p.prop("count", legacy ? 4 : fan ? 5 : 3);
                         float phase = p.prop("phase", (o.id * 2.39996f) % 6.2832f);
                         for (int i = 0; i < n; i++) {
-                            Spawn s = spawn(fan ? Enemy.Type.FAN : Enemy.Type.RUSHER, left + i * (fan ? 18f : 40f),
+                            Spawn s = spawn(legacy ? Enemy.Type.LEGACY : fan ? Enemy.Type.FAN : Enemy.Type.RUSHER, left + i * (fan ? 18f : 40f),
                                     bottom + h / 2f, group, n, p.prop("drop", true));
                             s.phase = phase;
+                            s.gap = i * (fan ? 18f : 40f);
+                            s.midX = left + w / 2f;
                         }
                         group++;
                         break;
@@ -206,6 +253,7 @@ public class Level {
                             Spawn s = spawn(Enemy.Type.FROST, left, bottom + h / 2f, group, n, p.prop("drop", true));   // y: entry line
                             s.upper = upper;
                             s.delay = i * Enemy.FROST_GAP;
+                            s.midX = left + w / 2f;
                         }
                         group++;
                         break;
@@ -224,6 +272,20 @@ public class Level {
                                 ceiling ? top - 4f : bottom + 4f, group++, 1, p.prop("drop", false));
                         break;
                     }
+                    case "wallturret": {                         // stage 2 wall turret; "drop" = red one that leaves a capsule
+                        Spawn s = spawn(Enemy.Type.TURRET_WALL, left, bottom, group++, 1, p.prop("drop", false));
+                        s.right = flippedH || p.prop("right", false);   // flipped in Tiled: on the right wall
+                        s.diag = p.prop("diag", false);
+                        s.diagUp = flippedV;
+                        break;
+                    }
+                    case "dome": {                               // stage 2 dome on a side wall: flip it (X) for the right wall
+                        Dome d = new Dome();
+                        d.x = left; d.y = bottom; d.right = flippedH || p.prop("right", false);
+                        domes.add(d);
+                        break;
+                    }
+                    case "eye": eyes.add(new float[]{left, bottom}); break;
                     case "bamda": case "asteroid": {           // ("asteroid" = its old name)
                         Bamda a = new Bamda();
                         a.x = left; a.y = bottom; a.w = w; a.h = h;
@@ -272,6 +334,10 @@ public class Level {
                         crushers.add(c);
                         break;
                     }
+                    case "boss":                                 // where the boss sits in the map
+                        bossX = left; bossY = bottom; bossW = w; bossH = h;
+                        bossFixed = p.prop("fixed", false);
+                        break;
                     case "checkpoint": cpPoints.add(new float[]{o.x + w / 2f, worldH - o.y - (o.gid != 0 ? -h / 2f : h / 2f)}); break;
                     default: break;   // anything else is a note for the level designer
                 }
@@ -289,6 +355,7 @@ public class Level {
         cps.sort(Float::compare);
         checkpoints = new float[cps.size()];
         for (int i = 0; i < cps.size(); i++) checkpoints[i] = cps.get(i);
+        if (vertical) for (Spawn s : spawns) s.trigger = s.y + s.gap;   // the top edge of the screen reaches it
         spawns.sort((a, b) -> Float.compare(a.trigger, b.trigger));
     }
 
@@ -406,6 +473,8 @@ public class Level {
 
     /** True if the rectangle touches terrain (or a brick). */
     public boolean hits(float x, float y, float w, float h) {
+        for (Obstacle o : obstacles)                 // (rubble left in the stage while playing)
+            if (x < o.x + o.mask.w && x + w > o.x && y < o.y + o.mask.h && y + h > o.y && o.mask.overlaps(o.x, o.y, x, y, w, h)) return true;
         int c0 = (int) Math.floor(x / cell), c1 = (int) Math.floor((x + w - 0.001f) / cell);
         int r0 = (int) Math.floor(y / cell), r1 = (int) Math.floor((y + h - 0.001f) / cell);
         for (int r = r0; r <= r1; r++)
@@ -413,6 +482,18 @@ public class Level {
                 if (solidCell(c, r)) return true;
         return false;
     }
+
+    /**
+     * Solid things added to the stage while playing (stage 2: the rubble a destroyed eye rock leaves behind). They count
+     * as terrain for everything that asks hits(): ships crash into them, shots stop, missiles crawl along them. Their
+     * exact shape is the picture's. Cleared when the stage restarts from a checkpoint.
+     */
+    public static class Obstacle {
+        public final float x, y;
+        public final PixelMask mask;
+        public Obstacle(float x, float y, PixelMask mask) { this.x = x; this.y = y; this.mask = mask; }
+    }
+    public final ArrayList<Obstacle> obstacles = new ArrayList<>();
 
     /** Is there a solid map cell (not a brick) at cell (c, r)? For the debug overlay. */
     public boolean solidTerrainCell(int c, int r) {
@@ -434,7 +515,7 @@ public class Level {
         for (int r = r0; r <= r1; r++)
             for (int c = c0; c <= c1; c++) {
                 int i = r * gCols + c;
-                if (bricks[i] || brickGrow[i] > 0f) { bricks[i] = false; brickGrow[i] = 0f; brickRegrow[i] = BRICK_REGROW_TIME; n++; }
+                if (bricks[i] || brickGrow[i] > 0f) { bricks[i] = false; brickGrow[i] = 0f; brickRegrow[i] = brickRegrowTime; n++; }
             }
         return n;
     }

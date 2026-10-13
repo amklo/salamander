@@ -4,7 +4,7 @@ import com.badlogic.gdx.math.MathUtils;
 
 /** Environmental dangers: falling stalactites, floating bamdas, moving teeth, erupting volcanoes and piston crushers. */
 public class Hazard {
-    public enum Type { ROCK, VOLCANO, CRUSHER, BAMDA, FANG, ARM, TOWER }
+    public enum Type { ROCK, VOLCANO, CRUSHER, BAMDA, FANG, ARM, TOWER, DOME, EYE, RUBBLE }
 
     /** Rocks and bamdas can be shot to pieces and hurt the ship on contact. */
     public boolean shootable() { return type == Type.ROCK || type == Type.BAMDA; }
@@ -21,6 +21,8 @@ public class Hazard {
     public PixelMask mask;
     /** Hidden teeth sit this much deeper than their own length, so no tip peeks out of the rock. */
     public static final float FANG_TUCK = 10f;
+    /** FANG: how far it moves between hidden (inside the rock) and fully out (its tip on the opposite surface). */
+    public float fangTravel;
 
     // BAMDA: pulses through the frames of sprites/bamda.png (big, medium, small, medium, ...) around a fixed centre;
     // its hit box follows the frame. Frame sizes are filled in by GameScreen from the picture.
@@ -28,7 +30,7 @@ public class Hazard {
     private static final int[] PULSE = {0, 1, 2, 1};
     public static final float PULSE_FRAME_TIME = 0.28f;
     /** Bamdas are tough, and shoot at the nearest ship like the walkers do. */
-    public static final int BAMDA_HP = 25;
+    public static final int BAMDA_HP = 12;
     public static final float BAMDA_SHOT_INTERVAL = 2.0f, BAMDA_SHOT_SPEED = 105f;
     public float cx, cy;
     public int frame;
@@ -172,9 +174,10 @@ public class Hazard {
             if (timer <= 0f && g.inView(x + w / 2f, fromCeil ? y : y + h, 0f)) {   // only while its tip is on screen
                 timer = MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
                 float tipY = fromCeil ? y - 16f : y + h;              // just beyond the green tip
+                int red = MathUtils.random(TOWER_SPIT_COUNT - 1);       // one of them is red (and carries a capsule)
                 for (int i = 0; i < TOWER_SPIT_COUNT; i++) {          // fanned out left to right
                     float spread = (i - (TOWER_SPIT_COUNT - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
-                    g.spawnAmoeba(x + w / 2f - 8f, tipY, spread, (fromCeil ? -1f : 1f) * MathUtils.random(60f, 110f));
+                    g.spawnAmoeba(x + w / 2f - 8f, tipY, spread, (fromCeil ? -1f : 1f) * MathUtils.random(60f, 110f), i == red);
                 }
             }
         }
@@ -187,6 +190,37 @@ public class Hazard {
         float ty = fromCeil ? y : y + h - TOWER_TIP;
         return rx < x + w && rx + rw > x && ry < ty + TOWER_TIP && ry + rh > ty;
     }
+
+    // DOME (stage 2): a dome on a side wall, 18x32 (sprites/dome.png: closed, open; the size comes from the picture). It starts closed, opens
+    // DOME_OPEN_DELAY seconds after it comes on screen and stays open, spitting sprays of amoebas sideways like the
+    // stage 1 towers. Shooting it DOME_HP times destroys it (DOME_SCORE points). flipV is unused; fromCeil = on the
+    // right wall (facing left).
+    public static final int DOME_HP = 12, DOME_SCORE = 500;
+    public static final float DOME_OPEN_DELAY = 1f;
+    public boolean open;
+
+    private void updateDome(GameScreen g, float dt) {
+        if (!g.inView(x + w / 2f, y + h / 2f, 0f)) return;   // waits (closed, or between sprays) while off screen
+        timer -= dt;
+        if (timer > 0f) return;
+        if (!open) { open = true; timer = 0.6f; return; }      // opens, and soon spits its first spray
+        timer = MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
+        float dir = fromCeil ? -1f : 1f;
+        float mx = fromCeil ? x - 12f : x + w - 4f;          // out of the open mouth
+        int red = MathUtils.random(TOWER_SPIT_COUNT - 1);     // one of them is red (and carries a capsule)
+        for (int i = 0; i < TOWER_SPIT_COUNT; i++) {          // fanned out bottom to top
+            float spread = (i - (TOWER_SPIT_COUNT - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
+            g.spawnAmoeba(mx, y + h / 2f - 8f, dir * MathUtils.random(60f, 110f), spread, i == red);
+        }
+    }
+
+    // EYE (stage 2): a rock with a green eye, 32x32 (sprites/rock_eye.png; it is not part of the map art). The eye
+    // shoots at the ships like a bamda. The rock is solid to the ships (its exact shape); shot EYE_HP times, the whole
+    // rock is destroyed.
+    public static final int EYE_HP = 3, EYE_SCORE = 300;
+
+    // RUBBLE (stage 2): what a destroyed eye rock leaves behind (sprites/rubbles.png). Only drawn here: it is solid as a
+    // Level.Obstacle, so it works like terrain (indestructible, ships crash into it, shots stop).
 
     public Hazard(Type type) { this.type = type; }
 
@@ -236,11 +270,23 @@ public class Hazard {
             case TOWER:
                 updateTower(g, dt);
                 break;
+            case DOME:
+                updateDome(g, dt);
+                break;
+            case RUBBLE:                                // just lies there
+                break;
+            case EYE:                                   // shoots at the nearest ship, like a bamda
+                timer -= dt;
+                if (timer <= 0f) {
+                    timer = BAMDA_SHOT_INTERVAL + MathUtils.random(0f, 0.8f);
+                    if (g.inView(x + w / 2f, y + h / 2f, 12f)) g.aimedShotFromRock(x + w / 2f, y + h / 2f, BAMDA_SHOT_SPEED);
+                }
+                break;
             case ARM:                                   // stage arm (boss arms are moved by the boss)
                 if (!bossArm) updateArm(g, anchorX, anchorY, dt);
                 break;
             case FANG:       // hidden in the ground / ceiling, then juts out, holds, and pulls back in
-                y = baseY + (fromCeil ? 1f : -1f) * (1f - fangOut()) * (h + FANG_TUCK);
+                y = baseY + (fromCeil ? 1f : -1f) * (1f - fangOut()) * fangTravel;
                 break;
             default:
                 updateCrusher();

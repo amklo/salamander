@@ -4,6 +4,8 @@ import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.example.salamander.Controls.Action;
 import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.graphics.Cursor;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 public class SalamanderGame extends Game {
@@ -26,6 +28,18 @@ public class SalamanderGame extends Game {
     public int hiScore;
     private Preferences prefs;
 
+    /**
+     * Difficulty, picked on the title screen (saved between runs). EASY: a destroyed ship keeps its power-ups, except
+     * the options (they are still left behind as green capsules). NORMAL: it starts over without power-ups.
+     */
+    public boolean easy;
+
+    public void setEasy(boolean e) {
+        easy = e;
+        prefs.putBoolean("easy", e);
+        prefs.flush();
+    }
+
     /** Volume levels in steps of 10%: 0 = off, 10 = full. Saved between runs. */
     public int bgmLevel, sfxLevel;
     /** Seconds left to show the volume read-out after a change. */
@@ -38,6 +52,7 @@ public class SalamanderGame extends Game {
         bgm = new Bgm();
         prefs = Gdx.app.getPreferences("salamander");
         hiScore = prefs.getInteger("hi", 0);
+        easy = prefs.getBoolean("easy", false);
         bgmLevel = clampLevel(prefs.getInteger("bgmVolume", 7));
         sfxLevel = clampLevel(prefs.getInteger("sfxVolume", 10));
         applyVolumes();
@@ -68,7 +83,64 @@ public class SalamanderGame extends Game {
             if (sfxChanged) assets.play("pickup", 0.35f);   // let the player hear the new level
         }
         if (volumeMsgT > 0f) volumeMsgT -= Gdx.graphics.getDeltaTime();
+        updateCursor();
         super.render();
+    }
+
+    /** The mouse pointer hides itself after this many seconds without moving, and comes back as soon as it moves. */
+    private static final float CURSOR_HIDE_DELAY = 3f;
+    private float cursorIdleT;
+    private int lastMouseX = Integer.MIN_VALUE, lastMouseY;
+    private boolean cursorHidden;
+    /** Invisible pointer, the fallback when GLFW can't be asked directly to hide it. */
+    private Cursor blankCursor;
+
+    /** Hides the mouse pointer once it has been still for CURSOR_HIDE_DELAY seconds (window or full screen). */
+    private void updateCursor() {
+        int mx = Gdx.input.getX(), my = Gdx.input.getY();
+        boolean moved = mx != lastMouseX || my != lastMouseY || Gdx.input.getDeltaX() != 0 || Gdx.input.getDeltaY() != 0;
+        lastMouseX = mx;
+        lastMouseY = my;
+        if (moved) cursorIdleT = 0f;
+        else cursorIdleT += Gdx.graphics.getDeltaTime();
+        boolean hide = cursorIdleT >= CURSOR_HIDE_DELAY;
+        if (hide != cursorHidden) setCursorVisible(!hide);
+    }
+
+    private void setCursorVisible(boolean visible) {
+        cursorHidden = !visible;
+        if (glfwCursor(visible)) return;
+        try {   // fallback: a see-through pointer picture
+            if (visible) {
+                Gdx.graphics.setSystemCursor(Cursor.SystemCursor.Arrow);
+            } else {
+                if (blankCursor == null) {
+                    Pixmap pm = new Pixmap(16, 16, Pixmap.Format.RGBA8888);   // all see-through
+                    blankCursor = Gdx.graphics.newCursor(pm, 0, 0);
+                    pm.dispose();
+                }
+                Gdx.graphics.setCursor(blankCursor);
+            }
+        } catch (RuntimeException e) {
+            Gdx.app.error("Salamander", "Could not change the mouse pointer", e);
+        }
+    }
+
+    /**
+     * Desktop (LWJGL3): tells GLFW to hide / show the pointer over the game window, which also works in macOS full
+     * screen. Done by reflection so the core module doesn't depend on the desktop backend. Returns false if not possible.
+     */
+    private boolean glfwCursor(boolean visible) {
+        try {
+            Object window = Gdx.graphics.getClass().getMethod("getWindow").invoke(Gdx.graphics);
+            long handle = (Long) window.getClass().getMethod("getWindowHandle").invoke(window);
+            Class<?> glfw = Class.forName("org.lwjgl.glfw.GLFW");
+            final int GLFW_CURSOR = 0x00033001, NORMAL = 0x00034001, HIDDEN = 0x00034002;
+            glfw.getMethod("glfwSetInputMode", long.class, int.class, int.class).invoke(null, handle, GLFW_CURSOR, visible ? NORMAL : HIDDEN);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /** e.g. "MUSIC 70%   SFX 100%" */
@@ -97,5 +169,6 @@ public class SalamanderGame extends Game {
         batch.dispose();
         assets.dispose();
         bgm.dispose();
+        if (blankCursor != null) blankCursor.dispose();
     }
 }

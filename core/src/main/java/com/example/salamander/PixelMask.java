@@ -3,7 +3,7 @@ package com.example.salamander;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Pixmap;
 
-/** Which pixels of a sprite are solid, for exact collisions with oddly shaped things (teeth, the brain boss). */
+/** Which pixels of a sprite are solid, for exact collisions with oddly shaped things (teeth, the brain boss, domes). */
 public final class PixelMask {
     public final int w, h;
     private final boolean[] solid;   // row 0 = bottom
@@ -13,12 +13,38 @@ public final class PixelMask {
     /** Builds the mask from a PNG's alpha channel (drawn 1:1, so mask pixels = world pixels). */
     public static PixelMask load(String internalPath) {
         Pixmap pm = new Pixmap(Gdx.files.internal(internalPath));
-        int w = pm.getWidth(), h = pm.getHeight();
+        PixelMask m = fromPixmap(pm, 0, pm.getWidth());
+        pm.dispose();
+        return m;
+    }
+
+    /** Masks of the frames of a horizontal strip, each frameW wide (frame 0 = leftmost). */
+    public static PixelMask[] loadFrames(String internalPath, int frameW) {
+        Pixmap pm = new Pixmap(Gdx.files.internal(internalPath));
+        PixelMask[] f = new PixelMask[Math.max(1, pm.getWidth() / frameW)];
+        for (int i = 0; i < f.length; i++) f[i] = fromPixmap(pm, i * frameW, frameW);
+        pm.dispose();
+        return f;
+    }
+
+    /** Mask of the columns x0 .. x0+w-1 of a picture (its alpha channel). */
+    public static PixelMask fromPixmap(Pixmap pm, int x0, int w) {
+        int h = pm.getHeight();
         boolean[] s = new boolean[w * h];
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
-                s[(h - 1 - y) * w + x] = (pm.getPixel(x, y) & 0xff) > 0;
-        pm.dispose();
+                s[(h - 1 - y) * w + x] = (pm.getPixel(x0 + x, y) & 0xff) > 0;
+        return new PixelMask(w, h, s);
+    }
+
+    /** Is pixel (x, y) solid (y counted from the bottom)? Outside the mask is not. */
+    public boolean at(int x, int y) { return x >= 0 && y >= 0 && x < w && y < h && solid[y * w + x]; }
+
+    /** The same mask mirrored left to right (for sprites drawn flipped horizontally). */
+    public PixelMask flippedH() {
+        boolean[] s = new boolean[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) s[y * w + (w - 1 - x)] = solid[y * w + x];
         return new PixelMask(w, h, s);
     }
 

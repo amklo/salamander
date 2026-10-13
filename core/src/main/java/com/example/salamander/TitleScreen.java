@@ -26,8 +26,9 @@ public class TitleScreen extends ScreenAdapter {
     private final Texture bg, stars, logo;
     private final TextureRegion pix;
     private static final Color WHITE = new Color(0.88f, 0.88f, 0.88f, 1f), DIM = new Color(0.6f, 0.6f, 0.7f, 1f);
-    private static final int OUT = 0, CHOOSING = 1, READY = 2;
-    private final int[] stage = new int[Controls.PLAYERS];        // OUT / CHOOSING / READY per player
+    private static final int OUT = 0, CHOOSING = 1, GUARD = 2, READY = 3;
+    private final int[] stage = new int[Controls.PLAYERS];        // OUT / CHOOSING (ship) / GUARD / READY per player
+    private final int[] guard = new int[Controls.PLAYERS];        // Player.SHIELD or Player.FFIELD
     private final int[] shipType = new int[Controls.PLAYERS];     // 0..Player.SHIP_TYPES-1
     private float t;
     // S: stage select (debug). Row 0 = stage (OFF, 1..3), row 1 = checkpoint.
@@ -52,7 +53,7 @@ public class TitleScreen extends ScreenAdapter {
     @Override
     public void render(float dt) {
         t += dt;
-        if (Gdx.input.isKeyJustPressed(Keys.D)) {   // debug: start with options, missiles, shield, DOUBLE
+        if (Gdx.input.isKeyJustPressed(Keys.D)) {   // debug: start with options, missiles, F.FIELD / SHIELD, DOUBLE
             GameScreen.debugLoadout = !GameScreen.debugLoadout;
             game.assets.play(GameScreen.debugLoadout ? "power" : "hit", 0.4f);
         }
@@ -80,28 +81,46 @@ public class TitleScreen extends ScreenAdapter {
             }
         }
         if (selectOpen) updateSelect();             // the menu takes the controls while it is open
-        else
+        else {
+        if (stage[0] == OUT && stage[1] == OUT) {    // attract screen: left / right picks the difficulty
+            for (int i = 0; i < Controls.PLAYERS; i++) {
+                if (Controls.pressed(i, Action.LEFT) || Controls.pressed(i, Action.RIGHT)) {
+                    game.setEasy(!game.easy);
+                    game.assets.play("hit", 0.2f);
+                }
+            }
+        }
         for (int i = 0; i < Controls.PLAYERS; i++) {
-            if (Controls.pressed(i, Action.CANCEL) && stage[i] != OUT) {   // back one step: READY -> CHOOSING -> not joined
-                stage[i] = stage[i] == READY ? CHOOSING : OUT;
+            if (Controls.pressed(i, Action.CANCEL) && stage[i] != OUT) {   // back one step: READY -> GUARD -> CHOOSING -> not joined
+                stage[i] = stage[i] == READY ? GUARD : stage[i] == GUARD ? CHOOSING : OUT;
                 game.assets.play("hit", 0.3f);
                 continue;
             }
             if (stage[i] == CHOOSING) {
                 if (Controls.pressed(i, Action.LEFT)) { shipType[i] = (shipType[i] + Player.SHIP_TYPES - 1) % Player.SHIP_TYPES; game.assets.play("hit", 0.2f); }
                 if (Controls.pressed(i, Action.RIGHT)) { shipType[i] = (shipType[i] + 1) % Player.SHIP_TYPES; game.assets.play("hit", 0.2f); }
+            } else if (stage[i] == GUARD) {          // left / right: SHIELD <-> F.FIELD
+                if (Controls.pressed(i, Action.LEFT) || Controls.pressed(i, Action.RIGHT)) {
+                    guard[i] = guard[i] == Player.SHIELD ? Player.FFIELD : Player.SHIELD;
+                    game.assets.play("hit", 0.2f);
+                }
             }
             if (!Controls.pressed(i, Action.FIRE) && !Controls.pressed(i, Action.CONFIRM)) continue;
             if (stage[i] == OUT) {
                 stage[i] = CHOOSING;                 // first press: join, then pick a ship
                 game.assets.play("pickup", 0.4f);
             } else if (stage[i] == CHOOSING) {
-                stage[i] = READY;                    // second press: ship confirmed
+                stage[i] = GUARD;                    // second press: ship confirmed, now the guard
+                guard[i] = Player.defaultGuard(shipType[i]);
+                game.assets.play("pickup", 0.4f);
+            } else if (stage[i] == GUARD) {
+                stage[i] = READY;                    // third press: guard confirmed
                 game.assets.play("power", 0.4f);
             } else if (!anyChoosing()) {
                 startGame();                         // a ready player presses again: start (once nobody is still choosing)
                 return;
             }
+        }
         }
 
         ScreenUtils.clear(0, 0, 0, 1);
@@ -119,12 +138,14 @@ public class TitleScreen extends ScreenAdapter {
         } else if (stage[0] == OUT && stage[1] == OUT) {
             // ---- attract: logo, join prompts, hi-score
             game.batch.draw(logo, (W - logo.getWidth()) / 2, H - 4 - logo.getHeight());
-            joinPrompt(0, 8, 62, Color.CYAN, blink);
-            joinPrompt(1, W / 2 + 4, 62, P2_TINT, blink);
-            text("HI-SCORE  " + String.format("%06d", game.hiScore), 0, 48, W, Align.center, PixelFont.NORMAL, WHITE);
+            text("<  " + difficultyName() + "  >", 0, 68, W, Align.center, PixelFont.NORMAL, game.easy ? Color.GREEN : WHITE);
+            joinPrompt(0, 8, 54, Color.CYAN, blink);
+            joinPrompt(1, W / 2 + 4, 54, P2_TINT, blink);
+            text("HI-SCORE  " + String.format("%06d", game.hiScore), 0, 42, W, Align.center, PixelFont.NORMAL, WHITE);
         } else {
             // ---- ship select: one column per player
             text("SELECT YOUR SHIP", 0, 174, W, Align.center, PixelFont.BOLD, WHITE);
+            text(difficultyName(), 0, 165, W, Align.center, PixelFont.SMALL, game.easy ? Color.GREEN : DIM);
             drawColumn(0, 4, Color.CYAN, blink);
             drawColumn(1, W / 2 + 4, P2_TINT, blink);
             if (stage[0] == READY || stage[1] == READY) {
@@ -170,14 +191,22 @@ public class TitleScreen extends ScreenAdapter {
             else if (blink) text(who + "  PRESS FIRE", x, 156, w, Align.center, PixelFont.NORMAL, c);
             return;
         }
-        boolean choosing = stage[i] == CHOOSING;
-        text(who + (choosing ? "  SELECT" : "  READY"), x, 156, w, Align.center, PixelFont.NORMAL, c);
+        boolean choosing = stage[i] == CHOOSING, picking = stage[i] == GUARD;
+        text(who + (choosing || picking ? "  SELECT" : "  READY"), x, 156, w, Align.center, PixelFont.NORMAL, c);
         text(choosing ? "< TYPE " + (shipType[i] + 1) + " >" : "TYPE " + (shipType[i] + 1), x, 142, w, Align.center,
                 PixelFont.BOLD, choosing && blink ? Color.YELLOW : WHITE);
-        int[] slots = Player.slotsFor(shipType[i]);
+        if (!choosing) {                             // the guard: SHIELD (front) or F.FIELD (bubble)
+            String g = Player.POWER_NAMES[guard[i]];
+            text(picking ? "< " + g + " >" : g, x, 130, w, Align.center, PixelFont.NORMAL, picking && blink ? Color.YELLOW : WHITE);
+            if (picking) text(guard[i] == Player.SHIELD ? "FRONT GUARD, " + Player.SHIELD_HITS + " HITS"
+                    : "BUBBLE, " + Player.FFIELD_HITS + " HITS", x, 121, w, Align.center, PixelFont.SMALL, Color.LIGHT_GRAY);
+        }
+        int[] slots = choosing ? Player.slotsFor(shipType[i]) : Player.slotsFor(shipType[i], guard[i]);
         for (int k = 0; k < slots.length; k++) {
-            boolean moved = slots[k] != Player.CLASSIC_SLOTS[k];
-            text((k + 1) + " " + Player.POWER_NAMES[slots[k]], x + 34, 128 - k * 9, w, Align.left, PixelFont.SMALL,
+            boolean guardSlot = slots[k] == Player.SHIELD || slots[k] == Player.FFIELD;   // "?": the guard picked next
+            boolean moved = !guardSlot && slots[k] != Player.CLASSIC_SLOTS[k];
+            String name = choosing && guardSlot ? "?" : Player.POWER_NAMES[slots[k]];   // guard not picked yet
+            text((k + 1) + " " + name, x + 34, 112 - k * 7, w, Align.left, PixelFont.SMALL,
                     moved ? Color.YELLOW : Color.LIGHT_GRAY);
         }
     }
@@ -233,14 +262,20 @@ public class TitleScreen extends ScreenAdapter {
         text("U/D: ROW  L/R: CHANGE  FIRE / S: DONE", 0, 58, W, Align.center, PixelFont.SMALL, DIM);
     }
 
+    private String difficultyName() { return game.easy ? "EASY" : "NORMAL"; }
+
     private boolean anyChoosing() {
-        for (int s : stage) if (s == CHOOSING) return true;
+        for (int s : stage) if (s == CHOOSING || s == GUARD) return true;
         return false;
     }
 
     private void startGame() {
         Player[] ps = new Player[Controls.PLAYERS];
-        for (int i = 0; i < ps.length; i++) if (stage[i] == READY) ps[i] = new Player(i, shipType[i]);
+        for (int i = 0; i < ps.length; i++) {
+            if (stage[i] != READY) continue;
+            ps[i] = new Player(i, shipType[i], guard[i]);
+            ps[i].lives = Player.startLives(game.easy);   // 5 ships on EASY, 3 on NORMAL
+        }
         game.assets.play("power", 0.5f);
         // boss test: straight to that stage's boss
         int first = GameScreen.bossTest >= 0 ? GameScreen.bossTest : Math.max(0, GameScreen.startStage);   // debug starts

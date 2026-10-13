@@ -36,7 +36,14 @@ public class GameScreen extends ScreenAdapter {
 
     private enum State { INTRO, PLAY, PAUSE, DEAD, CLEAR, GAMEOVER, WIN }
 
-    private static class Capsule { float x, y, y0, t; boolean dead() { return x < -9999f; } }
+    /** A power capsule; green = gives back one option lost when a ship was destroyed. */
+    private static class Capsule {
+        float x, y, y0, t;
+        boolean green;
+        /** Green capsules come back once at the far edge after leaving the screen: true once that has happened. */
+        boolean wrapped;
+        boolean dead() { return x < -9999f; }
+    }
     private static class Explosion { float x, y, t, scale; }
 
     final SalamanderGame game;
@@ -71,7 +78,7 @@ public class GameScreen extends ScreenAdapter {
     private static boolean debugHitbox;
     /** D on the title screen: every stage (and every newly joined ship) starts with the debug loadout. */
     static boolean debugLoadout;
-    public static final int STAGES = 3;
+    public static final int STAGES = 7;
     /**
      * B on the title screen: boss test. -1 = off, else the stage (0..STAGES-1) whose boss to fight.
      * The game starts at that stage's boss arena; beating the boss (or game over) returns to the title.
@@ -90,6 +97,8 @@ public class GameScreen extends ScreenAdapter {
     private final ArrayList<Hazard> hazards = new ArrayList<>();
 
     void addHazard(Hazard h) { hazards.add(h); }
+    /** Hazards made while the hazards are being gone through (e.g. rubble during the collisions); added after. */
+    private final ArrayList<Hazard> pendingHazards = new ArrayList<>();
     private final ArrayList<Capsule> caps = new ArrayList<>();
     private final ArrayList<Explosion> fx = new ArrayList<>();
     private final HashMap<Integer, Enemy.Group> groups = new HashMap<>();
@@ -97,7 +106,14 @@ public class GameScreen extends ScreenAdapter {
     // art
     private final Texture bgTex, starTex;
     private final float capW, capH;                 // power capsule size, from sprites/PowerCapsule.png
+    /** Legacy (sprites/Legacy.png): 4 frames of 16x16, white; drawn green (LEGACY_GREEN). */
+    private final TextureRegion[] legacyF;
+    private static final Color LEGACY_GREEN = new Color(0x73 / 255f, 1f, 0x73 / 255f, 1f);
+    /** Player 2's ship (sprites/player_red.png, same layout as player.png). */
+    private final TextureRegion[] playerRedF;
     private final TextureRegion[] playerF, optionF, fanF, rushF, walkF, capF, boomF, lavaF;
+    /** sprites/powercapsule_green.png (same layout as PowerCapsule.png); the normal capsule when it is missing. */
+    private final TextureRegion[] capGreenF;
     private final TextureRegion hudER, hudBoxR;
     private final TextureRegion[] bamdaF, armF;
     private final TextureRegion[] hudSlotR, hudShipR;
@@ -113,27 +129,52 @@ public class GameScreen extends ScreenAdapter {
     private static final float EBULLET_SPIN = 12f;
     /** Celtic Frost (sprites/celtic frost.png). */
     private final TextureRegion frostR;
-    /** F.FIELD (sprites/ffield.png): 8x16 frames, looped. null = picture not there yet (drawn as a plain bar). */
-    private final TextureRegion[] ffieldF;
-    /** sprites/ffield_red.png: the same field once it has Player.FFIELD_LOW hits or fewer left (null = keep ffield.png). */
-    private final TextureRegion[] ffieldRedF;
-    private static final float FFIELD_FPS = 12f;
+    /** SHIELD (sprites/shield.png): 8x16 frames, looped. null = picture not there yet (drawn as a plain bar). */
+    private final TextureRegion[] shieldF;
+    /** sprites/shield_red.png: the same field once it has Player.SHIELD_LOW hits or fewer left (null = keep shield.png). */
+    private final TextureRegion[] shieldRedF;
+    private static final float SHIELD_FPS = 12f;
     /** Missing Link (sprites/missing_link.png): 7 frames of a barrel roll, looped. */
     private final TextureRegion[] linkF;
     /** Amoeba (sprites/amoeba.png): 3 frames of 16x16, looped. */
     private final TextureRegion[] amoebaF;
     /** Rugal (sprites/rugal.png): level, diving, climbing. */
     private final TextureRegion[] rugalF;
+    /** sprites/rugal_red.png: a Rugal that carries a power capsule (same frames as rugal.png). */
+    private final TextureRegion[] rugalRedF;
     /** At most this many amoebas float around at once (the towers stop spitting until some are gone). */
     private static final int AMOEBA_MAX = 16;
-    private final TextureRegion rockR, shotR, laserR, missR, ebR, shieldR, pix, headR, shaftR, bossR;
+    private final TextureRegion rockR, shotR, laserR, missR, ebR, ffieldR, pix, headR, shaftR, bossR;
+    // ---- vertical stage (stage 2)
+    /**
+     * sprites/player_blue_vertical.png: the ship pointing up (vertical stages). Three frames side by side: banking
+     * left, level, banking right (a picture with a single frame is used for all three).
+     */
+    private final TextureRegion[] playerVF;
+    /** Player 2's vertical ship (sprites/player_red_vertical.png, same layout). */
+    private final TextureRegion[] playerVRedF;
+    /** Wall turrets: [0] = sideways, [1] = diagonal (pointing down), facing right. */
+    private final TextureRegion[] wallTurretRedF, wallTurretGreenF;
+    /** sprites/dome.png: two frames side by side, closed and open (facing right, for the left wall). */
+    private final TextureRegion[] domeF;
+    /** Exact shapes of the dome frames: [frame: closed, open][0 = as drawn (left wall), 1 = mirrored (right wall)]. */
+    private PixelMask[][] domeMasks;
+    private final TextureRegion rockEyeR, ringR;
+    /** Exact shape of the eye rock (sprites/rock_eye.png, its dark background made see-through). */
+    private PixelMask rockEyeMask;
+    /** sprites/rubbles.png: what is left of a destroyed eye rock (solid like terrain), and its exact shape. */
+    private final TextureRegion rubbleR;
+    private PixelMask rubbleMask;
+    /** The map's "brickArt" picture (null = bricks use brick_pattern.png). */
+    private Texture brickArtTex;
     // map stages: pre-rendered terrain strips, brick maze picture, bamda sprites
     private Texture[] artTex;
     private Texture brickTex;
     private final java.util.HashMap<String, PixelMask> masks = new java.util.HashMap<>();
     private PixelMask bossMask;
-    private static final Color[] STAR_TINT = {new Color(0.7f, 0.8f, 1f, 1f), new Color(1f, 0.6f, 0.3f, 1f),
-            new Color(0.6f, 1f, 0.9f, 1f)};
+    private static final Color[] STAR_TINT = {new Color(0.7f, 0.8f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f),
+            new Color(0.9f, 0.9f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f), new Color(0.8f, 0.85f, 1f, 1f),
+            new Color(0.9f, 0.9f, 1f, 1f), new Color(0.7f, 1f, 0.8f, 1f)};   // (stage 2 on: plain white stars, like the original)
 
     /** @param players the joined players (length 2, null entries = not joined); lives and score carry over */
     public GameScreen(SalamanderGame game, int levelIdx, Player[] players) {
@@ -143,6 +184,7 @@ public class GameScreen extends ScreenAdapter {
         this.levelIdx = levelIdx;
         this.level = Level.build(levelIdx);
         this.players = players;
+        Player.vertical = level.vertical;
         for (Player p : players) {
             if (p == null) continue;
             p.resetPowerups();                       // every stage starts without upgrades...
@@ -157,6 +199,7 @@ public class GameScreen extends ScreenAdapter {
         bgTex.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         starTex.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         playerF = a.strip("player", 32);
+        playerRedF = Gdx.files.internal("sprites/player_red.png").exists() ? a.strip("player_red", 32) : playerF;   // player 2
         // sprites/hud.png, pieces from the original game's HUD: meter slot (empty / highlighted / occupied /
         // highlighted + occupied), ship icons 1P / 2P, "E" icon, yellow box
         Texture hudTex = a.tex("hud");
@@ -169,11 +212,13 @@ public class GameScreen extends ScreenAdapter {
         hudBoxR = new TextureRegion(hudTex, 88, 0, 48, 7);
         optionF = a.strip("option", 12);
         fanF = a.strip("fan", 16);
+        legacyF = Gdx.files.internal("sprites/Legacy.png").exists() ? a.strip("Legacy", 16) : fanF;
         rushF = a.strip("rusher", 18);
         walkF = a.strip("walker", 16);
         bioWalkRedF = levelIdx == 0 ? a.strip("bio walker red", 16) : null;
         bioWalkBlueF = levelIdx == 0 ? a.strip("bio walker blue", 16) : null;
         capF = scanFrames("sprites/PowerCapsule.png");   // frames separated by empty columns
+        capGreenF = Gdx.files.internal("sprites/powercapsule_green.png").exists() ? scanFrames("sprites/powercapsule_green.png") : capF;
         capW = capF[0].getRegionWidth();
         capH = capF[0].getRegionHeight();
         boomF = a.strip("explosion", 24);
@@ -186,16 +231,38 @@ public class GameScreen extends ScreenAdapter {
         missR = a.one("missile");
         ebR = a.one("ebullet");
         frostR = a.one("celtic frost");
-        ffieldF = Gdx.files.internal("sprites/ffield.png").exists() ? a.strip("ffield", 8) : null;   // drawn as it is (its own transparency)
-        ffieldRedF = Gdx.files.internal("sprites/ffield_red.png").exists() ? a.strip("ffield_red", 8) : null;
+        shieldF = Gdx.files.internal("sprites/shield.png").exists() ? a.strip("shield", 8) : null;   // drawn as it is (its own transparency)
+        shieldRedF = Gdx.files.internal("sprites/shield_red.png").exists() ? a.strip("shield_red", 8) : null;
         linkF = a.strip("missing_link", 16);
         amoebaF = framesOuterBlackKeyed("sprites/amoeba.png", 16);
         rugalF = a.strip("rugal", 16);
-        shieldR = a.one("shield");
+        rugalRedF = Gdx.files.internal("sprites/rugal_red.png").exists() ? a.strip("rugal_red", 16) : null;
+        rippleTex = a.texFile("sprites/ripple.png");   // drawn as it is (its own transparency)
+        ffieldR = a.one("ffield");
         pix = a.one("pixel");
         headR = a.one("crusher_head");
         shaftR = a.one("crusher_shaft");
         bossR = a.one("boss" + levelIdx);
+        boolean v = level.vertical;   // pictures only the vertical stage uses
+        playerVF = v ? verticalShipFrames(keyedBackground("sprites/player_blue_vertical.png")) : null;
+        playerVRedF = v && Gdx.files.internal("sprites/player_red_vertical.png").exists()
+                ? verticalShipFrames(keyedBackground("sprites/player_red_vertical.png")) : playerVF;   // player 2
+        wallTurretRedF = v ? a.strip("wall turret red", 16) : null;
+        wallTurretGreenF = v ? a.strip("wall turret green", 16) : null;
+        domeF = v ? a.strip("dome", a.tex("dome").getWidth() / 2) : null;   // 2 frames: closed, open
+        if (v) {
+            PixelMask[] dm = PixelMask.loadFrames("sprites/dome.png", domeF[0].getRegionWidth());
+            domeMasks = new PixelMask[dm.length][];
+            for (int i = 0; i < dm.length; i++) domeMasks[i] = new PixelMask[]{dm[i], dm[i].flippedH()};
+        }
+        PixelMask[] eyeMask = new PixelMask[1];
+        rockEyeR = v ? keyedBackground("sprites/rock_eye.png", eyeMask) : null;
+        rockEyeMask = eyeMask[0];
+        boolean rubble = v && Gdx.files.internal("sprites/rubbles.png").exists();
+        rubbleR = rubble ? a.one("rubbles") : null;
+        rubbleMask = rubble ? PixelMask.load("sprites/rubbles.png") : null;
+        ringR = v ? a.one("tetran ring") : null;
+        if (level.brickArt != null) brickArtTex = a.texFile(level.brickArt);
         // stage art from the Tiled map: image layers, terrain tileset, brick pattern, hazard pictures
         artTex = new Texture[level.art.size()];
         for (int i = 0; i < artTex.length; i++) artTex[i] = a.texFile(level.art.get(i).image);
@@ -209,7 +276,8 @@ public class GameScreen extends ScreenAdapter {
             if (t.flip && !masks.containsKey(t.image + "#flipV")) masks.put(t.image + "#flipV", masks.get(t.image).flippedV());
         }
         bossMask = PixelMask.load("sprites/boss" + levelIdx + ".png");
-        loadBossEye("sprites/boss" + levelIdx + ".png");
+        if (levelIdx == 0) loadBossEye("sprites/boss" + levelIdx + ".png");   // (only stage 1's brain has an eye)
+        loadBossCore();
 
         if (bossTest >= 0) {
             checkpointT = level.stopT;               // boss test: start (and restart after dying) at the boss arena
@@ -255,14 +323,38 @@ public class GameScreen extends ScreenAdapter {
         p.dead = false;
         p.respawnT = 0f;
         p.aiming = false;
-        p.x = scrollX + 40f;
-        float off = playersInGame() > 1 ? (p.index == 0 ? 14f : -14f) : 0f;   // P1 above, P2 below
-        p.y = openSpot(p.x, scrollY + H / 2f - Player.H / 2f + off);
+        if (level.vertical) {                     // near the bottom, in the middle (P1 left, P2 right)
+            float off = playersInGame() > 1 ? (p.index == 0 ? -20f : 20f) : 0f;
+            p.y = scrollY + 24f;
+            p.x = openSpotX(scrollX + W / 2f - Player.W / 2f + off, p.y);
+        } else {
+            p.x = scrollX + 40f;
+            float off = playersInGame() > 1 ? (p.index == 0 ? 14f : -14f) : 0f;   // P1 above, P2 below
+            p.y = openSpot(p.x, scrollY + H / 2f - Player.H / 2f + off);
+        }
         p.invuln = 2f;
         p.ghostT = p.invuln;   // ...and the walls can't hurt it either while it blinks
         p.fireCd = 0f; p.missCd = 0f;
-        p.fillTrail(40f, p.y - pathY);
+        p.fillTrail(p.x - scrollX, p.y - pathY);
     }
+
+    /** Vertical stages: ship-sized free spot closest to x at height y (searched left and right within the screen). */
+    private float openSpotX(float x, float y) {
+        float lo = scrollX + 2f, hi = scrollX + W - Player.W - 2f;
+        for (float d = 0f; d < W; d += 4f) {
+            for (int s = -1; s <= 1; s += 2) {
+                float xx = MathUtils.clamp(x + s * d, lo, hi);
+                if (!level.hits(xx + Player.VART_L, y, Player.VART_R - Player.VART_L, Player.VART_T)) return xx;
+            }
+        }
+        return MathUtils.clamp(x, lo, hi);
+    }
+
+    /** How far the stage has scrolled in its own direction: the camera's left edge, or its bottom on a vertical stage. */
+    private float front() { return level.vertical ? scrollY : scrollX; }
+
+    /** Size of the view in the scrolling direction. */
+    private float viewLen() { return level.vertical ? H : W; }
 
     /** Ship-sized free spot closest to height y at x (searched up and down within the screen). */
     private float openSpot(float x, float y) {
@@ -278,6 +370,8 @@ public class GameScreen extends ScreenAdapter {
 
     /** Mid-game joiners pick a ship type first: -1 = not choosing, else the type under the cursor. */
     private final int[] choosing = {-1, -1};
+    /** Mid-game joiners then pick their guard: 0 = not yet (still on the ship type), else Player.SHIELD / FFIELD. */
+    private final int[] choosingGuard = {0, 0};
 
     /**
      * Player 2 joins by pressing fire, picks a ship type (left / right, fire to launch) and enters;
@@ -291,17 +385,29 @@ public class GameScreen extends ScreenAdapter {
                     if (Controls.pressed(i, Action.FIRE)) { choosing[i] = 0; a.play("pickup", 0.4f); }
                     continue;
                 }
-                if (Controls.pressed(i, Action.CANCEL)) { choosing[i] = -1; a.play("hit", 0.2f); continue; }   // changed their mind
-                if (Controls.pressed(i, Action.LEFT)) { choosing[i] = (choosing[i] + Player.SHIP_TYPES - 1) % Player.SHIP_TYPES; a.play("hit", 0.2f); }
-                if (Controls.pressed(i, Action.RIGHT)) { choosing[i] = (choosing[i] + 1) % Player.SHIP_TYPES; a.play("hit", 0.2f); }
+                if (choosingGuard[i] == 0) {                 // 1: ship type
+                    if (Controls.pressed(i, Action.CANCEL)) { choosing[i] = -1; a.play("hit", 0.2f); continue; }   // changed their mind
+                    if (Controls.pressed(i, Action.LEFT)) { choosing[i] = (choosing[i] + Player.SHIP_TYPES - 1) % Player.SHIP_TYPES; a.play("hit", 0.2f); }
+                    if (Controls.pressed(i, Action.RIGHT)) { choosing[i] = (choosing[i] + 1) % Player.SHIP_TYPES; a.play("hit", 0.2f); }
+                    if (Controls.pressed(i, Action.FIRE)) { choosingGuard[i] = Player.defaultGuard(choosing[i]); a.play("pickup", 0.4f); }
+                    continue;
+                }
+                // 2: guard (SHIELD / F.FIELD)
+                if (Controls.pressed(i, Action.CANCEL)) { choosingGuard[i] = 0; a.play("hit", 0.2f); continue; }   // back to the ship type
+                if (Controls.pressed(i, Action.LEFT) || Controls.pressed(i, Action.RIGHT)) {
+                    choosingGuard[i] = choosingGuard[i] == Player.SHIELD ? Player.FFIELD : Player.SHIELD;
+                    a.play("hit", 0.2f);
+                }
                 if (!Controls.pressed(i, Action.FIRE)) continue;
-                p = new Player(i, choosing[i]);
+                p = new Player(i, choosing[i], choosingGuard[i]);
+                p.lives = Player.startLives(game.easy);
                 choosing[i] = -1;
+                choosingGuard[i] = 0;
                 if (debugLoadout) p.applyDebugLoadout();
                 players[i] = p;
             } else if (p.out && Controls.pressed(i, Action.FIRE)) {
                 p.out = false;
-                p.lives = Player.START_LIVES;
+                p.lives = Player.startLives(game.easy);
             } else {
                 continue;
             }
@@ -321,13 +427,15 @@ public class GameScreen extends ScreenAdapter {
         scrollY = pathY;
         scrollSpeed = 0f;
         scrollVX = 0f;
-        float sx = scrollX;
+        float sx = scrollX, fr = front();
         pBullets.clear(); eBullets.clear(); enemies.clear(); caps.clear(); groups.clear();
+        level.obstacles.clear();                      // rubble goes (the eye rocks come back)
+        pendingHazards.clear();
         boss = null;
         bossSpawned = false;
         buildHazards();
         nextSpawn = 0;
-        while (nextSpawn < level.spawns.size() && level.spawns.get(nextSpawn).trigger < sx + W + 40f) nextSpawn++;
+        while (nextSpawn < level.spawns.size() && level.spawns.get(nextSpawn).trigger < fr + viewLen() + 40f) nextSpawn++;
         for (Player p : players) {
             if (p == null || p.out) continue;
             if (p.lives < 0) p.out = true;           // was shot down on its last ship
@@ -362,7 +470,18 @@ public class GameScreen extends ScreenAdapter {
             h.x = t.x; h.baseY = t.y; h.w = t.w; h.h = t.h; h.fromCeil = t.ceiling;
             h.delay = t.delay; h.period = t.period;
             h.image = t.image; h.mask = masks.get(t.image);
-            h.y = h.baseY + (h.fromCeil ? 1f : -1f) * (h.h + Hazard.FANG_TUCK);   // start hidden
+            // fully out, the tooth reaches right across the passage: its tip touches the floor (ceiling teeth) or the
+            // ceiling (floor teeth); the rest of it stays in the rock it comes out of. The passage is measured at the
+            // tooth's tip, as placed in Tiled.
+            float cx = t.x + t.w / 2f, tip = t.ceiling ? t.y + 4f : t.y + t.h - 4f;
+            float ceil = level.ceilBottom(cx, tip), floor = level.floorTop(cx, tip);
+            if (ceil < Level.NO_CEILING && floor > Level.NO_FLOOR && ceil > floor) {
+                h.baseY = t.ceiling ? floor : ceil - t.h;
+                h.fangTravel = ceil - floor + Hazard.FANG_TUCK;    // hidden: the tip just inside its own rock
+            } else {
+                h.fangTravel = t.h + Hazard.FANG_TUCK;            // no passage found: as placed
+            }
+            h.y = h.baseY + (h.fromCeil ? 1f : -1f) * h.fangTravel;   // start hidden
             hazards.add(h);
         }
         for (Level.Tower t : level.towers) {         // green-tipped towers: start inside the rock, grow when on screen
@@ -383,6 +502,21 @@ public class GameScreen extends ScreenAdapter {
             h.hp = Hazard.ARM_HP;
             hazards.add(h);
         }
+        for (Level.Dome d : level.domes) {           // stage 2 domes: closed until they come on screen
+            Hazard h = new Hazard(Hazard.Type.DOME);
+            h.x = d.x; h.y = d.y; h.fromCeil = d.right;
+            h.w = domeF[0].getRegionWidth(); h.h = domeF[0].getRegionHeight();   // size of a frame of sprites/dome.png
+            h.hp = Hazard.DOME_HP;
+            h.timer = Hazard.DOME_OPEN_DELAY;
+            hazards.add(h);
+        }
+        for (float[] e : level.eyes) {               // stage 2 eye rocks (the whole rock; size from sprites/rock_eye.png)
+            Hazard h = new Hazard(Hazard.Type.EYE);
+            h.x = e[0]; h.y = e[1]; h.w = rockEyeR.getRegionWidth(); h.h = rockEyeR.getRegionHeight();
+            h.hp = Hazard.EYE_HP;
+            h.timer = MathUtils.random(0.6f, 1.8f);
+            hazards.add(h);
+        }
         for (Level.Crusher c : level.crushers) {
             Hazard h = new Hazard(Hazard.Type.CRUSHER);
             h.x = c.x; h.w = 32; h.fromCeil = c.ceiling; h.baseY = c.baseY;
@@ -396,6 +530,9 @@ public class GameScreen extends ScreenAdapter {
     public void resize(int w, int h) { vp.update(w, h, false); }
 
     /** Music per stage (index = levelIdx); null = no music for that stage. */
+    /** Played (once) on the game over screen. */
+    private static final String GAME_OVER_MUSIC = "14. Crystal Forever.mp3";
+
     /** Stage music and boss music come from the map properties "music" and "bossMusic". */
     private void playStageMusic() {
         if (level.music != null && !level.music.isEmpty()) game.bgm.play(level.music);
@@ -438,7 +575,7 @@ public class GameScreen extends ScreenAdapter {
             case PAUSE:   // menu: CONTINUE / TITLE SCREEN
                 if (updatePauseMenu()) return;          // went back to the title screen
                 break;
-            case DEAD:   // every ship is down: rewind to the checkpoint, or game over
+            case DEAD:   // nobody has ships left: game over (rewinds to the checkpoint if somebody is somehow still in)
                 updateFx(dt);
                 if (stateT > RESPAWN_DELAY) {
                     for (Player p : players) if (p != null && p.lives < 0) p.out = true;
@@ -454,7 +591,7 @@ public class GameScreen extends ScreenAdapter {
                 break;
             case CLEAR:
                 updateFx(dt);
-                for (Player p : players) if (alive(p)) p.x += 220f * dt;
+                for (Player p : players) if (alive(p)) { if (level.vertical) p.y += 220f * dt; else p.x += 220f * dt; }
                 if (stateT > 3.6f) {
                     if (bossTest >= 0) {
                         submitScores();
@@ -516,6 +653,7 @@ public class GameScreen extends ScreenAdapter {
     private void setState(State s) {
         if (s == State.PAUSE) { game.bgm.pause(); pauseSel = 0; }
         if (s == State.CLEAR || s == State.GAMEOVER || s == State.WIN) game.bgm.stop();
+        if (s == State.GAMEOVER) game.bgm.play(GAME_OVER_MUSIC, false);   // once, not looped
         state = s;
         stateT = 0f;
     }
@@ -544,9 +682,15 @@ public class GameScreen extends ScreenAdapter {
         scrollVX = dt > 0f ? dS / dt : 0f;
         for (float cp : level.checkpoints) if (scrollT >= cp) checkpointT = Math.max(checkpointT, cp);
         if (scrollT >= level.stopT && !bossSpawned) spawnBoss();
+        // a boss that sits in the map (map object "boss" with "fixed" on) wakes up as soon as it comes on screen
+        if (!bossSpawned && level.bossFixed && level.bossX < scrollX + W && level.bossX + level.bossW > scrollX
+                && level.bossY < scrollY + H && level.bossY + level.bossH > scrollY) spawnBoss();
+        // stage 1's brick maze: the boss music starts early (map property "bossMusicAt") and plays on into the boss
+        if (level.bossMusicAt >= 0f && !bossSpawned && scrollX + W / 2f >= level.bossMusicAt
+                && level.bossMusic != null && !level.bossMusic.isEmpty()) game.bgm.play(level.bossMusic);
 
         // --- spawning
-        while (nextSpawn < level.spawns.size() && level.spawns.get(nextSpawn).trigger <= scrollX + W + 40f) {
+        while (nextSpawn < level.spawns.size() && level.spawns.get(nextSpawn).trigger <= front() + viewLen() + 40f) {
             spawnEnemy(level.spawns.get(nextSpawn++));
         }
 
@@ -559,6 +703,7 @@ public class GameScreen extends ScreenAdapter {
         // --- world objects
         for (Bullet b : pBullets) {
             b.update(dt, level);
+            if (b.kind == Bullet.Kind.RIPPLE) growRipple(b, dt);
             // a player shot is gone once it is completely off screen (so the on-screen limits really mean on screen)
             if (b.x > scrollX + W || b.x + b.w < scrollX || b.y > scrollY + H || b.y + b.h < scrollY) b.dead = true;
         }
@@ -570,21 +715,34 @@ public class GameScreen extends ScreenAdapter {
             e.update(this, dt);
             // vertical limits follow the whole lane, not the view, so enemies the camera drifted away from survive
             float laneB = pathY - laneSlack(), laneT = pathY + H + laneSlack();
-            if (e.x + e.w < scrollX - 40f || e.x > scrollX + W + 300f || e.y < laneB - 60f || e.y > laneT + 60f) {
+            boolean gone = level.vertical   // vertical stage: gone once below the screen (or far off it)
+                    ? e.y + e.h < scrollY - 40f || e.y > scrollY + H + 300f || e.x + e.w < scrollX - 80f || e.x > scrollX + W + 80f
+                    : e.x + e.w < scrollX - 40f || e.x > scrollX + W + 300f || e.y < laneB - 60f || e.y > laneT + 60f;
+            if (gone) {
                 e.dead = true;
                 if (e.group != null) e.group.lost = true;
             }
         }
         for (Hazard h : hazards) {
             if (h.dead) continue;
-            if (h.x < scrollX + W + 80f && h.x + 40f > scrollX - 80f) h.update(this, dt);
+            boolean near = level.vertical ? h.y < scrollY + H + 80f && h.y + h.h > scrollY - 80f
+                    : h.x < scrollX + W + 80f && h.x + 40f > scrollX - 80f;
+            if (near) h.update(this, dt);
             else if (h.type == Hazard.Type.CRUSHER) h.t += dt;
         }
         for (Capsule c : caps) {
             c.t += dt;                               // stays where it was dropped: only the scrolling moves it
         }
-        caps.removeIf(c -> c.x < scrollX - capW - 8f);
-        if (boss != null) boss.update(this, dt);
+        for (Capsule c : caps) {                     // a green capsule that left the screen comes back once, at the far edge
+            if (!c.green || c.wrapped || c.dead()) continue;
+            if (level.vertical && c.y < scrollY - capH) {
+                c.y = scrollY + H; c.x = MathUtils.clamp(c.x, scrollX, scrollX + W - capW); c.wrapped = true;
+            } else if (!level.vertical && c.x < scrollX - capW) {
+                c.x = scrollX + W; c.y = MathUtils.clamp(c.y, scrollY, scrollY + H - capH); c.wrapped = true;
+            }
+        }
+        caps.removeIf(c -> level.vertical ? c.y < scrollY - capH - 8f : c.x < scrollX - capW - 8f);
+        if (boss != null) { boss.update(this, dt); updateCoreBlocks(); }
         regrowBricks(dt);
         updateFx(dt);
         if (bannerT > 0f) bannerT -= dt;
@@ -595,6 +753,8 @@ public class GameScreen extends ScreenAdapter {
         eBullets.removeIf(b -> b.dead);
         enemies.removeIf(e -> e.dead);
         hazards.removeIf(h -> h.dead);
+        hazards.addAll(pendingHazards);
+        pendingHazards.clear();
     }
 
     /**
@@ -677,7 +837,8 @@ public class GameScreen extends ScreenAdapter {
         p.aiming = p.weapon == 1 && Controls.held(id, Action.AIM);
         if (p.aiming) {
             if (dx != 0f || dy != 0f) {
-                p.doubleDir = Math.round(MathUtils.atan2(dy, dx) / (MathUtils.PI / 4f)) & 7;
+                // (0 = straight ahead: right, or up on a vertical stage)
+                p.doubleDir = (Math.round(MathUtils.atan2(dy, dx) / (MathUtils.PI / 4f)) - (level.vertical ? 2 : 0)) & 7;
             }
             dx = 0f;
             dy = 0f;
@@ -685,14 +846,20 @@ public class GameScreen extends ScreenAdapter {
         if (dx != 0f && dy != 0f) { dx *= 0.7071f; dy *= 0.7071f; }
         p.x += dx * sp * dt + dS;
         p.y += dy * sp * dt + dSy;
-        p.x = MathUtils.clamp(p.x, scrollX - Player.ART_L, scrollX + W - Player.ART_R);   // the ship may touch every edge
-        p.y = MathUtils.clamp(p.y, scrollY - Player.ART_B, scrollY + H - Player.ART_T);
-        p.tilt = dy > 0f ? 1 : (dy < 0f ? 2 : 0);
+        if (level.vertical) {   // the ship may touch every edge
+            p.x = MathUtils.clamp(p.x, scrollX - Player.VART_L, scrollX + W - Player.VART_R);
+            p.y = MathUtils.clamp(p.y, scrollY - Player.VART_B, scrollY + H - Player.VART_T);
+        } else {
+            p.x = MathUtils.clamp(p.x, scrollX - Player.ART_L, scrollX + W - Player.ART_R);
+            p.y = MathUtils.clamp(p.y, scrollY - Player.ART_B, scrollY + H - Player.ART_T);
+        }
+        if (level.vertical) p.tilt = dx < 0f ? Player.TILT_LEFT : (dx > 0f ? Player.TILT_RIGHT : 0);   // banks sideways
+        else p.tilt = dy > 0f ? 1 : (dy < 0f ? 2 : 0);
 
         p.invuln = Math.max(0f, p.invuln - dt);
         p.ghostT = Math.max(0f, p.ghostT - dt);
-        p.shieldHitT = Math.max(0f, p.shieldHitT - dt);
         p.ffieldHitT = Math.max(0f, p.ffieldHitT - dt);
+        p.shieldHitT = Math.max(0f, p.shieldHitT - dt);
         p.fireCd -= dt;
         p.missCd -= dt;
 
@@ -723,12 +890,18 @@ public class GameScreen extends ScreenAdapter {
     public static final float FIRE_INTERVAL = 1f / 8f;
     /** On-screen limits per gun (the ship and each option count separately). With DOUBLE the forward
      *  and the angled shots each get their own, smaller limit. */
-    public static final int MAX_SHOTS = 4, MAX_DOUBLE_SHOTS = 2, MAX_LASERS = 1, MAX_RIPPLES = 2, MAX_MISSILES = 2, MAX_TWO_WAY = 1;
+    public static final int MAX_SHOTS = 4, MAX_DOUBLE_SHOTS = 2, MAX_LASERS = 1, MAX_RIPPLES = 1, MAX_MISSILES = 2, MAX_TWO_WAY = 1;
 
     /** Fires every gun (ship + options) that is under its limit. Returns true if anything was fired. */
     private boolean shoot(Player p) {
-        boolean fired = fireGun(p, 0, p.x + NOSE_X, p.y + NOSE_Y);
-        for (int i = 0; i < p.options; i++) fired |= fireGun(p, i + 1, optX(p, i) + 12f, optY(p, i) + 6f);
+        boolean fired;
+        if (level.vertical) {   // vertical stage: the nose is at the top of the picture, options fire from their top
+            fired = fireGun(p, 0, p.x + 16f, p.y + Player.VART_T);
+            for (int i = 0; i < p.options; i++) fired |= fireGun(p, i + 1, optX(p, i) + 6f, optY(p, i) + 12f);
+        } else {
+            fired = fireGun(p, 0, p.x + NOSE_X, p.y + NOSE_Y);
+            for (int i = 0; i < p.options; i++) fired |= fireGun(p, i + 1, optX(p, i) + 12f, optY(p, i) + 6f);
+        }
         if (fired) a.play("shoot", 0.15f);
         return fired;
     }
@@ -758,20 +931,30 @@ public class GameScreen extends ScreenAdapter {
 
     private boolean launchMissiles(Player p) {
         // down missiles leave from the bottom of the ship / option, 2-WAY's up missiles from the top
+        if (level.vertical) {   // vertical stage: from the sides of the ship / option (y = the missile's middle)
+            boolean fired = launchFromV(p, 0, p.x + Player.VART_R - 2f, p.x + Player.VART_L + 2f, p.y + 6f, p.x + 16f);
+            for (int i = 0; i < p.options; i++)
+                fired |= launchFromV(p, i + 1, optX(p, i) + 10f, optX(p, i) + 2f, optY(p, i) + 6f, optX(p, i) + 6f);
+            return fired;
+        }
         float mh = missR.getRegionHeight();
-        boolean fired = launchFrom(p, 0, p.x + 14f, p.y + Player.ART_B, p.y + Player.ART_T - mh);
-        for (int i = 0; i < p.options; i++) fired |= launchFrom(p, i + 1, optX(p, i) + 2f, optY(p, i), optY(p, i) + 12f - mh);
+        boolean fired = launchFrom(p, 0, p.x + 14f, p.y + Player.ART_B, p.y + Player.ART_T - mh, p.y + 8f);
+        for (int i = 0; i < p.options; i++) fired |= launchFrom(p, i + 1, optX(p, i) + 2f, optY(p, i), optY(p, i) + 12f - mh, optY(p, i) + 6f);
         return fired;
     }
 
     /**
-     * One gun's missiles. Normal: one downward missile, up to MAX_MISSILES on screen. 2-WAY: one down
-     * and one up, each direction with its own limit of MAX_TWO_WAY. yDown / yUp = launch heights.
+     * One gun's missiles. Normal: one missile toward the nearer edge of the screen (down if the gun is in the lower
+     * half, up if in the upper half), up to MAX_MISSILES on screen. 2-WAY: one down and one up, each direction with
+     * its own limit of MAX_TWO_WAY. yDown / yUp = launch heights, gunY = the gun's middle.
      */
-    private boolean launchFrom(Player p, int src, float x, float yDown, float yUp) {
+    private boolean launchFrom(Player p, int src, float x, float yDown, float yUp, float gunY) {
         if (!p.twoWay()) {
-            if (onScreen(p, src, Bullet.Kind.MISSILE, false) >= MAX_MISSILES) return false;
-            launchMissile(p, src, x, yDown, false);
+            if (onScreen(p, src, Bullet.Kind.MISSILE, false) + onScreen(p, src, Bullet.Kind.MISSILE, true) >= MAX_MISSILES) return false;
+            // nearer the top edge? (the playfield runs from scrollY, the top of the HUD strip, to scrollY + H: the
+            // middle of what you can fly in, not of the whole screen with the HUD)
+            boolean up = gunY > scrollY + H / 2f;
+            launchMissile(p, src, x, up ? yUp : yDown, up);
             return true;
         }
         boolean fired = false;
@@ -780,11 +963,49 @@ public class GameScreen extends ScreenAdapter {
         return fired;
     }
 
+    /**
+     * Vertical stage: one missile up and to the right, up to MAX_MISSILES on screen; 2-WAY: one to the right and one
+     * to the left, each with its own limit of MAX_TWO_WAY. xr / xl = launch points (centre) on the right / left side.
+     */
+    private boolean launchFromV(Player p, int src, float xr, float xl, float y, float gunX) {
+        if (!p.twoWay()) {   // normal MISSILE: toward the nearer side edge (left half: left, right half: right)
+            if (onScreen(p, src, Bullet.Kind.MISSILE, false) + onScreen(p, src, Bullet.Kind.MISSILE, true) >= MAX_MISSILES) return false;
+            boolean left = gunX < scrollX + W / 2f;
+            launchMissileV(p, src, left ? xl : xr, y, left);
+            return true;
+        }
+        boolean fired = false;
+        if (onScreen(p, src, Bullet.Kind.MISSILE, false) < MAX_TWO_WAY) { launchMissileV(p, src, xr, y, false); fired = true; }
+        if (onScreen(p, src, Bullet.Kind.MISSILE, true) < MAX_TWO_WAY) { launchMissileV(p, src, xl, y, true); fired = true; }
+        return fired;
+    }
+
+    /** Vertical missile: a small square hit box (it turns as it goes), see Bullet.wallMove. left = 2-WAY's second one. */
+    private static final float VMISSILE_BOX = 4f;
+
+    private void launchMissileV(Player p, int src, float cx, float cy, boolean left) {
+        float s = VMISSILE_BOX;
+        Bullet m = new Bullet(Bullet.Kind.MISSILE, cx - s / 2f, cy - s / 2f, s, s);
+        m.vx = left ? -1f : 1f;                             // (direction only: Bullet.MISSILE_SPEED sets the speed)
+        m.vy = 1f;
+        m.dmg = 3;
+        m.up = left;
+        m.vert = true;
+        m.owner = p; m.src = src;
+        if (level.hits(m.x, m.y, m.w, m.h)) return;         // launched inside rock
+        pBullets.add(m);
+    }
+
     /** Lasers stay level with the gun that fired them: when the ship or option moves up or down, so does its beam. */
     private void steerLasers(Player p) {
         for (int i = 0, k = pBullets.size(); i < k; i++) {
             Bullet b = pBullets.get(i);
             if (b.dead || b.owner != p || b.kind != Bullet.Kind.LASER) continue;
+            if (level.vertical) {   // (vertical stage: in line with it, left / right)
+                if (b.src == 0) b.x = p.x + 16f - b.w / 2f;
+                else if (b.src <= p.options) b.x = optX(p, b.src - 1) + 6f - b.w / 2f;
+                continue;
+            }
             if (b.src == 0) b.y = p.y + NOSE_Y - b.h / 2f;
             else if (b.src <= p.options) b.y = optY(p, b.src - 1) + 6f - b.h / 2f;
         }
@@ -806,6 +1027,15 @@ public class GameScreen extends ScreenAdapter {
     // (nx, ny) = the muzzle: shots start with their tip there, so they come out of the ship, not ahead of it.
     private void fireLaser(Player p, int src, float nx, float ny) {
         float lh = laserR.getRegionHeight();   // beam thickness (and hit height) from sprites/laser.png
+        if (level.vertical) {
+            Bullet b = new Bullet(Bullet.Kind.LASER, nx - lh / 2f, ny - Bullet.LASER_START_LEN, lh, Bullet.LASER_START_LEN);
+            b.dmg = Bullet.LASER_DAMAGE;
+            b.vy = 540f;
+            b.vert = true;
+            b.owner = p; b.src = src;
+            pBullets.add(b);
+            return;
+        }
         Bullet b = new Bullet(Bullet.Kind.LASER, nx - Bullet.LASER_START_LEN, ny - lh / 2f, Bullet.LASER_START_LEN, lh);
         b.dmg = Bullet.LASER_DAMAGE;
         b.vx = 540f;
@@ -814,9 +1044,20 @@ public class GameScreen extends ScreenAdapter {
     }
 
     private void fireRipple(Player p, int src, float nx, float ny) {
+        if (level.vertical) {   // lies across the way up: widens sideways as it climbs
+            Bullet b = new Bullet(Bullet.Kind.RIPPLE, nx - Bullet.RIPPLE_START_H / 2f, ny - Bullet.RIPPLE_START_W,
+                    Bullet.RIPPLE_START_H, Bullet.RIPPLE_START_W);
+            b.vy = Bullet.RIPPLE_SPEED;
+            b.dmg = Bullet.RIPPLE_DAMAGE;
+            b.vert = true;
+            b.owner = p; b.src = src;
+            pBullets.add(b);
+            return;
+        }
         Bullet b = new Bullet(Bullet.Kind.RIPPLE, nx - Bullet.RIPPLE_START_W, ny - Bullet.RIPPLE_START_H / 2f,
                 Bullet.RIPPLE_START_W, Bullet.RIPPLE_START_H);
         b.vx = Bullet.RIPPLE_SPEED;
+        b.dmg = Bullet.RIPPLE_DAMAGE;
         b.owner = p; b.src = src;
         pBullets.add(b);
     }
@@ -824,7 +1065,15 @@ public class GameScreen extends ScreenAdapter {
     // Shots take their size from sprites/shot.png (the picture is the hitbox), tip at the muzzle.
     private void fireShot(Player p, int src, float nx, float ny) {
         float sw = shotR.getRegionWidth(), sh = shotR.getRegionHeight();
-        Bullet b = new Bullet(Bullet.Kind.SHOT, nx - sw, ny - sh / 2f, sw, sh);
+        if (level.vertical) {   // straight up (drawn turned)
+            Bullet b = new Bullet(Bullet.Kind.SHOT, nx - (int) (sh / 2f), ny - sw, sh, sw);
+            b.vy = Bullet.SHOT_SPEED;
+            b.vert = true;
+            b.owner = p; b.src = src;
+            pBullets.add(b);
+            return;
+        }
+        Bullet b = new Bullet(Bullet.Kind.SHOT, nx - sw, ny - (int) (sh / 2f), sw, sh);
         b.vx = Bullet.SHOT_SPEED;
         b.owner = p; b.src = src;
         pBullets.add(b);
@@ -832,13 +1081,19 @@ public class GameScreen extends ScreenAdapter {
 
     /** DOUBLE's extra shot, in the direction chosen with AIM. */
     private void fireAngled(Player p, int src, float nx, float ny) {
-        float ang = p.doubleDir * MathUtils.PI / 4f;
+        float ang = doubleAngle(p);
         float s = shotR.getRegionWidth();               // square hitbox as wide as the shot, so any angle is covered
-        Bullet d = new Bullet(Bullet.Kind.SHOT, nx - s, ny - s / 2f, s, s);
+        Bullet d = level.vertical ? new Bullet(Bullet.Kind.SHOT, nx - s / 2f, ny - s, s, s)
+                : new Bullet(Bullet.Kind.SHOT, nx - s, ny - s / 2f, s, s);
         d.vx = MathUtils.cos(ang) * Bullet.SHOT_SPEED;      // same speed as the normal shot, in the aimed direction
         d.vy = MathUtils.sin(ang) * Bullet.SHOT_SPEED;
         d.owner = p; d.src = src; d.angled = true;
         pBullets.add(d);
+    }
+
+    /** DOUBLE's direction in radians: doubleDir steps of 45 degrees counter-clockwise from straight ahead. */
+    private float doubleAngle(Player p) {
+        return (p.doubleDir + (level.vertical ? 2 : 0)) * MathUtils.PI / 4f;
     }
 
     private void launchMissile(Player p, int src, float x, float y, boolean up) {
@@ -854,14 +1109,15 @@ public class GameScreen extends ScreenAdapter {
     private void activateMeter(Player p) {
         boolean ok = false;
         switch (p.selectedPower()) {
-            case Player.SPEED: if (p.speedLvl < 5) { p.speedLvl++; ok = true; } break;
+            case Player.SPEED: p.speedLvl = p.nextSpeed(); ok = true; break;   // always open: steps up, then back to 0
             case Player.MISSILE: case Player.TWO_WAY: if (!p.missile) { p.missile = true; ok = true; } break;
             case Player.DOUBLE: if (p.weapon != 1) { p.weapon = 1; ok = true; } break;
             case Player.LASER: if (p.weapon != 2) { p.weapon = 2; ok = true; } break;
             case Player.RIPPLE: if (p.weapon != Player.W_RIPPLE) { p.weapon = Player.W_RIPPLE; ok = true; } break;
             case Player.OPTION: if (p.options < Player.MAX_OPTIONS) { p.options++; ok = true; } break;
-            case Player.SHIELD: if (p.shield <= 0) { p.shield = 5; ok = true; } break;
-            case Player.FFIELD: if (p.ffield <= 0) { p.ffield = Player.FFIELD_HITS; ok = true; } break;
+            // F.FIELD / SHIELD: open again as soon as they have taken a hit; taking them refills them to full
+            case Player.FFIELD: if (p.ffield < Player.FFIELD_HITS) { p.ffield = Player.FFIELD_HITS; ok = true; } break;
+            case Player.SHIELD: if (p.shield < Player.SHIELD_HITS) { p.shield = Player.SHIELD_HITS; ok = true; } break;
             case Player.EXTRA: if (p.lives < Player.MAX_LIVES) { p.lives++; ok = true; } break;   // "!": one more ship
             default: break;
         }
@@ -884,7 +1140,14 @@ public class GameScreen extends ScreenAdapter {
         Enemy e;
         switch (s.type) {
             case FAN:
-                e = new Enemy(Enemy.Type.FAN, scrollX + W + 24f, s.y, levelIdx);
+            case LEGACY:                                  // (Legacy flies like a fan)
+                if (level.vertical) {                     // in from the top, weaving down around the object's column
+                    e = new Enemy(s.type, s.midX - 8f, scrollY + H + 24f, levelIdx);
+                    e.vertical = true;
+                    e.baseX = s.midX - 8f;
+                } else {
+                    e = new Enemy(s.type, scrollX + W + 24f, s.y, levelIdx);
+                }
                 e.phase = s.phase;
                 break;
             case RUSHER:
@@ -902,8 +1165,10 @@ public class GameScreen extends ScreenAdapter {
                 e.w = frostR.getRegionWidth(); e.h = frostR.getRegionHeight();
                 e.upper = s.upper;
                 e.t = -s.delay;
-                {   // the wave enters where it was placed in Tiled (its height on the screen), and leaves mirrored
-                    float f = (s.y - scrollY) / H;
+                e.vertical = level.vertical;
+                {   // the wave enters where it was placed in Tiled (its height on the screen), and leaves mirrored;
+                    // vertical stage: the column it comes down (its x on the screen)
+                    float f = level.vertical ? (s.midX - scrollX) / W : (s.y - scrollY) / H;
                     e.frostLow = MathUtils.clamp(s.upper ? 1f - f : f, Enemy.FROST_LOW_MIN, Enemy.FROST_LOW_MAX);
                 }
                 break;
@@ -918,6 +1183,11 @@ public class GameScreen extends ScreenAdapter {
                 if (s.behind) e.vx = 80f;                     // faster than the scrolling, so they catch up
                 break;
             }
+            case TURRET_WALL:                             // stage 2: stays where it was placed in Tiled
+                e = new Enemy(Enemy.Type.TURRET_WALL, s.x, s.y, levelIdx);
+                e.wallRight = s.right;
+                e.aim = !s.diag ? Enemy.WALL_SIDE : s.diagUp ? Enemy.WALL_UP : Enemy.WALL_DOWN;
+                break;
             case TURRET_CEIL: {
                 // stays where it was placed in Tiled if that is within 8 px of the ceiling (the 8 px collision cells
                 // don't follow the rock art exactly), else it snaps onto the ceiling
@@ -994,6 +1264,59 @@ public class GameScreen extends ScreenAdapter {
         return fr;
     }
 
+    /**
+     * A single picture drawn on a solid dark background (like sprites/player_blue_vertical.png): the background colour
+     * (the top-left pixel) connected to the edges becomes see-through. A picture with transparency is used as it is.
+     */
+    private TextureRegion keyedBackground(String file) { return keyedBackground(file, null); }
+
+    /** keyedBackground, and maskOut[0] = the exact shape of the result (when maskOut is given). */
+    private TextureRegion keyedBackground(String file, PixelMask[] maskOut) {
+        Pixmap pm = new Pixmap(Gdx.files.internal(file));
+        if (pm.getFormat() != Pixmap.Format.RGBA8888) {
+            Pixmap c = new Pixmap(pm.getWidth(), pm.getHeight(), Pixmap.Format.RGBA8888);
+            c.setBlending(Pixmap.Blending.None);
+            c.drawPixmap(pm, 0, 0);
+            pm.dispose();
+            pm = c;
+        }
+        pm.setBlending(Pixmap.Blending.None);
+        int W = pm.getWidth(), H = pm.getHeight(), bg = pm.getPixel(0, 0);
+        boolean dark = (bg & 0xff) == 0xff && ((bg >>> 24) & 0xff) < 24 && ((bg >>> 16) & 0xff) < 24 && ((bg >>> 8) & 0xff) < 24;
+        if (dark) {
+            boolean[] seen = new boolean[W * H];
+            java.util.ArrayDeque<int[]> q = new java.util.ArrayDeque<>();
+            for (int x = 0; x < W; x++) { q.add(new int[]{x, 0}); q.add(new int[]{x, H - 1}); }
+            for (int y = 0; y < H; y++) { q.add(new int[]{0, y}); q.add(new int[]{W - 1, y}); }
+            while (!q.isEmpty()) {
+                int[] c = q.poll();
+                int x = c[0], y = c[1];
+                if (x < 0 || x >= W || y < 0 || y >= H || seen[y * W + x] || pm.getPixel(x, y) != bg) continue;
+                seen[y * W + x] = true;
+                pm.drawPixel(x, y, 0);
+                q.add(new int[]{x + 1, y}); q.add(new int[]{x - 1, y}); q.add(new int[]{x, y + 1}); q.add(new int[]{x, y - 1});
+            }
+        }
+        if (maskOut != null) maskOut[0] = PixelMask.fromPixmap(pm, 0, W);
+        Texture tex = new Texture(pm);
+        tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return new TextureRegion(tex);
+    }
+
+    /**
+     * The vertical ship's frames: three of equal width side by side (left, level, right). A picture no wider than it
+     * is tall is a single frame, used for all three.
+     */
+    private static TextureRegion[] verticalShipFrames(TextureRegion sheet) {
+        int w = sheet.getRegionWidth(), h = sheet.getRegionHeight();
+        if (w <= h) return new TextureRegion[]{sheet, sheet, sheet};
+        int fw = w / 3;
+        TextureRegion[] f = new TextureRegion[3];
+        for (int i = 0; i < 3; i++) f[i] = new TextureRegion(sheet, i * fw, 0, fw, h);
+        return f;
+    }
+
     /** Frames side by side in one picture, separated by empty columns; each frame is trimmed to its own height. */
     private TextureRegion[] scanFrames(String file) {
         Pixmap pm = new Pixmap(Gdx.files.internal(file));
@@ -1068,14 +1391,100 @@ public class GameScreen extends ScreenAdapter {
     private boolean touchesBoss(float x, float y, float w, float h) {
         if (!overlap(x, y, w, h, boss.x, boss.y, boss.w, boss.h)) return false;
         if (boss.hasEye && overlap(x, y, w, h, boss.x + boss.eyeX, boss.y + boss.eyeY, boss.eyeW, boss.eyeH)) return true;
+        if (boss.coreTouches(x, y, w, h)) return true;
         return boss.mask == null || boss.mask.overlaps(boss.x, boss.y, x, y, w, h);
+    }
+
+    /** sprites/bossN_core.png (null = this boss has no separate core), and where it sits on the body. */
+    private TextureRegion coreR;
+    private PixelMask coreMask;
+    private int coreOX, coreOY;
+
+    /**
+     * Loads the core picture and finds where it belongs: over the hole cut out of the body for it (the spot where the
+     * most core pixels fall on see-through body pixels and the fewest on drawn ones).
+     */
+    private void loadBossCore() {
+        String file = "sprites/boss" + levelIdx + "_core.png";
+        if (!Gdx.files.internal(file).exists()) return;
+        coreR = a.one("boss" + levelIdx + "_core");
+        coreMask = PixelMask.load(file);
+        loadCoreBlocks();
+        int best = Integer.MIN_VALUE;
+        for (int oy = 0; oy <= bossMask.h - coreMask.h; oy++)
+            for (int ox = 0; ox <= bossMask.w - coreMask.w; ox++) {
+                int score = 0;
+                for (int y = 0; y < coreMask.h; y++)
+                    for (int x = 0; x < coreMask.w; x++)
+                        if (coreMask.at(x, y)) score += bossMask.at(ox + x, oy + y) ? -1 : 1;
+                if (score > best) { best = score; coreOX = ox; coreOY = oy; }
+            }
+    }
+
+    /**
+     * Tetran's core blocks (sprites/core_block.png): CORE_BLOCKS bars below the red core, drawn over the core picture.
+     * Every time the boss loses 1/(CORE_BLOCKS+1) of its health (20%), the lowest block left disappears, showing the
+     * dark inside of the core picture.
+     */
+    private TextureRegion blockR;
+    private static final int CORE_BLOCKS = 4;
+    /** Top row of each block in the core picture (counted from its top), top block first; x = its left column. */
+    private static final int[] CORE_BLOCK_ROWS = {26, 30, 34, 38};
+    private static final int CORE_BLOCK_X = 8, CORE_BLOCK_SPAN = 8;
+    private int coreBlocksShown = CORE_BLOCKS;
+    /** Where a block's picture goes, so its drawn part sits in the middle of the bar's span. */
+    private int blockOffX;
+
+    private void loadCoreBlocks() {
+        if (!Gdx.files.internal("sprites/core_block.png").exists()) return;
+        blockR = a.one("core_block");
+        PixelMask bm = PixelMask.load("sprites/core_block.png");   // centre the drawn part of the block
+        int x0 = bm.w, x1 = -1;
+        for (int x = 0; x < bm.w; x++) for (int y = 0; y < bm.h; y++) if (bm.at(x, y)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+        blockOffX = x1 < 0 ? 0 : Math.round((CORE_BLOCK_SPAN - (x1 - x0 + 1)) / 2f) - x0;
+    }
+
+    /** Draws the core blocks still left, at their spots in the core (each block's picture centred on its bar). */
+    private void drawCoreBlocks() {
+        if (blockR == null) return;
+        int ch = coreR.getRegionHeight();
+        float bw = blockR.getRegionWidth(), bh = blockR.getRegionHeight();
+        for (int i = 0; i < coreBlocksShown; i++) {         // the lowest ones go first
+            int top = CORE_BLOCK_ROWS[i];
+            float x = boss.x + boss.coreX + CORE_BLOCK_X + blockOffX;
+            float y = boss.y + boss.coreY + ch - top - bh;
+            batch.draw(blockR, x, y, bw, bh);
+        }
+    }
+
+    /** Takes a block away for every 20% of health the boss has lost (with a small burst where it was). */
+    private void updateCoreBlocks() {
+        if (blockR == null || boss == null || !boss.hasCore) return;
+        int want = Math.max(0, Math.min(CORE_BLOCKS, (int) Math.ceil(boss.hp / boss.maxHp * (CORE_BLOCKS + 1)) - 1));
+        while (coreBlocksShown > want) {
+            coreBlocksShown--;
+            int top = CORE_BLOCK_ROWS[coreBlocksShown];
+            boom(boss.x + boss.coreX + CORE_BLOCK_X + CORE_BLOCK_SPAN / 2f, boss.y + boss.coreY + coreR.getRegionHeight() - top - 1f, 0.5f);
+            a.play("hit", 0.3f);
+        }
     }
 
     private void spawnBoss() {
         bossSpawned = true;
-        int[] hp = {70, 100, 140};
+        int[] hp = {70, 100, 120, 140, 160, 180, 220};
         boss = new Boss(levelIdx, scrollX + W + 20f, hp[levelIdx], bossR.getRegionWidth(), bossR.getRegionHeight());
         boss.mask = bossMask;
+        coreBlocksShown = CORE_BLOCKS;
+        if (level.bossFixed) {                        // sits where the map has it (stages 5-7 for now)
+            boss.x = level.bossX;
+            boss.y = level.bossY;
+            boss.fixed = true;
+            boss.entering = false;
+        } else if (level.vertical) {                  // comes down from the top, in the middle
+            boss.x = scrollX + W / 2f - boss.w / 2f;
+            boss.y = scrollY + H + (levelIdx == 1 ? 70f : 10f);   // (Tetran's tentacles reach 60+ px around it)
+            if (levelIdx == 1) boss.initTetran();
+        }
         if (levelIdx == 0) {
             // the brain's two arms, as attached in the original map (sprite 100x100, y up from its bottom):
             // {anchor x, anchor y, direction x, direction y, ball spacing}
@@ -1083,6 +1492,12 @@ public class GameScreen extends ScreenAdapter {
                     {29f, 96f, -16f, -16f, 22.6f},   // from the top left, down at 45 degrees
                     {37f, 32f, -16f, -8f, 17.9f},    // from under the eye, down and to the left
             };
+        }
+        if (coreR != null) {                          // only the core takes damage
+            boss.hasCore = true;
+            boss.coreMask = coreMask;
+            boss.coreX = coreOX; boss.coreY = coreOY;
+            boss.coreW = coreR.getRegionWidth(); boss.coreH = coreR.getRegionHeight();
         }
         if (eyeF != null) {
             boss.hasEye = true;
@@ -1111,14 +1526,24 @@ public class GameScreen extends ScreenAdapter {
         return x >= scrollX + margin && x <= scrollX + W - margin && y >= scrollY + margin && y <= scrollY + H - margin;
     }
 
-    /** A tower spits out an amoeba at (x, y) (bottom-left), thrown with (vx, vy). */
-    void spawnAmoeba(float x, float y, float vx, float vy) {
+    /** Red amoeba colour (#ff2727): the white of amoeba.png is tinted with it. */
+    private static final Color AMOEBA_RED = new Color(1f, 0x27 / 255f, 0x27 / 255f, 1f);
+    /** Other capsule carriers are tinted light red. */
+    private static final Color CARRIER_TINT = new Color(1f, 0.45f, 0.45f, 1f);
+
+    /** A tower spits out an amoeba at (x, y) (bottom-left), thrown with (vx, vy). A red one leaves a power capsule. */
+    void spawnAmoeba(float x, float y, float vx, float vy, boolean red) {
         int n = 0;
         for (Enemy e : enemies) if (!e.dead && e.type == Enemy.Type.AMOEBA) n++;
         if (n >= AMOEBA_MAX) return;
         Enemy e = new Enemy(Enemy.Type.AMOEBA, x, y, levelIdx);
         e.vx = vx; e.vy = vy;
         e.phase = MathUtils.random(0f, MathUtils.PI2);
+        if (red) {
+            e.group = new Enemy.Group();
+            e.group.size = 1;
+            e.group.carrier = true;
+        }
         enemies.add(e);
     }
 
@@ -1128,6 +1553,13 @@ public class GameScreen extends ScreenAdapter {
         Player p = target(cx, cy);
         float ang = p == null ? MathUtils.PI : MathUtils.atan2(p.y + 8f - cy, p.x + 16f - cx);
         enemyBullet(cx, cy, ang + offset, speed);
+    }
+
+    /** aimedShot from something sitting in the rock (a rock eye): the shot first gets out of the rock. */
+    void aimedShotFromRock(float cx, float cy, float speed) {
+        int n = eBullets.size();
+        aimedShot(cx, cy, speed, 0f);
+        if (eBullets.size() > n) eBullets.get(n).terrainGrace = 0.3f;
     }
 
     void enemyBullet(float cx, float cy, float ang, float speed) {
@@ -1147,6 +1579,11 @@ public class GameScreen extends ScreenAdapter {
     /** Small explosion where a shot or laser hit something that survived it (missiles already burst on their own). */
     private void hitSpark(Bullet b, float tx, float ty, float tw, float th) {
         if (b.kind == Bullet.Kind.MISSILE) return;
+        if (b.vert) {   // vertical stage: the shot's tip is at its top, a beam enters from below
+            float vy = b.kind == Bullet.Kind.LASER ? Math.max(b.y, ty) : MathUtils.clamp(b.y + b.h, ty, ty + th);
+            boom(MathUtils.clamp(b.x + b.w / 2f, tx, tx + tw), vy, HIT_SPARK_SCALE);
+            return;
+        }
         float x = b.kind == Bullet.Kind.LASER ? Math.max(b.x, tx)                     // where the beam enters it
                 : MathUtils.clamp(b.x + b.w, tx, tx + tw);                         // the shot's tip
         float y = MathUtils.clamp(b.y + b.h / 2f, ty, ty + th);
@@ -1155,22 +1592,66 @@ public class GameScreen extends ScreenAdapter {
 
     private static final float HIT_SPARK_SCALE = 0.4f;
 
-    /** Ripple laser: an oval ring of 2x2 dots, plotted fresh at its current size so it stays crisp. */
-    private void drawRipple(Bullet b) {
-        float cx = b.x + b.w / 2f, cy = b.y + b.h / 2f, rx = b.w / 2f, ry = b.h / 2f;
-        int n = 12 + (int) (ry * 1.6f);                       // more dots as it grows, so the ring stays closed
-        batch.setColor(1f, 0.55f, 0.15f, 1f);
-        for (int i = 0; i < n; i++) {
-            float ang = i * MathUtils.PI2 / n;
-            batch.draw(pix, Math.round(cx + MathUtils.cos(ang) * rx - 1f), Math.round(cy + MathUtils.sin(ang) * ry - 1f), 2f, 2f);
-        }
-        batch.setColor(1f, 0.95f, 0.6f, 1f);                  // bright inner edge on the front half
-        for (int i = -n / 4; i <= n / 4; i++) {
-            float ang = i * MathUtils.PI2 / n;
-            batch.draw(pix, Math.round(cx + MathUtils.cos(ang) * (rx - 1.5f) - 0.5f), Math.round(cy + MathUtils.sin(ang) * (ry - 1.5f) - 0.5f), 1f, 1f);
-        }
-        batch.setColor(Color.WHITE);
+    /**
+     * Ripple laser: each end stretches away from the line it was fired along (up and down) until the ring is as tall
+     * as the playfield, but an end stops where terrain is in the way, and pulls back if the ring flies into a
+     * narrower passage. It never gets smaller than the sprite.
+     */
+    private void growRipple(Bullet b, float dt) {
+        if (b.vert) { growRippleV(b, dt); return; }
+        float step = Bullet.RIPPLE_GROW * dt / 2f;
+        float mid = b.y + b.h / 2f, half = Bullet.RIPPLE_START_H / 2f;
+        float top = b.y + b.h, bot = b.y;
+        float x = b.x + 1f, w = b.w - 2f;
+        // top end
+        if (top - 2f > mid + half && level.hits(x, top - 2f, w, 2f)) top = Math.max(mid + half, top - step);   // squeezed
+        else if (top + step <= scrollY + H && !level.hits(x, top, w, step)) top += step;                     // room to grow
+        else top = Math.min(top, scrollY + H);
+        // bottom end
+        if (bot + 2f < mid - half && level.hits(x, bot, w, 2f)) bot = Math.min(mid - half, bot + step);
+        else if (bot - step >= scrollY && !level.hits(x, bot - step, w, step)) bot -= step;
+        else bot = Math.max(bot, scrollY);
+        b.y = bot;
+        b.h = top - bot;
     }
+
+    /** growRipple on a vertical stage: the ring flies up and its ends stretch left and right. */
+    private void growRippleV(Bullet b, float dt) {
+        float step = Bullet.RIPPLE_GROW * dt / 2f;
+        float mid = b.x + b.w / 2f, half = Bullet.RIPPLE_START_H / 2f;
+        float right = b.x + b.w, left = b.x;
+        float y = b.y + 1f, h = b.h - 2f;
+        // right end
+        if (right - 2f > mid + half && level.hits(right - 2f, y, 2f, h)) right = Math.max(mid + half, right - step);
+        else if (right + step <= scrollX + W && !level.hits(right, y, step, h)) right += step;
+        else right = Math.min(right, scrollX + W);
+        // left end
+        if (left + 2f < mid - half && level.hits(left, y, 2f, h)) left = Math.min(mid - half, left + step);
+        else if (left - step >= scrollX && !level.hits(left - step, y, step, h)) left -= step;
+        else left = Math.max(left, scrollX);
+        b.x = left;
+        b.w = right - left;
+    }
+
+    /** Ripple laser picture: the 6 rows at each end of ripple.png stay as drawn, the straight middle rows stretch. */
+    private void drawRipple(Bullet b) {
+        if (b.vert) {   // vertical stage: the picture turned a quarter (its front pointing up), stretched sideways
+            int th = rippleTex.getHeight(), tw = rippleTex.getWidth(), cap = Math.min(6, th / 2);
+            float midW = b.w - 2 * cap;
+            batch.draw(rippleTex, b.x + b.w, b.y, 0f, 0f, tw, cap, 1f, 1f, 90f, 0, th - cap, tw, cap, false, false);
+            if (midW > 0f) batch.draw(rippleTex, b.x + b.w - cap, b.y, 0f, 0f, tw, midW, 1f, 1f, 90f, 0, cap, tw, th - 2 * cap, false, false);
+            batch.draw(rippleTex, b.x + cap, b.y, 0f, 0f, tw, cap, 1f, 1f, 90f, 0, 0, tw, cap, false, false);
+            return;
+        }
+        int th = rippleTex.getHeight(), tw = rippleTex.getWidth(), cap = Math.min(6, th / 2);
+        float midH = b.h - 2 * cap;
+        batch.draw(rippleTex, b.x, b.y, tw, cap, 0, th - cap, tw, cap, false, false);                     // bottom end
+        if (midH > 0f) batch.draw(rippleTex, b.x, b.y + cap, tw, midH, 0, cap, tw, th - 2 * cap, false, false);   // sides
+        batch.draw(rippleTex, b.x, b.y + b.h - cap, tw, cap, 0, 0, tw, cap, false, false);              // top end
+    }
+
+    /** sprites/ripple.png */
+    private Texture rippleTex;
 
     /** A tower's tip is shot to pieces: the column crumbles. */
     private void destroyTower(Hazard h, Player owner) {
@@ -1191,6 +1672,58 @@ public class GameScreen extends ScreenAdapter {
     }
 
     private static final int ARM_SCORE = 500;
+
+    /**
+     * Stage 2: a player shot against the domes and rock eyes, which sit in the rock (so they have to be checked
+     * before the rock stops the shot). Returns true if the bullet is used up.
+     */
+    private boolean hitWallTarget(Bullet b, float bx, float by, float bw, float bh, boolean laser) {
+        for (Hazard h : hazards) {
+            if (h.dead || (h.type != Hazard.Type.DOME && h.type != Hazard.Type.EYE)) continue;
+            if (!wallTargetTouches(h, bx, by, bw, bh)) continue;
+            if (laser) { if (b.hits.contains(h)) continue; b.hits.add(h); } else b.dead = true;
+            h.hp -= b.dmg;
+            if (h.hp <= 0) destroyWallTarget(h, b.owner);
+            else { a.play("hit", 0.15f); hitSpark(b, h.x, h.y, h.w, h.h); }
+            if (b.dead) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Does the rectangle touch a dome's drawn pixels? Uses the shape of the frame showing (closed / open), mirrored for
+     * domes on the right wall, so the see-through part of the picture can be flown and shot through.
+     */
+    private boolean wallTargetTouches(Hazard h, float rx, float ry, float rw, float rh) {
+        if (h.type == Hazard.Type.DOME) return domeTouches(h, rx, ry, rw, rh);
+        return overlap(rx, ry, rw, rh, h.x, h.y, h.w, h.h) && rockEyeMask.overlaps(h.x, h.y, rx, ry, rw, rh);   // eye rock
+    }
+
+    private boolean domeTouches(Hazard h, float rx, float ry, float rw, float rh) {
+        if (!overlap(rx, ry, rw, rh, h.x, h.y, h.w, h.h)) return false;
+        PixelMask m = domeMasks[Math.min(h.open ? 1 : 0, domeMasks.length - 1)][h.fromCeil ? 1 : 0];
+        return m.overlaps(h.x, h.y, rx, ry, rw, rh);
+    }
+
+    /** A dome or an eye rock is shot to pieces. */
+    private void destroyWallTarget(Hazard h, Player owner) {
+        h.dead = true;
+        boolean dome = h.type == Hazard.Type.DOME;
+        addScore(owner, dome ? Hazard.DOME_SCORE : Hazard.EYE_SCORE);
+        if (dome) for (float yy = h.y + 6f; yy < h.y + h.h; yy += 10f) boom(h.x + h.w / 2f, yy, 0.8f);
+        else {                                       // the whole rock bursts, leaving rubble that stays like terrain
+            boom(h.x + h.w / 2f, h.y + h.h / 2f, 1.3f);
+            for (int i = 0; i < 4; i++) boom(h.x + 8f + (i % 2) * 16f, h.y + 8f + (i / 2) * 16f, 0.8f);
+            if (rubbleR != null) {
+                Hazard r = new Hazard(Hazard.Type.RUBBLE);   // (drawn; the Level.Obstacle makes it solid)
+                r.w = rubbleR.getRegionWidth(); r.h = rubbleR.getRegionHeight();
+                r.x = h.x + (h.w - r.w) / 2f; r.y = h.y + (h.h - r.h) / 2f;   // centred where the rock was
+                pendingHazards.add(r);
+                level.obstacles.add(new Level.Obstacle(r.x, r.y, rubbleMask));
+            }
+        }
+        a.play("boom", 0.3f);
+    }
 
     /** A missile that hit something bursts where it is (shots and lasers show a hit spark instead). */
     private void missileBurst(Bullet b) {
@@ -1215,17 +1748,23 @@ public class GameScreen extends ScreenAdapter {
             float bx = Math.max(b.x, scrollX), by = Math.max(b.y, scrollY);
             float bw = Math.min(b.x + b.w, scrollX + W) - bx, bh = Math.min(b.y + b.h, scrollY + H) - by;
             if (bw <= 0f || bh <= 0f) continue;
+            // stage 2 domes and rock eyes sit in the rock: they are hit before the rock stops the shot
+            if (hitWallTarget(b, bx, by, bw, bh, laser)) { missileBurst(b); continue; }
             // brick maze: every weapon blasts the blocks it touches (lasers keep going)
             float reach = b.kind == Bullet.Kind.MISSILE ? 3f : 0f;
-            if (level.breakBricks(bx, by - reach, bw + reach, bh + 2 * reach) > 0) {
+            boolean blasted = b.vert && b.kind == Bullet.Kind.MISSILE   // (a wall-crawling missile: on either side)
+                    ? level.breakBricks(bx - reach, by - reach, bw + 2 * reach, bh + 2 * reach) > 0
+                    : level.breakBricks(bx, by - reach, bw + reach, bh + 2 * reach) > 0;
+            if (blasted) {
                 addScore(b.owner, 10);
                 boom(b.x + b.w, b.y + b.h / 2f, 0.6f);
                 a.play("hit", 0.15f);
                 if (!laser) { b.dead = true; continue; }
             }
+            if (b.burst) { b.dead = true; missileBurst(b); continue; }   // a vertical missile that ran into rock
             if (b.kind == Bullet.Kind.RIPPLE) {
                 // a ripple is only stopped by terrain at its core, so a big ring can pass close to walls
-                if (level.hits(bx, b.y + b.h / 2f - 2f, bw, 4f)) { b.dead = true; continue; }
+                if (b.vert ? level.hits(b.x + b.w / 2f - 2f, by, 4f, bh) : level.hits(bx, b.y + b.h / 2f - 2f, bw, 4f)) { b.dead = true; continue; }
             } else if (b.kind != Bullet.Kind.MISSILE && level.hits(bx, by, bw, bh)) { b.dead = true; continue; }
 
             // towers: the green tip can be shot; the rock column just stops shots
@@ -1292,17 +1831,23 @@ public class GameScreen extends ScreenAdapter {
             }
             if (b.dead) { if (b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f); continue; }
 
+            if (boss != null && boss.ringTouches(bx, by, bw, bh)) {   // Tetran's rings: can't be hurt, block shots
+                if (!laser) { b.dead = true; missileBurst(b); }
+                continue;
+            }
             if (boss != null && !boss.dying && touchesBoss(bx, by, bw, bh)) {
                 // Bosses with an eye only take damage on the eye, and not while it is fully closed;
                 // other bosses take damage anywhere. A laser hurts it once per beam.
                 // After each hit the boss can't lose HP for Boss.HIT_COOLDOWN; shots that land then are absorbed.
                 float ex = boss.x + boss.eyeX, ey = boss.y + boss.eyeY;
                 boolean onEye = boss.hasEye && overlap(bx, by, bw, bh, ex, ey, boss.eyeW, boss.eyeH);
-                boolean weak = !boss.hasEye || (onEye && !boss.eyeShut());
+                boolean onCore = boss.coreTouches(bx, by, bw, bh);
+                boolean weak = boss.hasCore ? onCore : !boss.hasEye || (onEye && !boss.eyeShut());   // core: the only weak spot
                 if (!weak || boss.hitCooldown > 0f) {
                     if (!laser) {      // a laser keeps going and may still hurt it a moment later
                         b.dead = true;
-                        if (onEye) hitSpark(b, ex, ey, boss.eyeW, boss.eyeH); else hitSpark(b, boss.x, boss.y, boss.w, boss.h);
+                        if (onCore) hitSpark(b, boss.x + boss.coreX, boss.y + boss.coreY, boss.coreW, boss.coreH);
+                        else if (onEye) hitSpark(b, ex, ey, boss.eyeW, boss.eyeH); else hitSpark(b, boss.x, boss.y, boss.w, boss.h);
                     }
                     if (b.dead && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
                     continue;
@@ -1314,11 +1859,13 @@ public class GameScreen extends ScreenAdapter {
                 a.play("hit", 0.15f);
                 if (boss.hasEye) boss.onEyeHit();
                 if (boss.hp > 0) {
-                    if (boss.hasEye) hitSpark(b, ex, ey, boss.eyeW, boss.eyeH); else hitSpark(b, boss.x, boss.y, boss.w, boss.h);
+                    if (boss.hasCore) hitSpark(b, boss.x + boss.coreX, boss.y + boss.coreY, boss.coreW, boss.coreH);
+                    else if (boss.hasEye) hitSpark(b, ex, ey, boss.eyeW, boss.eyeH); else hitSpark(b, boss.x, boss.y, boss.w, boss.h);
                 }
                 if (boss.hp <= 0) {
                     boss.dying = true;
                     boss.explodeArms(this);
+                    boss.explodeRings(this);
                     eBullets.clear();
                     addScore(b.owner, 5000);
                 }
@@ -1329,18 +1876,18 @@ public class GameScreen extends ScreenAdapter {
         // ---- enemy bullets
         for (Bullet b : eBullets) {
             if (b.dead) continue;
-            if (level.hits(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }
+            if (b.t >= b.terrainGrace && level.hits(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }
             for (Hazard h : hazards) {
                 if (h.type == Hazard.Type.CRUSHER && overlap(b.x, b.y, b.w, b.h, h.x, h.y, h.w, h.h)) b.dead = true;
                 if (h.type == Hazard.Type.FANG && h.touches(b.x, b.y, b.w, b.h)) b.dead = true;
             }
             if (b.dead) continue;
-            for (Player p : players) {   // F.FIELD in front of a ship: blocks the shot (and wears down)
-                if (alive(p) && p.ffield > 0
-                        && overlap(b.x, b.y, b.w, b.h, p.ffieldX(), p.ffieldY(), Player.FFIELD_W, Player.FFIELD_H)) {
+            for (Player p : players) {   // SHIELD in front of a ship: blocks the shot (and wears down)
+                if (alive(p) && p.shield > 0
+                        && overlap(b.x, b.y, b.w, b.h, p.shieldX(), p.shieldY(), Player.shieldW(), Player.shieldH())) {
                     b.dead = true;
                     boom(b.x + b.w / 2f, b.y + b.h / 2f, 0.4f);
-                    if (p.invuln <= 0f) ffieldHit(p);   // shots that land during the invincibility don't wear it down
+                    if (p.invuln <= 0f) shieldHit(p);   // shots that land during the invincibility don't wear it down
                     break;
                 }
             }
@@ -1348,7 +1895,7 @@ public class GameScreen extends ScreenAdapter {
             for (Player p : players) {
                 if (alive(p) && overlap(b.x, b.y, b.w, b.h, p.hitX(), p.hitY(), Player.HIT_W, Player.HIT_H)) {
                     b.dead = true;
-                    hurt(p, false);   // got past the F.FIELD (from behind / above / below)
+                    hurt(p, false);   // got past the SHIELD (from behind / above / below)
                     break;
                 }
             }
@@ -1359,21 +1906,23 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /**
-     * What the F.FIELD (its own 8x16 picture in front of the nose) touches: an Enemy, a Hazard (Bamda / rock or claw
+     * What the SHIELD (its own 8x16 picture in front of the nose) touches: an Enemy, a Hazard (Bamda / rock or claw
      * arm), the Boss, or null.
      */
-    private Object ffieldTouches(Player p) {
-        float fx = p.ffieldX(), fy = p.ffieldY(), fw = Player.FFIELD_W, fh = Player.FFIELD_H;
+    private Object shieldTouches(Player p) {
+        float fx = p.shieldX(), fy = p.shieldY(), fw = Player.shieldW(), fh = Player.shieldH();
         for (Enemy e : enemies) if (!e.dead && overlap(fx, fy, fw, fh, e.x + 2f, e.y + 2f, e.w - 4f, e.h - 4f)) return e;
         for (Hazard h : hazards) {
             if (h.dead) continue;
             if (h.type == Hazard.Type.ARM && h.armTouches(fx, fy, fw, fh)) return h;
+            if ((h.type == Hazard.Type.DOME || h.type == Hazard.Type.EYE) && wallTargetTouches(h, fx, fy, fw, fh)) return h;
             if (h.shootable() && overlap(fx, fy, fw, fh, h.x + 2f, h.y + 2f, h.w - 4f, h.h - 4f)) return h;
         }
+        if (boss != null && boss.ringTouches(fx, fy, fw, fh)) return boss;
         return boss != null && !boss.dying && touchesBoss(fx, fy, fw, fh) ? boss : null;
     }
 
-    /** The shield or the F.FIELD took a hit from this: it takes 1 damage in return (enemies and Bamdas; arms and the boss shrug it off). */
+    /** The F.FIELD bubble or the SHIELD took a hit from this: it takes 1 damage in return (enemies and Bamdas; arms and the boss shrug it off). */
     private void guardDamage(Object o, Player p) {
         if (o instanceof Enemy) {
             Enemy e = (Enemy) o;
@@ -1394,17 +1943,17 @@ public class GameScreen extends ScreenAdapter {
         float hx = p.hitX(), hy = p.hitY(), hw = Player.HIT_W, hh = Player.HIT_H;
         boolean ghost = p.ghostT > 0f;   // just (re)entered: passes through terrain, teeth and crushers
         if (!ghost && level.hits(hx, hy, hw, hh)) { hurt(p, true); return; }
-        // F.FIELD: whatever runs into the field itself wears it down (and gives the ship a moment of invincibility)
-        if (p.ffield > 0 && p.invuln <= 0f && !debugInvincible) {
-            Object hit = ffieldTouches(p);
-            if (hit != null) { ffieldHit(p); guardDamage(hit, p); }   // ...and what ran into it takes 1 damage
+        // SHIELD: whatever runs into the field itself wears it down (and gives the ship a moment of invincibility)
+        if (p.shield > 0 && p.invuln <= 0f && !debugInvincible) {
+            Object hit = shieldTouches(p);
+            if (hit != null) { shieldHit(p); guardDamage(hit, p); }   // ...and what ran into it takes 1 damage
         }
         for (Enemy e : enemies) {
             if (!e.dead && overlap(hx, hy, hw, hh, e.x + 2f, e.y + 2f, e.w - 4f, e.h - 4f)) {
-                boolean shieldTakesIt = p.shield > 0 && p.invuln <= 0f && !debugInvincible;
+                boolean ffieldTakesIt = p.ffield > 0 && p.invuln <= 0f && !debugInvincible;
                 hurt(p, false);
                 if (p.dead) return;
-                if (shieldTakesIt) guardDamage(e, p);       // the shield hits back: 1 damage
+                if (ffieldTakesIt) guardDamage(e, p);       // the F.FIELD hits back: 1 damage
             }
         }
         for (Hazard h : hazards) {
@@ -1412,6 +1961,7 @@ public class GameScreen extends ScreenAdapter {
             if (!ghost && h.type == Hazard.Type.CRUSHER && overlap(hx, hy, hw, hh, h.x, h.y, h.w, h.h)) { hurt(p, true); return; }
             if (!ghost && h.type == Hazard.Type.FANG && h.touches(hx, hy, hw, hh)) { hurt(p, true); return; }
             if (!ghost && h.type == Hazard.Type.TOWER && h.touches(hx, hy, hw, hh)) { hurt(p, true); return; }
+            if (!ghost && (h.type == Hazard.Type.DOME || h.type == Hazard.Type.EYE) && wallTargetTouches(h, hx, hy, hw, hh)) { hurt(p, true); return; }
             if (h.type == Hazard.Type.ARM && h.armTouches(hx, hy, hw, hh)) { hurt(p, false); if (p.dead) return; }   // caught
             if (h.shootable() && overlap(hx, hy, hw, hh, h.x + 2f, h.y + 2f, h.w - 4f, h.h - 4f)) {
                 h.dead = true;
@@ -1420,7 +1970,7 @@ public class GameScreen extends ScreenAdapter {
                 if (p.dead) return;
             }
         }
-        if (boss != null && touchesBoss(hx, hy, hw, hh)) {
+        if (boss != null && (touchesBoss(hx, hy, hw, hh) || boss.ringTouches(hx, hy, hw, hh))) {
             hurt(p, false);
             if (p.dead) return;
         }
@@ -1428,7 +1978,8 @@ public class GameScreen extends ScreenAdapter {
             if (!c.dead() && overlap(p.x + 2f, p.y, 28f, 16f, c.x, c.y, capW, capH)) {
                 c.x = -99999f;   // consumed (culled next frame)
                 p.score += 300;
-                p.meter = p.meter >= Player.SLOT_COUNT ? 1 : p.meter + 1;   // only the player who caught it advances
+                if (c.green && p.options < Player.MAX_OPTIONS) p.options++;   // green: one option back, at once
+                else p.meter = p.meter >= Player.SLOT_COUNT ? 1 : p.meter + 1;   // only the player who caught it advances
                 a.play("pickup", 0.35f);
             }
         }
@@ -1450,29 +2001,29 @@ public class GameScreen extends ScreenAdapter {
         }
     }
 
-    /** Invincibility after the shield or the F.FIELD takes a hit. */
+    /** Invincibility after the F.FIELD or the SHIELD takes a hit. */
     private static final float GUARD_IFRAMES = 0.6f;
 
     /**
-     * The F.FIELD takes a hit (a blocked shot, or an enemy rammed): it wears down by one and the ship is invincible
-     * to enemies and shots for a moment, like with the shield (terrain still hurts).
+     * The SHIELD takes a hit (a blocked shot, or an enemy rammed): it wears down by one and the ship is invincible
+     * to enemies and shots for a moment, like with the F.FIELD (terrain still hurts).
      */
-    private void ffieldHit(Player p) {
-        p.ffield--;
+    private void shieldHit(Player p) {
+        p.shield--;
         p.invuln = Math.max(p.invuln, GUARD_IFRAMES);
-        p.ffieldHitT = GUARD_IFRAMES;   // the field flickers (the ship doesn't blink)
+        p.shieldHitT = GUARD_IFRAMES;   // the field flickers (the ship doesn't blink)
         a.play("hit", 0.3f);
     }
 
-    private void hurt(Player p, boolean ignoreShield) {   // (the F.FIELD only reacts to what touches the field itself)
+    private void hurt(Player p, boolean ignoreGuards) {   // (the SHIELD only reacts to what touches the field itself)
         if (debugInvincible) return;                 // debug: invincible
         if (p.dead || (boss != null && boss.dying)) return;
-        if (!ignoreShield) {
+        if (!ignoreGuards) {
             if (p.invuln > 0f) return;
-            if (p.shield > 0) {
-                p.shield--;
+            if (p.ffield > 0) {
+                p.ffield--;
                 p.invuln = GUARD_IFRAMES;
-                p.shieldHitT = p.invuln;   // the shield blinks (and fades out if this was its last hit)
+                p.ffieldHitT = p.invuln;   // the F.FIELD bubble blinks (and fades out if this was its last hit)
                 a.play("hit", 0.3f);
                 return;
             }
@@ -1481,11 +2032,31 @@ public class GameScreen extends ScreenAdapter {
         p.aiming = false;
         boom(p.x + 16f, p.y + 8f, 1.8f);
         a.play("boom", 0.5f);
-        p.lives--;           // upgrades are kept when the ship is destroyed
-        if (anyAlive()) {
-            p.respawnT = RESPAWN_DELAY;   // partner still flying: re-enter on the spot
+        p.lives--;
+        // its options are left behind as green capsules (one option each); on NORMAL the ship starts over without
+        // power-ups, on EASY it keeps everything else
+        for (int i = 0; i < p.options; i++) {
+            Capsule c = new Capsule();
+            c.green = true;
+            c.x = optX(p, i) + 6f - capW / 2f; c.y = optY(p, i) + 6f - capH / 2f; c.y0 = c.y;
+            caps.add(c);
+        }
+        if (game.easy) {
+            p.options = 0;                            // easy: everything else is kept
         } else {
-            setState(State.DEAD);         // nobody left: rewind to the checkpoint
+            int meter = p.meter;                      // (the power meter's highlight stays where it was)
+            p.resetPowerups();
+            p.meter = meter;
+        }
+        if (debugLoadout) p.applyDebugLoadout();
+        // the game carries on (no rewind): the ship re-enters on the spot after a moment. Only when nobody has
+        // ships left is it game over.
+        boolean othersPlaying = false;
+        for (Player o : players) if (o != null && o != p && !o.out && o.lives >= 0) othersPlaying = true;
+        if (p.lives >= 0 || othersPlaying) {
+            p.respawnT = RESPAWN_DELAY;   // (out of ships: drops out, can press fire to continue)
+        } else {
+            setState(State.DEAD);         // nobody left
         }
     }
 
@@ -1547,7 +2118,18 @@ public class GameScreen extends ScreenAdapter {
                     if (gid != 0) drawTile(gid, c * s, r * s, s);
                 }
         }
-        if (level.bricks != null) {
+        if (level.bricks != null && brickArtTex != null) {   // each brick shows its own piece of the map's brick picture
+            int top = brickArtTex.getHeight(), cs = (int) s;
+            for (int r = r0; r <= r1; r++)
+                for (int c = c0; c <= c1; c++) {
+                    int i = r * level.gCols + c;
+                    float alpha = level.bricks[i] ? 1f : level.brickGrow[i];
+                    if (alpha <= 0f) continue;
+                    if (alpha < 1f) batch.setColor(1f, 1f, 1f, alpha);
+                    batch.draw(brickArtTex, c * s, r * s, s, s, c * cs, top - (r + 1) * cs, cs, cs, false, false);
+                    if (alpha < 1f) batch.setColor(Color.WHITE);
+                }
+        } else if (level.bricks != null) {
             float p = brickTex.getWidth();   // the brick pattern repeats seamlessly across the wall
             for (int r = r0; r <= r1; r++)
                 for (int c = c0; c <= c1; c++) {
@@ -1613,7 +2195,19 @@ public class GameScreen extends ScreenAdapter {
         for (Hazard h : hazards) {
             if (h.type == Hazard.Type.FANG || h.type == Hazard.Type.TOWER) continue;   // drawn behind the terrain
             if (h.x > scrollX + W + 40f || h.x + Math.max(40f, h.w + 60f) < scrollX) continue;
+            if (level.vertical && (h.y > scrollY + H + 40f || h.y + h.h < scrollY - 40f)) continue;
             switch (h.type) {
+                case DOME: {                                 // facing right on the left wall, mirrored on the right wall
+                    TextureRegion f = domeF[h.open ? 1 : 0];
+                    batch.draw(f, h.fromCeil ? h.x + h.w : h.x, h.y, h.fromCeil ? -h.w : h.w, h.h);
+                    break;
+                }
+                case EYE:
+                    batch.draw(rockEyeR, h.x, h.y, h.w, h.h);
+                    break;
+                case RUBBLE:
+                    batch.draw(rubbleR, h.x, h.y, h.w, h.h);
+                    break;
                 case ROCK:
                     batch.draw(rockR, h.x, h.y, 16, 16);
                     break;
@@ -1639,7 +2233,8 @@ public class GameScreen extends ScreenAdapter {
 
     private void drawCapsules() {
         for (Capsule c : caps) {
-            TextureRegion f = capF[(int) (c.t * 6f) % capF.length];
+            TextureRegion[] fr = c.green ? capGreenF : capF;
+            TextureRegion f = fr[(int) (c.t * 6f) % fr.length];
             batch.draw(f, c.x, c.y, f.getRegionWidth(), f.getRegionHeight());
         }
     }
@@ -1649,6 +2244,11 @@ public class GameScreen extends ScreenAdapter {
             TextureRegion r;
             switch (e.type) {
                 case FAN: r = fanF[(int) (e.t * 10f) % fanF.length]; break;
+                case LEGACY: {                           // forward, then backward: 0 1 2 3 2 1 0 ...
+                    int n = legacyF.length, cycle = Math.max(1, 2 * n - 2), k = (int) (e.t * Enemy.LEGACY_FPS) % cycle;
+                    r = legacyF[k < n ? k : cycle - k];
+                    break;
+                }
                 case RUSHER: r = rushF[(int) (e.t * 12f) % rushF.length]; break;
                 case WALKER: r = walkF[(int) (e.t * 6f) % walkF.length]; break;
                 case FROST: r = frostR; break;
@@ -1668,6 +2268,12 @@ public class GameScreen extends ScreenAdapter {
                 batch.draw(f, e.x, e.y, e.w / 2f, e.h / 2f, e.w, e.h, 1f, e.ceiling ? -1f : 1f, rot);
                 continue;
             }
+            if (e.type == Enemy.Type.TURRET_WALL) {   // stage 2 wall turret: red = carries a capsule
+                TextureRegion f = (red ? wallTurretRedF : wallTurretGreenF)[e.aim == Enemy.WALL_SIDE ? 0 : 1];
+                boolean flipX = e.wallRight, flipY = e.aim == Enemy.WALL_UP;   // (the diagonal frame points down)
+                batch.draw(f, flipX ? e.x + e.w : e.x, flipY ? e.y + e.h : e.y, flipX ? -e.w : e.w, flipY ? -e.h : e.h);
+                continue;
+            }
             if (r == null) {                           // bio turret: red = carries a capsule; mirrored to aim right
                 TextureRegion f = (red ? bioRedF : bioBlueF)[e.aim == 0 ? 1 : 0];
                 boolean flipX = e.aim > 0, ceil = e.type == Enemy.Type.TURRET_CEIL;
@@ -1675,7 +2281,17 @@ public class GameScreen extends ScreenAdapter {
                 continue;
             }
             if (e.type == Enemy.Type.FROST) red = false;   // keeps its own colours (the group still carries a capsule)
-            if (red) batch.setColor(1f, 0.45f, 0.45f, 1f);
+            if (e.type == Enemy.Type.RUGAL && red && rugalRedF != null) {   // red Rugal: its own picture
+                r = rugalRedF[Math.min(e.rugalFrame(), rugalRedF.length - 1)];
+                red = false;
+            }
+            if (e.type == Enemy.Type.LEGACY) {          // always green (the group may still carry a capsule)
+                batch.setColor(LEGACY_GREEN);
+                batch.draw(r, e.x, e.y, e.w, e.h);
+                batch.setColor(Color.WHITE);
+                continue;
+            }
+            if (red) batch.setColor(e.type == Enemy.Type.AMOEBA ? AMOEBA_RED : CARRIER_TINT);
             if (e.type == Enemy.Type.WALKER) {
                 // mirrored when walking right, upside down on the ceiling, tilted 45 degrees at steps
                 // (front up while climbing a step, front down while dropping off one)
@@ -1688,9 +2304,14 @@ public class GameScreen extends ScreenAdapter {
     }
 
     private void drawBoss() {
+        drawTentacles();                                // under the body
         if (boss.flash > 0f) batch.setColor(1f, 0.55f, 0.55f, 1f);
         if (boss.dying && (int) (boss.dieT * 20f) % 2 == 0) batch.setColor(1f, 1f, 1f, 0.5f);
         batch.draw(bossR, boss.x, boss.y, boss.w, boss.h);
+        if (boss.hasCore) {                              // in its hole, with the blocks still left
+            batch.draw(coreR, boss.x + boss.coreX, boss.y + boss.coreY, boss.coreW, boss.coreH);
+            drawCoreBlocks();
+        }
         if (boss.hasEye && eyeF != null) {
             TextureRegion f = eyeF[boss.eyeFrame()];
             batch.draw(f, boss.x + boss.eyeX, boss.y + boss.eyeY, f.getRegionWidth(), f.getRegionHeight());
@@ -1699,13 +2320,31 @@ public class GameScreen extends ScreenAdapter {
         if (boss.arms != null) for (Hazard arm : boss.arms) if (!arm.dead) drawArm(arm);   // over the brain, as in the original
     }
 
+    /** Tetran's tentacles: drawn before (under) the body. */
+    private void drawTentacles() {
+        if (!boss.tetran || boss.dying) return;
+        float rs = Boss.RING_SIZE;
+        for (int k = 0; k < Boss.TENTACLES; k++)
+            for (int i = 0; i < Boss.RINGS; i++)
+                batch.draw(ringR, Math.round(boss.ringX[k][i] - rs / 2f), Math.round(boss.ringY[k][i] - rs / 2f), rs, rs);
+    }
+
     private void drawBullets() {
         for (Bullet b : pBullets) {
             switch (b.kind) {
-                case LASER: batch.draw(laserR, b.x, b.y, b.w, b.h); break;
+                case LASER:
+                    if (b.vert) batch.draw(laserR, b.x + b.w, b.y, 0f, 0f, b.h, b.w, 1f, 1f, 90f);   // turned to point up
+                    else batch.draw(laserR, b.x, b.y, b.w, b.h);
+                    break;
                 case RIPPLE: drawRipple(b); break;
                 case MISSILE:   // tilted 45 degrees nose-up while climbing, nose-down while dropping
-                    if (b.up)       // 2-WAY's upward missile: drawn upside down; "climbing" a lower ceiling means going down
+                    if (b.vert) {   // vertical stage: turned to where it is going (centred on its little hit box)
+                        float mw = missR.getRegionWidth(), mh = missR.getRegionHeight();
+                        batch.draw(missR, b.x + b.w / 2f - mw / 2f, b.y + b.h / 2f - mh / 2f, mw / 2f, mh / 2f, mw, mh, 1f,
+                                b.up ? -1f : 1f, MathUtils.atan2(b.vy, b.vx) * MathUtils.radiansToDegrees);
+                    } else if (!b.grounded)  // still flying to the floor / ceiling: nose 45 degrees down / up
+                        batch.draw(missR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, b.up ? -1f : 1f, b.up ? 45f : -45f);
+                    else if (b.up)       // upward missile: drawn upside down; "climbing" a lower ceiling means going down
                         batch.draw(missR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, -1f, -b.climb * 45f);
                     else if (b.climb == FloorCrawler.LEVEL) batch.draw(missR, b.x, b.y, b.w, b.h);
                     else batch.draw(missR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, 1f, b.climb * 45f);
@@ -1738,34 +2377,46 @@ public class GameScreen extends ScreenAdapter {
     private float snapY(float worldY) { return Math.round(scrollY) + Math.round(worldY - scrollY); }
 
     private void drawPlayer(Player p) {
-        Color tint = p.index == 1 ? P2_TINT : Color.WHITE;
+        Color tint = p.index == 1 ? P2_TINT : Color.WHITE;   // (player 2's options; its ship has its own red sprites)
         float px = snapX(p.x), py = snapY(p.y);
         boolean blinkPhase = (int) (p.invuln * 20f) % 2 == 0;
-        boolean shieldHit = p.shieldHitT > 0f;          // shield took the hit: it blinks, the ship stays solid
-        boolean blink = p.invuln > 0f && !shieldHit && p.ffieldHitT <= 0f && blinkPhase;   // a guard took it: no blink
+        boolean ffieldHit = p.ffieldHitT > 0f;          // the F.FIELD took the hit: it blinks, the ship stays solid
+        boolean blink = p.invuln > 0f && !ffieldHit && p.shieldHitT <= 0f && blinkPhase;   // a guard took it: no blink
+        if (!blink) {
+            boolean p2 = p.index == 1;
+            if (level.vertical) {   // pointing up, banking left / right while moving sideways; centred on the hit box
+                TextureRegion[] vf = p2 ? playerVRedF : playerVF;
+                TextureRegion f = vf[p.tilt == Player.TILT_LEFT ? 0 : p.tilt == Player.TILT_RIGHT ? 2 : 1];
+                batch.draw(f, px + Math.round(16.5f - f.getRegionWidth() / 2f), py + Player.VART_B);
+            } else {
+                TextureRegion[] hf = p2 ? playerRedF : playerF;
+                batch.draw(hf[Math.min(p.tilt, hf.length - 1)], px, py, 32, 16);
+            }
+        }
         batch.setColor(tint);
-        if (!blink) batch.draw(playerF[Math.min(p.tilt, playerF.length - 1)], px, py, 32, 16);
         for (int i = 0; i < p.options; i++) {
             batch.draw(optionF[(int) (stateT * 8f + i) % optionF.length], snapX(optX(p, i)), snapY(optY(p, i)), 12, 12);
         }
         batch.setColor(Color.WHITE);
         if (p.aiming) {   // dotted line showing the DOUBLE shot direction
-            float ang = p.doubleDir * MathUtils.PI / 4f, cx = px + 16f, cy = py + 8f;
+            float ang = doubleAngle(p), cx = px + 16f, cy = py + 8f;
             batch.setColor(1f, 0.9f, 0.3f, 0.9f);
             for (int i = 1; i <= 4; i++) {
                 batch.draw(pix, cx + MathUtils.cos(ang) * (10f + i * 7f) - 1f, cy + MathUtils.sin(ang) * (10f + i * 7f) - 1f, 2f, 2f);
             }
             batch.setColor(Color.WHITE);
         }
-        if (p.ffield > 0 && !blink && !(p.ffieldHitT > 0f && (int) (p.ffieldHitT * 40f) % 2 == 0)) {   // flickers when hit
-            float fx = snapX(p.ffieldX()), fy = snapY(p.ffieldY());
-            TextureRegion[] ff = p.ffield <= Player.FFIELD_LOW && ffieldRedF != null ? ffieldRedF : ffieldF;   // red: nearly used up
-            if (ff != null) batch.draw(ff[(int) (stateT * FFIELD_FPS) % ff.length], fx, fy, Player.FFIELD_W, Player.FFIELD_H);
-            else { batch.setColor(0.4f, 0.9f, 1f, 0.8f); batch.draw(pix, fx + 2f, fy, 4f, Player.FFIELD_H); batch.setColor(Color.WHITE); }
+        if (p.shield > 0 && !blink && !(p.shieldHitT > 0f && (int) (p.shieldHitT * 40f) % 2 == 0)) {   // flickers when hit
+            float fx = snapX(p.shieldX()), fy = snapY(p.shieldY());
+            TextureRegion[] ff = p.shield <= Player.SHIELD_LOW && shieldRedF != null ? shieldRedF : shieldF;   // red: nearly used up
+            if (ff != null && level.vertical)       // turned a quarter: lying across the top of the nose
+                batch.draw(ff[(int) (stateT * SHIELD_FPS) % ff.length], fx + Player.shieldW(), fy, 0f, 0f, Player.SHIELD_W, Player.SHIELD_H, 1f, 1f, 90f);
+            else if (ff != null) batch.draw(ff[(int) (stateT * SHIELD_FPS) % ff.length], fx, fy, Player.SHIELD_W, Player.SHIELD_H);
+            else { batch.setColor(0.4f, 0.9f, 1f, 0.8f); batch.draw(pix, fx + 2f, fy, 4f, Player.SHIELD_H); batch.setColor(Color.WHITE); }
         }
-        if ((p.shield > 0 || shieldHit) && !(shieldHit && blinkPhase)) {
-            batch.setColor(1f, 1f, 1f, 0.35f + 0.1f * Math.max(p.shield, 1));
-            batch.draw(shieldR, px - 6f, py - 8f, 40, 32);
+        if ((p.ffield > 0 || ffieldHit) && !(ffieldHit && blinkPhase)) {
+            batch.setColor(1f, 1f, 1f, 0.35f + 0.1f * Math.max(p.ffield, 1));
+            batch.draw(ffieldR, px - 6f, py - 8f, 40, 32);
             batch.setColor(Color.WHITE);
         }
         if (p.invuln > 1f && playersInGame() > 1) {   // "1P" / "2P" tag just after (re)entering
@@ -1888,7 +2539,8 @@ public class GameScreen extends ScreenAdapter {
         boolean inPlay = p != null && !p.out;
 
         // power meter: 7 slots of 14x6, 16px apart
-        int[] slots = p != null ? p.slots : Player.slotsFor(Math.max(0, choosing[idx]));
+        int[] slots = p != null ? p.slots : choosingGuard[idx] != 0 ? Player.slotsFor(Math.max(0, choosing[idx]), choosingGuard[idx])
+                : Player.slotsFor(Math.max(0, choosing[idx]));
         for (int i = 0; i < Player.SLOT_COUNT; i++) {
             float x = ox + 9 + 16 * i;
             boolean sel = inPlay && p.meter == i + 1;
@@ -1910,10 +2562,10 @@ public class GameScreen extends ScreenAdapter {
         batch.setColor(Color.WHITE);
         String box = "";
         if (choosingType) {
-            box = blinkOn ? "TYPE " + (choosing[idx] + 1) : "";
+            box = !blinkOn ? "" : choosingGuard[idx] != 0 ? Player.POWER_NAMES[choosingGuard[idx]] : "TYPE " + (choosing[idx] + 1);
         } else if (inPlay) {
             int power = p.selectedPower();
-            box = power == 0 ? "" : Player.POWER_NAMES[power];
+            box = power == 0 ? "" : p.powerLabel(power);
         } else if (state != State.GAMEOVER && state != State.WIN) {
             if (!Controls.hasInput(idx)) box = "PAD " + (idx + 1);
             else if (blinkOn) box = p == null ? "JOIN" : "RETRY";
@@ -1928,14 +2580,14 @@ public class GameScreen extends ScreenAdapter {
     /** Is this power-up already active (taken as far as it goes)? */
     private static boolean owned(Player p, int power) {
         switch (power) {
-            case Player.SPEED: return p.speedLvl >= 5;
+            case Player.SPEED: return false;                   // always open (cycles back to 0)
             case Player.MISSILE: case Player.TWO_WAY: return p.missile;
             case Player.DOUBLE: return p.weapon == Player.W_DOUBLE;
             case Player.LASER: return p.weapon == Player.W_LASER;
             case Player.RIPPLE: return p.weapon == Player.W_RIPPLE;
             case Player.OPTION: return p.options >= Player.MAX_OPTIONS;
-            case Player.SHIELD: return p.shield > 0;
-            case Player.FFIELD: return p.ffield > 0;
+            case Player.FFIELD: return p.ffield >= Player.FFIELD_HITS;   // open again once it has taken a hit
+            case Player.SHIELD: return p.shield >= Player.SHIELD_HITS;
             case Player.EXTRA: return p.lives >= Player.MAX_LIVES;
             default: return false;
         }

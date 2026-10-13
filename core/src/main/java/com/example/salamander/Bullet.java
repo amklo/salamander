@@ -10,7 +10,9 @@ public class Bullet {
     public float x, y, w, h, vx, vy, gravity, t;
     public int dmg = 1;
     /** Damage of one laser beam. It hits each target once, but hard: tough enemies go down in fewer beams. */
-    public static final int LASER_DAMAGE = 7;
+    public static final int LASER_DAMAGE = 3;
+    /** Damage of one ripple ring. */
+    public static final int RIPPLE_DAMAGE = 3;
     public boolean dead, grounded;
     /** Skip movement on the frame the bullet is created, so it is first drawn where it was fired. */
     public boolean fresh = true;
@@ -23,6 +25,20 @@ public class Bullet {
     public boolean angled;
     /** 2-WAY's upward missile: flies up and crawls along the ceiling. */
     public boolean up;
+    /**
+     * Vertical stage: fired upward. A laser grows in height (and follows its gun sideways), a ripple widens sideways,
+     * a missile flies diagonally up and to the right (2-WAY's second one: to the left) and crawls up along rock walls.
+     */
+    public boolean vert;
+    /**
+     * Vertical missile ran into rock (or bricks) and stops right there: GameScreen blasts the bricks it touches and
+     * then bursts it.
+     */
+    public boolean burst;
+    /** Enemy bullet fired from inside rock (a rock eye): rock doesn't stop it for this many seconds. */
+    public float terrainGrace;
+    /** Vertical missile: how far it has stepped away from the wall to get past rock in front of it. */
+    private float sideStep;
     public ArrayList<Object> hits;   // lasers pierce: remember what they already hurt
 
     public Bullet(Kind kind, float x, float y, float w, float h) {
@@ -40,28 +56,28 @@ public class Bullet {
     /** Laser: fired short, its front races ahead while its tail lags until it is this long. */
     public static final float LASER_START_LEN = 8f, LASER_MAX_LEN = 320f, LASER_GROW = 320f;
 
-    /** Ripple laser: an oval ring that starts small and widens (mostly vertically) as it travels. */
-    public static final float RIPPLE_START_W = 4f, RIPPLE_START_H = 8f, RIPPLE_MAX_W = 14f, RIPPLE_MAX_H = 48f,
-            RIPPLE_GROW_TIME = 0.35f, RIPPLE_SPEED = 480f;
+    /**
+     * Ripple laser: starts as sprites/ripple.png (8x16) and stretches up and down as it travels, up to the full
+     * playfield height, wherever terrain doesn't block it (GameScreen grows it). RIPPLE_GROW = px/s, both ends together:
+     * fired from the left edge it is about 80% of the screen height when it reaches the right edge.
+     */
+    public static final float RIPPLE_START_W = 8f, RIPPLE_START_H = 16f, RIPPLE_GROW = 110f, RIPPLE_SPEED = 240f;
 
     public void update(float dt, Level lv) {
         if (fresh) { fresh = false; return; }
         t += dt;
-        if (kind == Kind.RIPPLE) {
-            // grow around the ring's centre so it stays on the line it was fired along
-            float k = Math.min(1f, t / RIPPLE_GROW_TIME);
-            float nw = RIPPLE_START_W + (RIPPLE_MAX_W - RIPPLE_START_W) * k;
-            float nh = RIPPLE_START_H + (RIPPLE_MAX_H - RIPPLE_START_H) * k;
-            x -= (nw - w) / 2f; y -= (nh - h) / 2f;
-            w = nw; h = nh;
-        }
         if (kind == Kind.MISSILE) {
+            if (vert) { wallMove(dt, lv); return; }
             if (up) { if (!grounded) flyUp(dt, lv); else crawlCeiling(dt, lv); }
             else if (!grounded) fly(dt, lv);
             else crawl(dt, lv);
             return;
         }
-        if (kind == Kind.LASER && w < LASER_MAX_LEN) {
+        if (kind == Kind.LASER && vert && h < LASER_MAX_LEN) {   // (vertical stage: grows upward)
+            float grow = Math.min(LASER_GROW * dt, LASER_MAX_LEN - h);
+            h += grow;
+            y -= grow;
+        } else if (kind == Kind.LASER && !vert && w < LASER_MAX_LEN) {
             // the front keeps full speed, the tail moves slower, so the beam stretches out as it travels
             float grow = Math.min(LASER_GROW * dt, LASER_MAX_LEN - w);
             w += grow;
@@ -97,6 +113,43 @@ public class Bullet {
             y = cb - h;
         } else if (lv.hits(x, y, w, h)) {
             dead = true;
+        }
+    }
+
+    /**
+     * Vertical stage missile: flies diagonally up and to the side (right, or left for 2-WAY's second missile) until it
+     * touches a rock wall, then crawls straight up along it. Without rock on that side it flies off the side of the
+     * screen (the screen edges are not walls). Where the wall ends it flies diagonally again (around
+     * the corner); rock right in front of it makes it step away from the wall (up to 48 px) to get past.
+     * vx / vy keep the direction it is moving in (for drawing).
+     */
+    private void wallMove(float dt, Level lv) {
+        if (burst) return;
+        int dir = up ? -1 : 1;
+        float dist = MISSILE_SPEED * dt;
+        int n = Math.max(1, (int) Math.ceil(dist));
+        float st = dist / n, d = st * 0.7071f;
+        for (int k = 0; k < n; k++) {
+            // the sides of the map are the sides of the screen: no rock there, the missile just flies off
+            if (x + w < 0f || x > lv.worldW) { dead = true; return; }
+            if (!grounded) {
+                x += dir * d;
+                if (x < 0f || x + w > lv.worldW) { y += d; vx = dir; vy = 1f; continue; }   // flying out past the side
+                if (lv.hits(x, y, w, h)) { x -= dir * d; grounded = true; sideStep = 0f; }   // reached a wall
+                y += d;
+                if (lv.hits(x, y, w, h)) { y -= d; burst = true; return; }                 // flew into rock
+                vx = grounded ? 0f : dir; vy = 1f;
+            } else if (!lv.hits(x, y + st, w, h)) {                // crawl up along the wall
+                y += st;
+                sideStep = 0f;
+                vx = 0f; vy = 1f;
+                if (!lv.hits(x + dir, y, w, h)) grounded = false;  // the wall ends: around the corner
+            } else {                                               // rock in front: step away from the wall
+                x -= dir * st;
+                sideStep += st;
+                vx = -dir; vy = 0f;
+                if (sideStep > 48f || lv.hits(x, y, w, h)) { x += dir * st; burst = true; return; }
+            }
         }
     }
 

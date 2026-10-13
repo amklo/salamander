@@ -24,9 +24,23 @@ public class Boss {
     private int eyePhase = EYE_WAIT;   // closed until the boss has finished entering
     private float eyePos, eyeShutT;    // eyePos: 0 = closed .. eyeFrames-1 = open
 
+    // ---- core (stage 2, Tetran): a separate picture (sprites/boss1_core.png) drawn over a hole cut in the body. When a
+    // boss has one, only the core takes damage; the rest of the body just stops shots.
+    public boolean hasCore;
+    /** Core's bottom-left relative to the boss's bottom-left, its size and exact shape. */
+    public float coreX, coreY, coreW, coreH;
+    public PixelMask coreMask;
+
+    /** Does the rectangle touch the core's drawn pixels? */
+    public boolean coreTouches(float rx, float ry, float rw, float rh) {
+        if (!hasCore) return false;
+        float cx = x + coreX, cy = y + coreY;
+        return rx < cx + coreW && rx + rw > cx && ry < cy + coreH && ry + rh > cy && coreMask.overlaps(cx, cy, rx, ry, rw, rh);
+    }
+
     // ---- arms (stage 1): in phase 1 the boss has none; below half HP (phase 2) two chains of 4 blue balls and a claw
     // grow out of it, and once they are fully out (phase 3) the boss chases the ships. Shooting any blue ball of an arm
-    // damages it (Hazard.ARM_HP, like the stage arms); a destroyed arm grows back out after ARM_REGROW_TIME seconds.
+    // damages it (ARM_HP); a destroyed arm grows back out after ARM_REGROW_TIME seconds.
     public static final int PHASE_NORMAL = 0, PHASE_GROWING = 1, PHASE_CHASE = 2;
     public int phase = PHASE_NORMAL;
     /** Per arm: anchor (centre of the first ball) relative to the boss's bottom-left, direction, ball spacing. */
@@ -36,12 +50,85 @@ public class Boss {
     /** Arms grow below this share of HP; then the boss chases the ships at this speed (px/s). */
     public static final float ARM_PHASE_HP = 0.5f, CHASE_SPEED = 32f;
     /** Seconds until a destroyed arm starts growing back. */
-    public static final float ARM_REGROW_TIME = 2f;
+    public static final float ARM_REGROW_TIME = 1f;
+    /** A boss arm is 5 times as tough as a stage arm. */
+    public static final int ARM_HP = Hazard.ARM_HP * 5;
     private float[] armRegrowT;
+
+    // ---- Tetran (stage 2, the vertical stage): four identical tentacles of 3 rings plus a bent tip ring turn slowly
+    // around the body like a revolving door. The rings can't be hurt: they block shots and hurt the ships. Each tip
+    // fires aimed shots. The body (sprite) takes the damage.
+    public boolean tetran;
+    public static final int TENTACLES = 4, RINGS = 4;
+    /** Ring centres, world coordinates: [tentacle][ring], ring 3 = the tip. */
+    public final float[][] ringX = new float[TENTACLES][RINGS], ringY = new float[TENTACLES][RINGS];
+    /** Ring layout (from the original map), relative to the body centre along the tentacle / to its side. */
+    private static final float[] RING_ALONG = {36f, 44f, 52f, 60f}, RING_SIDE = {20f, 20f, 20f, 12f};
+    /** Turning speed (radians per second, counter-clockwise), tip shot interval and speed. */
+    public static final float TETRAN_SPIN = 0.45f, TIP_SHOT_INTERVAL = 2.6f, TIP_SHOT_SPEED = 105f;
+    public static final float RING_SIZE = 8f;
+    private float spinA;
+    private final float[] tipShotT = new float[TENTACLES];
+
+    /** Lays the tentacles out around the body for the current turn. */
+    private void layoutRings() {
+        float cx = x + w / 2f, cy = y + h / 2f;
+        for (int k = 0; k < TENTACLES; k++) {
+            float a = spinA + k * MathUtils.PI / 2f, dx = MathUtils.cos(a), dy = MathUtils.sin(a);
+            float sx = dy, sy = -dx;                 // to the side: the tentacle's direction turned clockwise
+            for (int i = 0; i < RINGS; i++) {
+                ringX[k][i] = cx + dx * RING_ALONG[i] + sx * RING_SIDE[i];
+                ringY[k][i] = cy + dy * RING_ALONG[i] + sy * RING_SIDE[i];
+            }
+        }
+    }
+
+    /** Does the rectangle touch a ring (its 6x6 core)? */
+    public boolean ringTouches(float rx, float ry, float rw, float rh) {
+        if (!tetran || dying) return false;
+        for (int k = 0; k < TENTACLES; k++)
+            for (int i = 0; i < RINGS; i++) {
+                float bx = ringX[k][i] - 3f, by = ringY[k][i] - 3f;
+                if (rx < bx + 6f && rx + rw > bx && ry < by + 6f && ry + rh > by) return true;
+            }
+        return false;
+    }
+
+    /** The boss is beaten: the rings burst. */
+    public void explodeRings(GameScreen g) {
+        if (!tetran) return;
+        for (int k = 0; k < TENTACLES; k++) for (int i = 0; i < RINGS; i++) g.boom(ringX[k][i], ringY[k][i], 0.7f);
+    }
+
+    /** Vertical stage: comes down from the top into the upper part of the screen and sways from side to side. */
+    private void updateVertical(GameScreen g, float dt) {
+        float tx = g.scrollX + SalamanderGame.W / 2f - w / 2f + MathUtils.sin(t * 0.5f) * 40f;
+        float ty = g.scrollY + SalamanderGame.H - 56f - h / 2f;
+        x = tx;
+        if (entering) {
+            y -= 50f * dt;
+            if (y <= ty) { y = ty; entering = false; }
+        } else {
+            y = ty;
+            spinA += TETRAN_SPIN * dt;
+        }
+        if (tetran) {
+            layoutRings();
+            if (entering) return;
+            for (int k = 0; k < TENTACLES; k++) {
+                tipShotT[k] -= dt;
+                if (tipShotT[k] > 0f) continue;
+                tipShotT[k] = TIP_SHOT_INTERVAL + MathUtils.random(0f, 0.6f);
+                g.aimedShot(ringX[k][RINGS - 1], ringY[k][RINGS - 1], TIP_SHOT_SPEED, 0f);
+            }
+        }
+    }
 
     public final int kind;
     public float x, y, t, hp, maxHp, flash, shotT, spin, dieT, expT;
     public boolean entering = true, dying;
+    /** Sits where the map has it (map object "boss" with "fixed" on): it does not move, it only shoots. */
+    public boolean fixed;
     private int burst;
 
     public Boss(int kind, float x, int hp, float w, float h) {
@@ -49,6 +136,13 @@ public class Boss {
         this.w = w; this.h = h;
         this.y = SalamanderGame.H / 2f - h / 2f;
         this.shotT = 1.5f;
+        for (int k = 0; k < TENTACLES; k++) tipShotT[k] = 1f + k * 0.65f;   // the tips take turns
+    }
+
+    /** Tetran: places the rings around the body before the first frame is drawn. */
+    public void initTetran() {
+        tetran = true;
+        layoutRings();
     }
 
     private void updateEye(float dt) {
@@ -98,7 +192,7 @@ public class Boss {
         float[] s = armSpec[k];
         Hazard a = new Hazard(Hazard.Type.ARM);
         a.bossArm = true;                            // all blue balls; any of them can be shot
-        a.hp = Hazard.ARM_HP;
+        a.hp = ARM_HP;
         a.initArm(ARM_BALLS, s[4], x + s[0], y + s[1], s[2], s[3], false);
         arms[k] = a;
         g.addHazard(a);
@@ -143,6 +237,19 @@ public class Boss {
             if (dieT > 2.4f) g.bossDefeated();
             return;
         }
+        if (tetran) {                                // (Tetran: its own movement and shots)
+            updateVertical(g, dt);
+            return;
+        }
+        if (fixed) {
+            shoot(g, dt);
+            return;
+        }
+        if (g.level.vertical) {                      // other vertical stages: sways at the top of the screen
+            updateVertical(g, dt);
+            if (!entering) shoot(g, dt);
+            return;
+        }
         if (phase == PHASE_NORMAL && armSpec != null && !entering && hp <= maxHp * ARM_PHASE_HP) growArms(g);
         if (phase == PHASE_CHASE) {
             chase(g, dt);
@@ -173,6 +280,11 @@ public class Boss {
             }
             if (phase == PHASE_GROWING && allOut) phase = PHASE_CHASE;
         }
+        shoot(g, dt);
+    }
+
+    /** The boss's own shots (by kind; stages 3-7 use the default pattern for now). */
+    private void shoot(GameScreen g, float dt) {
         shotT -= dt;
         float cx = x + w / 2f, cy = y + h / 2f, front = x + 12f;   // shots leave from the front (left) side
         if (hasEye) { front = x + eyeX + eyeW / 2f; cy = y + eyeY + eyeH / 2f; }   // ...or from the eye
@@ -191,16 +303,19 @@ public class Boss {
                     g.aimedShot(cx, cy, 150f, 0f);
                 }
                 break;
-            default: // sweeping stream + occasional aimed burst
+            default: { // sweeping stream + occasional aimed burst (forward: left, or down on a vertical stage)
                 spin += dt * 3.2f;
+                boolean down = g.level.vertical;
+                float sx = down ? cx : front - 4f, sy = down ? y + 8f : cy;
                 if (shotT <= 0f) {
                     shotT = 0.11f;
-                    g.enemyBullet(front - 4f, cy, MathUtils.PI + MathUtils.sin(spin) * 0.9f, 140f);
+                    g.enemyBullet(sx, sy, (down ? -MathUtils.HALF_PI : MathUtils.PI) + MathUtils.sin(spin) * 0.9f, 140f);
                     if (++burst % 20 == 0) {
-                        for (int i = -2; i <= 2; i++) g.aimedShot(front - 4f, cy, 150f, i * 0.2f);
+                        for (int i = -2; i <= 2; i++) g.aimedShot(sx, sy, 150f, i * 0.2f);
                     }
                 }
                 break;
+            }
         }
     }
 }
