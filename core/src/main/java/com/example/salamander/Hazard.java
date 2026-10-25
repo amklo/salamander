@@ -1,6 +1,7 @@
 package com.example.salamander;
 
 import com.badlogic.gdx.math.MathUtils;
+import java.util.ArrayList;
 
 /** Environmental dangers: falling stalactites, floating bamdas, moving teeth, erupting volcanoes and piston crushers. */
 public class Hazard {
@@ -23,6 +24,71 @@ public class Hazard {
     public static final float FANG_TUCK = 10f;
     /** FANG: how far it moves between hidden (inside the rock) and fully out (its tip on the opposite surface). */
     public float fangTravel;
+    /**
+     * FANG (as on the MSX, stage 1 recording): it slides out and back in at FANG_SPEED px/s (linearly), stays fully out
+     * fangHoldOut seconds, and rests with fangRest px of its tip showing for the rest of its period. Fully out its tip
+     * stops fangShort px short of the opposite rock (0 = it touches it). Starts resting; the first push comes after delay.
+     */
+    public static final float FANG_SPEED = 85f;
+    public float fangHoldOut = 0.3f, fangRest = 8f, fangShort = 0f;
+    /**
+     * FANG with "switch" on (stage 1's 5th and 6th): it doesn't pull back. After touching the opposite rock (and
+     * holding) it carries on until it has gone right into that rock, and lives there from then on: next time it comes
+     * out of that side (drawn and hit upside down), and so on, back and forth. fangCeil / fangFloor = the passage.
+     */
+    public boolean fangSwitch;
+    public float fangCeil, fangFloor;
+    public PixelMask maskFlipped;
+    /**
+     * FANG with "sink" on (stage 1's 3rd, 5th and 6th): after touching the opposite rock (and holding) it carries on
+     * until it has gone right into that rock, waits there fangSinkWait seconds, then comes back out of it and slides
+     * all the way back home (the right way up), where it rests as usual.
+     */
+    public boolean fangSink;
+    public float fangSinkWait = 0.5f;
+    // 0 = not started, 1 = rests, 2 = slides out, 3 = holds, 4 = goes through, 5 = peeks out (switch),
+    // 6 = waits in the opposite rock (sink), 7 = travels back home (sink)
+    private int fangState;
+    private float fangD, fangTimer;    // how far it is out of its hiding place (px); time left in the state
+
+    /** FANG with "switch" or "sink" on: goes right into the opposite rock, then lives there (switch) or comes back (sink). */
+    private void updateThroughFang(float dt) {
+        float lo = Math.min(fangTravel, FANG_TUCK + fangRest), hi = Math.max(lo, fangTravel - fangShort);
+        float end = fangTravel + h + FANG_TUCK;                  // all of it inside the opposite rock
+        if (fangState == 0) { fangD = lo; fangTimer = delay; fangState = 1; }
+        switch (fangState) {
+            case 1: fangTimer -= dt; if (fangTimer <= 0f) fangState = 2; break;
+            case 2: fangD += FANG_SPEED * dt; if (fangD >= hi) { fangD = hi; fangTimer = fangHoldOut; fangState = 3; } break;
+            case 3: fangTimer -= dt; if (fangTimer <= 0f) fangState = 4; break;
+            case 4:
+                fangD += FANG_SPEED * dt;
+                if (fangD >= end && fangSink) {              // all of it in the other rock: wait there
+                    fangD = end; fangTimer = fangSinkWait; fangState = 6;
+                } else if (fangD >= end) {                   // it is in the other rock now: that is its home
+                    fromCeil = !fromCeil; flipV = !flipV;
+                    PixelMask m = mask; mask = maskFlipped; maskFlipped = m;
+                    baseY = fromCeil ? fangFloor : fangCeil - h;
+                    fangD = 0f; fangState = 5;
+                }
+                break;
+            case 6: fangTimer -= dt; if (fangTimer <= 0f) fangState = 7; break;
+            case 7:                                          // comes back out of the other rock and slides home
+                fangD -= FANG_SPEED * dt;
+                if (fangD <= lo) {
+                    fangD = lo; fangState = 1;
+                    fangTimer = Math.max(0f, period - (end - lo) * 2f / FANG_SPEED - fangHoldOut - fangSinkWait);
+                }
+                break;
+            default:                                         // peeks out to its resting place, then rests
+                fangD += FANG_SPEED * dt;
+                if (fangD >= lo) {
+                    fangD = lo; fangState = 1;
+                    fangTimer = Math.max(0f, period - (hi - lo + end - hi + lo) / FANG_SPEED - fangHoldOut);
+                }
+                break;
+        }
+        y = baseY + (fromCeil ? 1f : -1f) * (fangTravel - fangD);
+    }
 
     // BAMDA: pulses through the frames of sprites/bamda.png (big, medium, small, medium, ...) around a fixed centre;
     // its hit box follows the frame. Frame sizes are filled in by GameScreen from the picture.
@@ -97,14 +163,66 @@ public class Hazard {
         }
     }
 
+    /**
+     * Stage arms start tucked into the rock (only the claw shows, at the anchor) and grow out once their anchor is on
+     * screen (ARM_GROW_SPEED): REMAKE along the resting direction, MSX straight out of the floor / ceiling.
+     * MSX style (stage 1 recording): the chain stays straight and swings to point at the nearest ship, at most
+     * ARM_MSX_MAX_LEAN degrees from straight out, turning at ARM_MSX_TURN degrees/s. The blue (weak) ball moves
+     * along the chain with the lean: next to the anchor when it points straight out, one ball further out from
+     * ARM_MSX_WEAK_STEP degrees, two balls further from twice that.
+     */
+    public static final float ARM_MSX_MAX_LEAN = 65f, ARM_MSX_TURN = 150f, ARM_MSX_WEAK_STEP = 22f;
+    private int armState;              // 0 = not set up yet, 1 = tucked / growing, 2 = out
+    private float armLean;             // MSX: degrees from straight out (+ = toward the right)
+
+    private void updateStageArm(GameScreen g, float bx, float by, float dt) {
+        boolean msx = g.level.msx();
+        float up = fromCeil ? -1f : 1f;
+        if (armState == 0) {
+            if (msx) { restDX = 0f; restDY = up; }
+            armGrow = 0f; placeArm(bx, by);
+            tipX = armX[armX.length - 1]; tipY = armY[armY.length - 1];
+            armState = 1;
+            if (msx) armWeak = 0;
+        }
+        if (armState == 1) {
+            if (!g.inView(bx, by, 0f)) return;
+            armGrow = Math.min(armReach(), armGrow + ARM_GROW_SPEED * dt);
+            placeArm(bx, by);
+            tipX = armX[armX.length - 1]; tipY = armY[armY.length - 1];
+            if (armGrown()) armState = 2;
+            return;
+        }
+        if (!msx) { reachFor(g, bx, by, dt); return; }
+        float want = armLean;
+        Player p = g.target(bx, by);
+        if (p != null) {
+            float px = p.x + Player.W / 2f - bx, py = (p.y + Player.H / 2f - by) * up;   // py > 0: out from the rock
+            want = MathUtils.atan2(px, Math.max(py, 0.001f)) * MathUtils.radDeg;
+        }
+        want = MathUtils.clamp(want, -ARM_MSX_MAX_LEAN, ARM_MSX_MAX_LEAN);
+        float step = ARM_MSX_TURN * dt;
+        armLean += MathUtils.clamp(want - armLean, -step, step);
+        float dx = MathUtils.sinDeg(armLean), dy = MathUtils.cosDeg(armLean) * up;
+        for (int i = 0; i < armX.length; i++) { armX[i] = bx + dx * armLink * i; armY[i] = by + dy * armLink * i; }
+        tipX = armX[armX.length - 1]; tipY = armY[armY.length - 1];
+        armWeak = Math.min(armX.length - 2, (int) (Math.abs(armLean) / ARM_MSX_WEAK_STEP));
+    }
+
     /** ARM: one frame. (bx, by) = anchor (where ball 0 sits). */
     public void updateArm(GameScreen g, float bx, float by, float dt) {
+        if (!bossArm) { updateStageArm(g, bx, by, dt); return; }
         if (!armGrown()) {                           // growing out of the boss: straight out along the rest direction
             armGrow = Math.min(armReach(), armGrow + ARM_GROW_SPEED * dt);
             placeArm(bx, by);
             tipX = armX[armX.length - 1]; tipY = armY[armY.length - 1];
             return;
         }
+        reachFor(g, bx, by, dt);
+    }
+
+    /** REMAKE arm (and boss arms): the claw reaches for the nearest ship when it comes close, the chain follows. */
+    private void reachFor(GameScreen g, float bx, float by, float dt) {
         float reach = armReach();
         // goal: the nearest ship if it comes close, otherwise the resting position
         float gx = bx + restDX * reach, gy = by + restDY * reach;
@@ -161,6 +279,10 @@ public class Hazard {
     public static final float TOWER_SPIT_MIN = 2.5f, TOWER_SPIT_MAX = 4f;
     /** Amoebas per spit. */
     public static final int TOWER_SPIT_COUNT = 4;
+    /** MSX style: sprays come in bursts of TOWER_BURSTS, TOWER_BURST_GAP s apart (as in the stage 1 recording). */
+    public static final int TOWER_BURSTS = 3;
+    public static final float TOWER_BURST_GAP = 0.85f;
+    private int burst;
     public static final float TOWER_GROW_SPEED = 20f, TOWER_ROOT = 8f, TOWER_TIP = 8f;
     /** How far the tower has come out of the rock (h = fully grown; it starts completely inside). */
     public float grown;
@@ -172,11 +294,14 @@ public class Hazard {
         } else {
             timer -= dt;                             // fully grown: spits out a spray of amoebas
             if (timer <= 0f && g.inView(x + w / 2f, fromCeil ? y : y + h, 0f)) {   // only while its tip is on screen
-                timer = MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
+                boolean msx = g.level.msx();                            // MSX: bursts of sprays in quick succession
+                burst = msx ? (burst + 1) % TOWER_BURSTS : 0;
+                timer = burst != 0 ? TOWER_BURST_GAP : MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
+                int count = TOWER_SPIT_COUNT;
                 float tipY = fromCeil ? y - 16f : y + h;              // just beyond the green tip
-                int red = MathUtils.random(TOWER_SPIT_COUNT - 1);       // one of them is red (and carries a capsule)
-                for (int i = 0; i < TOWER_SPIT_COUNT; i++) {          // fanned out left to right
-                    float spread = (i - (TOWER_SPIT_COUNT - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
+                int red = burst == 0 ? MathUtils.random(count - 1) : -1;   // one red per burst (it carries a capsule)
+                for (int i = 0; i < count; i++) {                       // fanned out left to right
+                    float spread = (i - (count - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
                     g.spawnAmoeba(x + w / 2f - 8f, tipY, spread, (fromCeil ? -1f : 1f) * MathUtils.random(60f, 110f), i == red);
                 }
             }
@@ -192,26 +317,101 @@ public class Hazard {
     }
 
     // DOME (stage 2): a dome on a side wall, 18x32 (sprites/dome.png: closed, open; the size comes from the picture). It starts closed, opens
-    // DOME_OPEN_DELAY seconds after it comes on screen and stays open, spitting sprays of amoebas sideways like the
-    // stage 1 towers. Shooting it DOME_HP times destroys it (DOME_SCORE points). flipV is unused; fromCeil = on the
-    // right wall (facing left).
+    // DOME_OPEN_DELAY seconds after it comes on screen and stays open. A side-wall dome on the vertical stage (stage
+    // 2) sends out waves of Enemy.DOME_FLYER_COUNT green flyers (Enemy.Type.DOME_FLYER), one after the other out of
+    // its mouth: they fly a circle above the dome twice, then leave the screen (see Enemy). The next wave comes
+    // DOME_WAVE_MIN..MAX seconds after the last flyer of the previous one is gone. Shooting the dome DOME_HP times
+    // destroys it (DOME_SCORE points); the flyers already out fly on. flipV is unused; fromCeil = on the right wall
+    // (facing left).
+    // Stage 3 has the same domes on the floor and the ceiling (domeSide DOME_FLOOR / DOME_CEIL): sprites/dome.png turned
+    // a quarter, so it faces up (down), spitting sprays of amoebas up (down) into the corridor like the stage 1 towers.
+    public static final int DOME_LEFT = 0, DOME_RIGHT = 1, DOME_FLOOR = 2, DOME_CEIL = 3;
+    public int domeSide = DOME_LEFT;
     public static final int DOME_HP = 12, DOME_SCORE = 500;
     public static final float DOME_OPEN_DELAY = 1f;
+    /** Seconds from the end of one wave of flyers (the last one gone) to the next wave. */
+    public static final float DOME_WAVE_MIN = 2.5f, DOME_WAVE_MAX = 4f;
+    /** The circle stays at least this far inside the screen edges (px). */
+    private static final float DOME_CIRCLE_MARGIN = 12f;
     public boolean open;
+    /** The current wave of flyers: members sent out so far, and the shared path of the wave (screen coordinates). */
+    private final ArrayList<Enemy> flyers = new ArrayList<>();
+    private Enemy.Group flyGroup;
+    private float flyCx, flyCy, flyLead;
+
+    /**
+     * MSX style, Lavinia (Tiled floordome property "gunhosMsx"): a floor hatch that lets out gunHos Gun Hos instead of
+     * spitting amoebas, as in the recording: one each time its left edge reaches GUNHO_HATCH_FIRST,
+     * GUNHO_HATCH_FIRST - GUNHO_HATCH_STEP, ... on the screen (every 64 px of scrolling), 7 px in from its left edge.
+     */
+    public static final float GUNHO_HATCH_FIRST = 208f, GUNHO_HATCH_STEP = 64f;
+    public int gunHos;
+    private int gunHosOut;
 
     private void updateDome(GameScreen g, float dt) {
+        if (gunHos > 0) {                                     // a Gun Ho hatch
+            float sx = x - g.scrollX;
+            if (gunHosOut < gunHos && sx <= GUNHO_HATCH_FIRST - gunHosOut * GUNHO_HATCH_STEP && sx > -8f) {
+                g.hatchGunHo(x + 7f, y);
+                gunHosOut++;
+            }
+            return;
+        }
         if (!g.inView(x + w / 2f, y + h / 2f, 0f)) return;   // waits (closed, or between sprays) while off screen
+        boolean sideWall = domeSide == DOME_LEFT || domeSide == DOME_RIGHT;
+        if (sideWall && g.level.vertical) { updateFlyerDome(g, dt); return; }
         timer -= dt;
         if (timer > 0f) return;
         if (!open) { open = true; timer = 0.6f; return; }      // opens, and soon spits its first spray
         timer = MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
-        float dir = fromCeil ? -1f : 1f;
-        float mx = fromCeil ? x - 12f : x + w - 4f;          // out of the open mouth
+        boolean upDown = domeSide == DOME_FLOOR || domeSide == DOME_CEIL;
+        float dir = domeSide == DOME_RIGHT || domeSide == DOME_CEIL ? -1f : 1f;
+        float mx, my;                                         // out of the open mouth (amoebas are 16x16)
+        if (domeSide == DOME_FLOOR) { mx = x + w / 2f - 8f; my = y + h - 4f; }
+        else if (domeSide == DOME_CEIL) { mx = x + w / 2f - 8f; my = y - 12f; }
+        else { mx = domeSide == DOME_RIGHT ? x - 12f : x + w - 4f; my = y + h / 2f - 8f; }
         int red = MathUtils.random(TOWER_SPIT_COUNT - 1);     // one of them is red (and carries a capsule)
-        for (int i = 0; i < TOWER_SPIT_COUNT; i++) {          // fanned out bottom to top
+        for (int i = 0; i < TOWER_SPIT_COUNT; i++) {          // fanned out across the mouth
             float spread = (i - (TOWER_SPIT_COUNT - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
-            g.spawnAmoeba(mx, y + h / 2f - 8f, dir * MathUtils.random(60f, 110f), spread, i == red);
+            float out = dir * MathUtils.random(60f, 110f);
+            if (upDown) g.spawnAmoeba(mx, my, spread, out, i == red);
+            else g.spawnAmoeba(mx, my, out, spread, i == red);
         }
+    }
+
+    /** Stage 2 side-wall dome: sends out its waves of green flyers (see above). */
+    private void updateFlyerDome(GameScreen g, float dt) {
+        int dir = domeSide == DOME_RIGHT ? -1 : 1;
+        // its mouth, on the screen (the flyers fly in screen coordinates)
+        float sx = (dir > 0 ? x + w - 2f : x + 2f) - g.scrollX, sy = y + h / 2f - g.scrollY;
+        if (flyGroup != null && flyers.size() < Enemy.DOME_FLYER_COUNT) {   // a wave is coming out
+            timer -= dt;
+            if (timer <= 0f) {
+                timer += Enemy.DOME_FLYER_GAP;
+                flyers.add(g.spawnDomeFlyer(sx, sy, flyCx, flyCy, flyLead, dir, flyGroup));
+            }
+            return;
+        }
+        if (flyGroup != null) {                               // all out: the next wave waits until they are all gone
+            for (Enemy e : flyers) if (!e.dead) return;
+            flyGroup = null;
+            flyers.clear();
+            timer = MathUtils.random(DOME_WAVE_MIN, DOME_WAVE_MAX);
+            return;
+        }
+        timer -= dt;
+        if (timer > 0f) return;
+        if (!open) { open = true; timer = 0.6f; return; }      // opens, and soon sends out its first wave
+        // a new wave: the circle sits above the mouth, its bottom DOME_FLYER_LEAD px out from the wall (kept on screen)
+        float r = Enemy.DOME_FLYER_R, m = DOME_CIRCLE_MARGIN + 8f;
+        flyCx = MathUtils.clamp(sx + dir * Enemy.DOME_FLYER_LEAD, r + m, SalamanderGame.W - r - m);
+        flyCy = MathUtils.clamp(sy + r, r + m, SalamanderGame.H - r - m);
+        flyLead = (float) Math.hypot(flyCx - sx, flyCy - r - sy) / Enemy.DOME_FLYER_SPEED;
+        flyGroup = new Enemy.Group();                         // shoot down all of them: a power capsule
+        flyGroup.size = Enemy.DOME_FLYER_COUNT;
+        flyGroup.carrier = true;
+        flyers.add(g.spawnDomeFlyer(sx, sy, flyCx, flyCy, flyLead, dir, flyGroup));
+        timer = Enemy.DOME_FLYER_GAP;
     }
 
     // EYE (stage 2): a rock with a green eye, 32x32 (sprites/rock_eye.png; it is not part of the map art). The eye
@@ -286,7 +486,8 @@ public class Hazard {
                 if (!bossArm) updateArm(g, anchorX, anchorY, dt);
                 break;
             case FANG:       // hidden in the ground / ceiling, then juts out, holds, and pulls back in
-                y = baseY + (fromCeil ? 1f : -1f) * (1f - fangOut()) * fangTravel;
+                if (fangSwitch || fangSink) updateThroughFang(dt);
+                else y = baseY + (fromCeil ? 1f : -1f) * (fangTravel - fangExtension());
                 break;
             default:
                 updateCrusher();
@@ -294,14 +495,16 @@ public class Hazard {
         }
     }
 
-    /** How far a tooth is out: 0 = hidden, 1 = fully out. */
-    private float fangOut() {
-        if (t < delay) return 0f;
-        float u = ((t - delay) % period) / period;
-        if (u < 0.2f) return smooth(u / 0.2f);              // jut out
-        if (u < 0.45f) return 1f;                           // hold
-        if (u < 0.65f) return 1f - smooth((u - 0.45f) / 0.2f);   // pull back
-        return 0f;                                          // stay hidden
+    /** How far a tooth is out of its hiding place (px, 0..fangTravel): resting, sliding out, held out, sliding back. */
+    public float fangExtension() {
+        float lo = Math.min(fangTravel, FANG_TUCK + fangRest), hi = Math.max(lo, fangTravel - fangShort);
+        if (t < delay) return lo;
+        float move = (hi - lo) / FANG_SPEED;
+        float u = (t - delay) % Math.max(period, 2f * move + fangHoldOut);
+        if (u < move) return lo + u * FANG_SPEED;                               // slides out
+        if (u < move + fangHoldOut) return hi;                                  // holds
+        if (u < 2f * move + fangHoldOut) return hi - (u - move - fangHoldOut) * FANG_SPEED;   // slides back
+        return lo;                                                              // rests
     }
 
     private static float smooth(float v) { return v * v * (3f - 2f * v); }

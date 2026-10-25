@@ -9,7 +9,7 @@ from scipy import ndimage
 Image.MAX_IMAGE_PIXELS=None
 # Run from the project folder:  python3 tools/stage1_build.py
 # Needs numpy, scipy, pillow. Writes into tools/stage1_out/:
-#   stage1_t*.png, brick_pattern.png, asteroid_*.png, fang*.png -> assets/sprites/
+#   stage1_t*.png, brick_pattern.png -> assets/maps/;  asteroid_*.png, fang*.png -> assets/sprites/
 #   meta.json (teeth / asteroid positions, collision + brick cells) is used by tools/stage1_tmx.py
 SRC='reference matterial/salamanderstage1.png'
 OUT='tools/stage1_out'; os.makedirs(OUT,exist_ok=True)

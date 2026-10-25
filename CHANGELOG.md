@@ -2,6 +2,200 @@
 
 All notable changes to this Salamander remake. Newest first.
 
+## 2026-10-25
+
+### Added
+- **Lavinia (stage 3), MSX style, from `reference material/recordings/stage lavinia.avi`**:
+  - Scroll speed 20 px/s (`speedMsx`), with the drop down the shaft at 0.8× and the lower corridor at 1.1× (`speedsMsx` `1,0.8,1.1`), as measured. The Laser Guard room holds for 52.5 s before the guards retreat (new `hold` property `timeMsx`; REMAKE keeps 60 s).
+  - The opening has the six **Battleaxe** rows of the recording (low, high, low, high, low, high; objects 81–86, the first leaves a capsule) and five **Possessed** row groups near the terrain start (objects 87–91). There are no Celtic Frost, Missing Links or Rugals on the MSX: the REMAKE opening (objects 53–78) and the three Celtic Frost waves in the base (41, 43, 45) are now `style=remake`.
+  - **Gun Ho hatches**: on the MSX the Gun Hos come out of four of the blue floor domes (x 1440, 1728, 2680 and 4448): one each time the dome's left edge reaches x 208, 144, 80 and 16 on the screen (every 64 px of scrolling). Each hops out (up 48 px, 24 px left, back down to the floor, 16 px left), then lines up with the nearest ship, fires and flies off to the left at 80 px/s. New `floordome` property `gunhosMsx` (4 on those domes); the four standalone Gun Ho objects (3, 4, 11, 25) are now `style=remake`. The other four domes spit amoebas as before.
+- Possessed row groups work on horizontal stages too (in from the top edge, as in the Lavinia recording), with new properties `place`, `down`, `side`, `gap` and `colours`.
+- **Lavinia wall lasers** (both styles): the eight `laser` objects are now beams between the pillars, on all the time; they hurt a ship and let shots through. Each beam's emitter (part of the wall art, at the pillar end; new property `emitter`, `left` for the three on the right-hand side of the first pillar) can be shot (6 hits) to put the beam out, as beams go out in the recording.
+- **Kierke walkers** (both styles), from the MSX recording (77–126 s): the red / cyan hoppers are the stage 1 bio walkers (Albert's `bio walker red/blue.png`). 23 placed where they come in (objects 91–113), in five waves at ~77, 84, 92, 100 and 107 s: pairs leap in from the left and right screen edges at mid height, one dropping onto the floor and one "falling" up onto the ceiling, drifting inward at 40 px/s (gravity 88 px/s², the floor ones glide level for 0.2–0.8 s first). Those that land far from the ship (more than 112 px) walk toward it to about mid-screen; then each keeps walking away from the ship (16–40 px/s relative to the screen, 0.9–3 s) and hopping back toward it, 32–56 px high, or up to the ship's height when it is higher (a hop that reaches the ceiling grabs it, and the walker carries on up there). About one hop in six goes the other way, as seen. They don't shoot, and walking off a screen edge they are gone. Red ones leave a capsule. New `walker` property `leap` (`left` / `right`); a leaper flipped vertically in Tiled heads for the ceiling (for leapers the flip wins over the tile's `ceiling=false`) (`Enemy.updateLeaper`, `LEAP_*`).
+
+### Changed
+- **Eioneus bases** (Albert): the base around the middle is background. The destroyed frame of `eioneus_base.png` is painted into `stage4_t0–3.png` at all 28 bases (lined up with the reference map), and the enemy is now only the middle, `sprites/eioneus_base_core.png` (4 frames of 20×21, cut from x 12–31, y 12–32 of each frame): its hit box is the middle only, and the mines still leave from its centre. `stage4.tmx`: base 22 moved onto its picture (86, 1092, 44×48); base 25 removed (it doubled base 97).
+- **Fangs**, stage 1, both styles: the 3rd, 5th and 6th (x 3448, 3632, 3680) reach across the passage, hold, and carry on until they have sunk right into the opposite rock; they wait there 0.5 s, then come back out of it and slide all the way home (the right way up), and rest as usual. New `tooth` properties `sink` and `sinkWait` (`Hazard.updateThroughFang`). The 5th and 6th used `switch` (they lived in the opposite rock from then on, upside down); `switch` still works for any tooth that has it.
+- **Eioneus bases** (the seeds) use Albert's `sprites/eioneus_base.png` (closed, opening, open, destroyed) instead of `seed.png` / `seed_open.png`: a base opens for 0.4 s and stays open, letting its bursts of 4 flying mines out of its middle. Bases are drawn under the other enemies (they are part of the ground). It is ground now: ships fly over it, but shots hit it; destroyed, it shows its last frame and stays.
+- Flying mines show their three take-off frames a third of the take-off each (the first one was only on screen for a moment).
+- Laser battery beams are the Laser Guards' beam (the red / blue `enemy laser` pattern, 5 px).
+- **Whiplash** (stage 2): as it stops it fires one expanding laser like the Omen's, toward the far edge of the screen.
+
+### Fixed
+- Gremlins on the left wall were drawn upside down; they are now the right-wall picture mirrored.
+
+## 2026-10-24
+
+### Added
+- **Seeds and flying mines** (Eioneus, both styles), with `sprites/seed.png` / `seed_open.png` and Albert's `sprites/flying_mines.png` / `flying_mines_red.png`: the 29 seeds (one was missing from the map and was added, object 97) let out bursts of 4 flying mines once they are a little way onto the screen (0.5 s apart, every 4 s). As in the recording, a mine takes off just above the seed (frames 0–2, 1 s, while it can't hit or be hit), loops round to the right, down and up to the left, then homes in on the nearest ship flickering between frames 3 and 4. About one in six is red and leaves a power capsule (`SEED_*`, `MINE_*` in `Enemy`).
+- **Eioneus, from the recording (2026-10-24, second round)**:
+  - **Celtic Frost** (MSX style): the blue "jellyfish" columns of the opening are the vertical-stage Celtic Frost. Seven columns placed where they come in (183 at 7.2 s, 79 at 10.2, 47 at 11.4, 215 + 183 at 14.6, 79 at 16.8, 47 at 19.0; objects 72–78), the same sequence as the stage 2 opening. They fly the existing vertical path.
+  - **Laser batteries** (both styles), with Albert's `sprites/laser_battery_small.png` / `laser_battery_big.png`: the 8 emitters of the map are now enemies (objects 79–86; their pictures and rock cells were taken out of the map art / collision). Small ones on the walls shoot a beam sideways to the rock across; a big one on the floor shoots it up to the big one hanging above it. The beam is on all the time, flickers red / blue, hurts a ship and lets shots through; it goes out when a battery is shot down (6 hits). New Tiled classes `laserbattery`, `laserbattery_big` (tiles 59, 60).
+  - **Gremlins** (both styles), with Albert's `sprites/gremlin_yellow.png` / `gremlin_red.png`: they come up from the bottom edge climbing a side wall (48 px/s), walk 2 s, stop 3 s to aim and fire an aimed shot, and walk on, as in the recording. Nine placed where they come in (objects 88–96). New Tiled class `gremlin` (tile 61, properties `red`, `right`).
+  - **Asteroid storm** (both styles): from camera top ~1576 for 27 s (~140–167 s in the recording), with big rocks that split (object 87).
+- **Eioneus (stage 4), MSX style, from the recording**: scroll speed 18 (`speedMsx`). The opening has four Possessed "row" groups (new property `row`; objects 68–71): six members each come in diagonally from the top one after another, stop for a moment in a row near the top edge shooting, then fly on diagonally up and out, as in the recording. The REMAKE fly-by Legacy and Celtic Frost waves (objects 53–61) are now `style=remake`.
+- **Blue domes and green flyers** (Eioneus, both styles), with `sprites/bluedome.png` / `bluedome_open.png` and `sprites/green_flyer.png`: the 13 wall domes let out bursts of 4 green flyers once they are a little way onto the screen (0.5 s apart, a burst every 5.3 s), and each flyer flies the double loop measured in the recording, mirrored for the right wall (`BLUE_DOME_*`, `GREEN_*` in `Enemy`).
+- **Gamma** (new enemy, both styles), with Albert's `sprites/gamma.png` (4 frames, shown 0, 2, 3, 1 every 0.2 s as in the recording): the blue balls of the Kierke cave. Each comes in at the right edge and drifts left through the world at 16 px/s, bouncing slowly on the floor (or on the ceiling) about 35 px high every ~2.3 s; it rides up over rock and doesn't shoot (`GAMMA_*` in `Enemy`). New Tiled class `gamma` (objects.tsx tile 58, properties `ceiling`, `drop`). Nine placed in stage 5 where they come in in the recording (126.8–161.4 s; objects 82–90, two of them on the ceiling).
+- **Whiplash** (new enemy, both styles), with Albert's `sprites/whiplash.png` (15×16, drawn as it is). As in the stage 2 recording, it slides in from the top edge (or up from the bottom edge, `fromBottom`) at 28 px/s until 42 px inside the screen, stops for 0.6 s, then darts off diagonally (40 px/s on in the same direction, 24 px/s sideways toward the nearest ship) and leaves the screen; it doesn't shoot (`WHIP_*` in `Enemy`). New Tiled class `whiplash` (objects.tsx tile 56). Two placed in stage 2 where they show up in the recording, at ~21 s: one rising from the bottom at x 104, one coming down from the top at x 168 (objects 120, 121).
+- **Battleaxe** (new enemy), with Albert's `sprites/battleaxe.png` (16×16, drawn as it is): the rows of six in the Kierke opening, as measured in the recording. A rigid row (16 px apart) comes in from the right edge at 40 px/s, goes straight up (a high row: down) at 80 px/s when its front reaches x 136 on the screen, left again to x 16, straight back down (up) and out to the left; it doesn't shoot (`BATTLEAXE_*` in `Enemy`). New Tiled class `battleaxe` (objects.tsx tile 57, properties `count`, `high`, `drop`). Seven rows placed in MSX style where they come in in the recording (10.7, 18.1, 23.5, 29.3, 35.1, 38.9, 44.5 s; objects 75–81); the first one leaves a capsule. The REMAKE opening (Rugals, fans, red Rugal; objects 60–65) is now `style=remake`.
+- **Kierke chains** (both styles), with Albert's `sprites/chain_balls.png`: as in the recording, a chain starts when its first ball comes to x 216 on the screen and grows a ball every 0.25 s (4, 6, then 8 px), each one 8 px further right and 8 px up or down toward the nearest ship's height; rock in the way makes it go straight on. The balls stay put, can't be destroyed, stop shots and lasers, and hurt the ship (`CHAIN_*` in `Enemy`). The ten chain objects of stage 5 are moved to the measured first balls, with `count` 7 (from the middle) or 10 (from the top); the old `diag` property is gone.
+- **Aberrant** (new enemy, both styles), with Albert's `sprites/aberrant.png` (alive / withered frames): the plants of Kierke (the old `spider` objects, now Tiled class `aberrant`, moved onto the picture's 16×16). A chain grows from the aberrant under its first ball, and only while it is alive; the balls it already grew stay when it is shot. Shot down, it withers to the blue frame and stays: shots pass through it, but it still hurts a ship that touches it.
+- **Nests** (both styles), with `sprites/nest.png`: the 13 nests of Kierke stand where they are (6 hits, 500 points). New property `spawns` says what comes out: `ug` (the default) or `bug`.
+- **Ug** (new enemy, both styles), with Albert's `sprites/ug.png` (3 frames cycled): as in the recording, a nest lets 6 Ugs out of its mouth, 0.2 s apart, once it comes to x 232 on the screen. Each flies diagonally out to a lane 40 px from the ceiling or floor, left along it at 90 px/s to x 64, straight toward the middle to its row (ceiling Ugs above, floor Ugs below), then back right at 70 px/s and out; they don't shoot (`UG_*` in `Enemy`).
+- **Creeping Death** (new enemy, both styles), with Albert's `sprites/creeping death.png` (4 frames, white on see-through; any black pixels left are made see-through too, as the MSX sprite is one colour): the small bugs of the floor nest at x 1242 (`spawns=creeping death`). As in the recording, the nest lets them out in bursts of 4 (0.15 s apart, every 2.5 s) while it is on the screen; each rises out of the mouth at 50 px/s for 1.3 s, then homes in on the nearest ship at 45 px/s. They play the frames back and forth (0.2 s each) and flicker between cyan and light green, or (every other one) red and dark green, every 0.1 s (`CREEP_*` in `Enemy`).
+
+### Changed
+- Kierke chains now grow toward the nearest ship sideways as well as up or down (diagonally when both), instead of always to the right; rock in the way makes a ball step only sideways or only up / down, and a chain stops once it reaches the ship.
+- Tetran's tentacles turn clockwise (the other way round).
+- The Tiled icon of the Possessed is `possessed_red.png`.
+- The Possessed now use Albert's own pictures, `sprites/possessed_red.png` and `sprites/possessed_cyan.png`, drawn as they are, instead of tinting `possessed.png` in the code.
+
+### Fixed
+- The Whiplash never came on screen: its starting place just off the edge was set again every frame, so it stayed there. It now slides in as it should.
+- The Possessed were drawn with the bio turret picture: enemies without a regular frame fell through to the bio turret drawing before the Possessed's own drawing. They are now drawn first (tinted body, red eye).
+
+## 2026-10-23
+
+### Added
+- **Possessed** (new enemy, both styles), with Albert's `sprites/possessed.png`: the white body is tinted red or cyan in the game and the red eye is drawn on top untinted. As in the stage 2 recording, a group comes in from the top edge one after another (0.3 s apart), each flies to its spot in a small cluster near the top of the screen, hovers there for 2.2 s shooting aimed shots at the nearest ship, then flies back up and out. New Tiled class `possessed` (objects.tsx tile 55, properties `count`, `reds`, `drop`). Nine groups placed in stage 2 where they show up in the recording: four in the opening (12.8, 20.9, 24.7, 27.9 s) and five around 85–95 s (objects 111–119). In MSX style they replace the opening fly-by Legacy waves that stood in for them (objects 47, 49, 65, 66, 75 are now `style=remake`).
+- **Legacy as on the MSX** (both styles), with Albert's new `sprites/legacy.png` (7 frames of 16×16: straight on in the middle, leaning left / right to the sides). A Legacy now hangs in the world where it is placed and scrolls with the scenery. It drifts or darts sideways toward the nearest ship (a new speed every 0.6–1.6 s, up to 45 px/s), sometimes dives at a ship below it (60 px/s for 1.4 s), and doesn't shoot. It leans with its sideways speed and flickers magenta, magenta, blue, magenta, magenta, red (2 frames each, each Legacy out of step), as measured in the stage 2 recording. 24 placed in stage 2 where they show up in the recording (objects 87–110, camera top ~1650–1150, around the eye rocks), in both styles.
+- `legacy` property `flyby`: the old Legacy wave that flies like a fan and shoots once past a ship. The existing Legacy objects of stages 2, 4 and 6 have it on, so they fly as before. (The loading code now reads `sprites/legacy.png`, lower case.)
+
+### Changed
+- **Celtic Frost on vertical stages** (both styles): instead of the old Z they fly a "V" like in the stage 2 recording: down their column, at 48 px below the top 45° down toward the middle for 48 px, then 45° back up and out through the top (`Enemy.FROST_V_TURN`, `FROST_V_DIP`). Same 80 px/s per axis and 16 px spacing as on stage 1; a frost that has left through the top is removed.
+- **Stage 2, MSX style** (from `reference material/recordings/salamander stage 2 playthrough.avi`): scrolls at 21 px/s (`speedMsx`; REMAKE stays 26). The opening has the 8 Celtic Frost columns of the recording, timed from the start (objects 78–85, `style=msx`). The REMAKE opening waves (48, 61, 63, 64, 67, 72–74) are now `style=remake`. The asteroid storm starts a little later (camera top at y 3460) and lasts 27 s as on the MSX (object 86, `style=msx`; the REMAKE storm 77 is unchanged).
+- **Celtic Frost** path rebuilt from waves 2–4 measured frame by frame (the earlier numbers used the blue band at the top of the sprite instead of its centre): in on the entry line, left to 64% of the width, 45° back toward the middle for 64 px, left to 28%, 45° back again until the sprite is flush with the far edge, then right along the edge and out. Nothing is cut off by the screen edge any more. MSX waves now enter with their centre 23.5 px above the bottom / 32.5 px below the top.
+- **Fangs**: the 5th and 6th (x 3632, 3680) no longer pull back. They cross the passage, hold, and carry on right into the opposite rock; next time they come out of that side (upside down), and so on, back and forth (new `tooth` property `switch`; `Hazard.updateSwitchFang`). Their `period` is 4.6 s. Both styles.
+- **Towers**, MSX style: sprays come in bursts of three, 0.85 s apart (was two), still 4 amoebas each; one red per burst (`TOWER_BURSTS`, `TOWER_BURST_GAP`). The MSX sprite limit isn't copied (the remake's cap of 16 amoebas stays).
+- **Bamdas** don't drift any more (in either style): the drift seen in the recording was the MSX's 8 px character scrolling.
+- **Claw arms**, both styles: they start tucked into the rock with only the claw showing and grow out once their anchor is on screen (REMAKE along its resting direction, MSX straight out). Their balls stop the laser, including the blue weak ball, where the laser now hits it (it used to go through it).
+- **Claw arms**, MSX style: after growing out, the chain stays straight and swings to point at the nearest ship (at most 65° from straight out, 150°/s). The blue weak ball moves along the chain with the lean: next to the rock when it points straight out, one ball further from 22°, two from 44° (`ARM_MSX_*`, `Hazard.updateStageArm`). Replaces yesterday's "lean 45° and stay".
+- **Towers**, MSX style: 4 amoebas per spray as in REMAKE, but every spray is followed by a second one 0.8 s later (`TOWER_SECOND_WAVE`); one red amoeba per pair. Replaces yesterday's 10 per spray.
+- **Walkers**, MSX style: they jump about half a screen high (48–84 px) toward the ship and come back down onto their own floor / ceiling (a ceiling stops them on the way up); 1.5–3.5 s between jumps (`WALKER_JUMP_*`). Replaces yesterday's leap to the opposite surface.
+- **Amoebas**, both styles: all change colour together: yellow, cream, white, green, 3 frames each (`AMOEBA_COLOURS`).
+- **Celtic Frost** path re-measured from the recording: turns at x 160, 224, 80 and 152; middle line 93 px above the bottom for a low wave; it leaves along the very top (bottom) edge. Distance now counts per axis (a diagonal step moves as far across as along, as on the MSX) at 80 px/s, 16 px apart. MSX style: the waves enter on the MSX lines (29 px above the bottom / below the top).
+
+- **Fangs**, both styles, measured in the recording: they slide out and back in linearly at 85 px/s (no easing), hold fully out (0.2–0.7 s), then rest with a bit of their tip showing (6–24 px) instead of hiding completely. Five of the six reach right across to the opposite rock; the fourth (x 3597) stops 8 px short. Each of stage 1's six has its own measured `delay`, `period` (3.0–4.5 s), `holdOut`, `rest` and `short` (new `tooth` properties; `Hazard.fangExtension`).
+
+### Added
+- Seven red walkers that run in from the left in the blue tentacle passage, as in the recording (objects 207–213, `behind`), in both styles.
+
+## 2026-10-22
+
+### Changed
+- Styles renamed: ORIGINAL → **MSX**, ARRANGED → **REMAKE** (object property `style` = `msx` / `remake`, map property `speedMsx`, path property `speedsMsx`).
+- Celtic Frost flies at the MSX speed: 96 px/s (was 135), 16 px apart (`FROST_GAP` 0.167 s). Both styles.
+- MSX style, stage 1 (`Level.msx()`), enemy behaviour as seen in the recording; REMAKE is unchanged:
+  - Claw arms start tucked into the rock with only the claw showing; once on screen they grow straight out (`ARM_GROW_SPEED`), then lean over to 45° toward the side the nearest ship is on and stay that way (`Hazard.updateArmMsx`).
+  - Bamdas drift slowly through the cave (and through rock), 12–24 px/s, up to 45° either side of straight left (`BAMDA_DRIFT_*`).
+  - Towers throw out sprays of 10 amoebas (fanned 20° apart) every 4.5–5.5 s instead of 4 every 2.5–4 s (`TOWER_SPIT_*_MSX`).
+  - Walkers leap across to the opposite surface while chasing: when the nearest ship is closer to the other side and the gap is 24–150 px, they fly straight across (120 px/s, drifting toward the ship) and land on the floor / ceiling there; 1.5–3.5 s between leaps (`WALKER_JUMP_*`).
+- Celtic Frost flies the MSX zigzag (from the stage 1 recording): in from the right on its entry line, left, diagonally back toward the middle line, left along it, diagonally back again to the mirrored line, then right and off the right edge (it used to leave on the left). It is removed as soon as it is past the right edge again (an escaped wave still leaves no capsule). Vertical stages keep the old Z (`Enemy.FROST_PATH_V`).
+
+### Added
+- Title screen: **style** REMAKE / MSX (first called ARRANGED / ORIGINAL) (up / down picks difficulty or style, left / right changes it; remembered between runs; shown next to the difficulty on the ship select screen). ORIGINAL plays stage 1 as measured from `reference material/recordings/salamander stage 1 playthrough.avi`: scrolling at 19.2 px/s on every stretch (map property `speedOriginal`, path property `speedsOriginal` = `1,1,1,1,1`) and the MSX opening: 8 Celtic Frost waves alternating low / high, 2 Missing Links, 2 Rugal trios and 2 single Rugals, placed so that they arrive the same number of seconds after the start as in the recording. ARRANGED is unchanged (28.4 px/s, the remake's 12 waves).
+- Object property `style` (`original` / `arranged`): the object only appears in that style. `Level.originalStyle`, `SalamanderGame.setOriginal`.
+
+## 2026-10-20
+
+### Changed
+- Stage 2 domes (on the side walls) no longer spit amoebas: they send out waves of **7 green flyers** (new enemy `DOME_FLYER`, `sprites/green_flyer.png`: 4 frames of 16×16 taken from `reference material/Salamander_0068.png`, played 0 1 2 3 2 1 …). The flyers leave the dome's mouth one after the other (0.4 s apart) and fly to the bottom of a circle (radius 40 px) above the dome, 48 px out from the wall (kept on screen); they go round it twice — counter-clockwise from a left-wall dome, clockwise from a right-wall one — evenly spread so the seven form a ring, then fly straight on away from the dome and off the screen. They fly in screen coordinates (they keep their place while the screen scrolls) and through rock. Each one starts shooting aimed shots (every 2.2–3.4 s) once it has finished its first circle. 1 hit, 100 points; shooting down all 7 of a wave leaves a power capsule. The dome sends its next wave 2.5–4 s after the last flyer of the previous one is gone, and only while it is on screen. Stage 3's floor / ceiling domes still spit amoebas. Tuning: `DOME_FLYER_*` in `Enemy`, `DOME_WAVE_*` in `Hazard`.
+
+### Added
+- Stage 2: **asteroid storm**. Where the scenery starts (the top of the screen at world y 528, about 14 s in) rocks rain down the screen for 15 s: small rocks (`sprites/rock_small.png`, 4 frames of 15×15, tumbling) and about one big rock (`sprites/rock_big.png`, 30×27) for every five small ones. They fall from the top edge toward the bottom of the screen (55–75 px/s; most almost straight down, 45 % slant 12–40° to a side); big rocks are slower (32 px/s) and come nearly straight down. The rocks move relative to the screen and bounce off the scenery (collision, bricks, eye-rock rubble, eye rocks, domes): off a wall they bounce back sideways (keeping 80 % of their speed against it); off a ledge below they hop up a little (45 %) and are pushed off toward the more open side (at least 35 px/s), and they are always pulled back to their falling speed (260 px/s²), so they keep heading for the bottom edge. Bounces are worked out against the scenery as it scrolls; a rock the scrolling pushes into rock rides along with it or, if that doesn't free it, passes through until it is clear (also used for rocks that can't spawn in the open). Tuning: `BOUNCE_*`, `PULL`, `KICK` in `Meteor`. They are not enemies: no points, and shots go straight through the small ones. Only a guard destroys them: the SHIELD breaks any rock that touches it (and wears down by one, unless the ship is still invincible from its last hit), and when a rock reaches the ship the F.FIELD takes the hit and the rock breaks. Without a guard a rock that reaches the ship destroys it and flies on; a blinking (invincible) ship lets them pass. Shooting a big rock splits it into three small ones that fly 3× as fast as the big one did: one straight down, the others 50° to the left and right (a laser splits it once and keeps going). New class `Meteor` (all tuning constants there).
+- New map object `meteors` (`objects.tsx` tile 54, icon `sprites/rock_big.png`, property `time` = 15): the storm starts when the front edge of the screen reaches it (the top edge reaching the bottom of the icon on a vertical stage) and lasts `time` seconds. Restarting from a later checkpoint skips storms the screen already passed. Stage 2 has one at x 113, y 3600 in Tiled; `tools/stage2_build.py` writes it too.
+
+## 2026-10-30
+
+### Added
+- Stage 3's last room (x 4632..4856, a dead end) is now a fight: the scrolling stops there for 60 s (new map object `hold`, a point on the camera path with property `time`). Three **Laser Guards** (new enemy, the old "dart": `sprites/Laser Guard.png`) sit on the ceiling, the floor and the right-hand wall, where the darts are in the reference picture. They can't be destroyed (shots just stop on them). The ceiling and floor ones slide left / right, the wall one up / down; After every volley one guard, picked at random, chases the nearest ship and stays lined up with it (140 px/s); sometimes (30 %) two: the right-hand wall one plus the ceiling or the floor one, never ceiling and floor together. The others slide to random spots (90 px/s). The three fire together: a volley every 1.6–3 s, or as soon as one of them is lined up (`GameScreen.updateGuardVolley`). Their laser (the flashing red / blue `enemy laser` pattern) behaves like the ships' laser: it grows out of the gun for 0.6 s and then lets go, and it stays in line with the gun. The guards stop for 0.3 s before every volley (`GUARD_WIND_UP`) and stands still while its laser is on screen (and only fires again once it is gone). Rock stops its front. After the 60 s the guards slide back into their walls, the right-hand wall dissolves pixel by pixel (1.5 s) and the scrolling goes on to the boss. Dying in the room starts it over from the last checkpoint with the wall back. Tuning: `GUARD_*` in `Enemy`, `WALL_DEMAT_TIME` in `GameScreen`.
+- New map object `dematwall` (a rectangle with property `image`): a wall whose picture is not part of the stage art and that dissolves when the hold is over (its collision cells go with it). Stage 3's is `maps/stage3_endwall.png`, cut out of `stage3_t4.png`.
+
+### Changed
+- `sprites/dart.png` is now `sprites/Laser Guard.png`; Tiled classes `laserguard` (tile 38; flip Y for the floor) and `laserguard_wall` (tile 39, icon `maps/icons/laserguard_wall.png`). `tools/stages_build.py` / `stagebuild.py` write the new names, the `hold` / `dematwall` objects and cut the wall out of the art.
+
+## 2026-10-29
+
+### Added
+- Stage 3: the stage 2 domes, at the eight spots of the blue domes in `reference material/salamander_stage_3_lavinia.png`: on the floor at x 1440, 1728, 1824, 2680, 3472 and 4448 (lower corridor), on the ceiling at x 2008 and 2560. They are the same enemy as in stage 2 (closed until on screen, then open and spit sprays of amoebas, one red; 12 HP, 500 points, exact-pixel hits), drawn with `sprites/dome.png` turned a quarter so they face up (floor) or down (ceiling) and spit into the corridor. Tiled: the old "pod" tile (objects.tsx tile 36) is now `floordome`, with a turned dome icon (`maps/icons/floordome.png`); flip it (Y) to hang it from the ceiling. `Hazard.domeSide`, `PixelMask.rotatedCCW / rotatedCW`.
+
+### Changed
+- Omen keeps firing: a burst of 3 lasers, then the next burst 1.5 s after the last laser of the previous one, for as long as it is on screen (`Enemy.OMEN_REPEAT`).
+- Stage 3 opening: the open space before the terrain (x < 1048) now has the same enemies in the same places as the open space before stage 1's terrain (12 Celtic Frost waves alternating low / high, 6 Missing Links, Rugals single and in threes), shifted 26 px left because stage 3's camera path starts 26 px earlier. The old opening waves there (Rugals, fans, a red Rugal, a Celtic Frost) are gone. `tools/stages_build.py` has the same waves.
+
+## 2026-10-28
+
+### Added
+- Stage 3 (Lavinia): new enemy **Gun Ho** (the robot that was the "jumper" object), at the four spots where it stands in `reference material/salamander_stage_3_lavinia.png` (x 1463, 1703, 2695 in the upper lane and 4495 in the lower corridor). It scrolls in with the terrain; once it is well on screen it keeps its place on the screen and moves up / down (not into rock) to line its gun up with the nearest ship. As soon as it is lined up it fires one shot straight at the ship (horizontal; picture `sprites/Gun Ho bullet.png`, its size is the hit box; stopped by rock and the SHIELD), waits a moment and flies off the left edge. It turns round if a ship is behind it. If it can't line up within 6 s it leaves without firing. 3 HP, 300 points. Tuning: `GUNHO_*` constants in `Enemy` (climb speed, beam speed / length, leave speed, give-up time).
+
+- Stage 3 (Lavinia): new enemy **Omen** (the orange-topped turret that was the "hatch" object), at the six spots where it sits in `reference material/salamander_stage_3_lavinia.png`: on the floor at x 1248, 3040 and 3464, on the ceiling at x 2912, 3152 and 3472 (drawn upside down). It never moves and has no animation. 0.3 s after it comes on screen it fires one burst of 3 lasers (0.15 s apart) and then stays quiet. The lasers fly straight up (down from a ceiling Omen, 120 px/s) and widen sideways as they go, like the Ripple on the vertical stages: the 8 px pattern of `sprites/enemy laser red.png` / `enemy laser blue.png` is repeated sideways from the middle, flashing between red and blue 15 times a second. They grow to 96 px wide at most; an end stops at rock and at the screen edge, and only the middle of the laser is stopped by rock. Tuning: `OMEN_LASER_*` in `Enemy`. 3 HP, 200 points. Tuning: `OMEN_*` constants in `Enemy`.
+
+### Changed
+- `sprites/hatch.png` is now `sprites/Omen.png`; the Tiled object class is `omen` (`objects.tsx` tile 35, `tools/stages_build.py`). Old maps with `hatch` objects still load as Omen.
+- `sprites/jumper.png` is now `sprites/Gun Ho.png`; the Tiled object class is `gunho` (`objects.tsx` tile 37, `tools/stages_build.py`). Old maps with `jumper` objects still load as Gun Ho.
+
+## 2026-10-27
+
+### Added
+- New missile power-up HOMING, in slot 2 of ship TYPE 3's meter (replacing MISSILE). It flies like 2-WAY's missiles, but only one per gun is on screen at a time (`MAX_HOMING` = 1 in `GameScreen`), fired toward the nearer screen edge like MISSILE (down / up; left / right on vertical stages). The ship and each option have their own. As soon as an enemy is on screen it leaves its path and flies at the nearest one (enemies, Bamdas / falling rocks, domes / rock eyes, the green tips of towers, the weak blue balls of claw arms (stage and boss arms), the boss's weak spot), keeping that target until it is gone. It never crawls: it explodes the moment it touches anything, map collision included. `Bullet.HOMING_SPEED` (150 px/s) and `Bullet.HOMING_TURN` (360 deg/s) tune the chase.
+
+### Fixed
+- Missiles no longer treat the edge of the map as rock. Where the screen edge was also the map edge (the top and bottom on most stages, the sides of vertical stages, the end of a stage), missiles crawled along it or vanished there. Now they just fly off the screen unless the .tmx has collision there. Missiles use the new `Level.hitsMap()` (outside the map is open space); ships, shots and enemies still use `Level.hits()` as before. Floor / ceiling lookups (`floorTop` / `ceilBottom`) also treat the columns left and right of the map as open space.
+
+## 2026-10-26
+
+### Changed
+- Tetran (stage 2 boss): the tentacles turn 50% faster (`TETRAN_SPIN` 0.675 rad/s, was 0.45).
+- Tetran no longer sways from side to side: once it has come down, it flies round in a circle (counter-clockwise, 32 px radius, about one lap every 10 s), starting from the spot where it stops. `TETRAN_CIRCLE_R` / `TETRAN_CIRCLE_SPEED` in `Boss` set the size and speed. Other vertical-stage bosses still sway as before.
+
+## 2026-10-25
+
+### Changed
+- The ship starts slower: 75 px/s at speed 0, 60% of the old 125 px/s (`updatePlayer` in `GameScreen`). Each SPEED power-up still adds 34 px/s, so every speed level is 50 px/s slower than before (top speed SPEED#5: 245 px/s, was 295).
+
+## 2026-10-24
+
+### Changed
+- The stage music now starts fading out before the boss arrives, at a new map object `bossmusic`: a point on the camera path, like a checkpoint. Every stage has one, about 4 s of scrolling before the boss arrives (for the bosses that sit in the map: before they come on screen). Stage 1's is at the start of the brick maze, where the old map property `bossMusicAt` had it. Move it in Tiled to change the timing.
+
+## 2026-10-23
+
+### Changed
+- The stage music now fades out over 3 s (was 2 s), followed by 1 s of silence before the boss music starts (`BOSS_MUSIC_FADE`, `BOSS_MUSIC_GAP` in `GameScreen`).
+
+## 2026-10-22
+
+### Changed
+- The stage music fades out over 2 s before the boss music starts (also in stage 1's brick maze), done by the music player: the song files are untouched. `BOSS_MUSIC_FADE` in `GameScreen` sets the time. Pausing the game also pauses the fade.
+- The boss music is decoded in the background when a stage starts, so starting it doesn't make the game stall for a moment.
+
+## 2026-10-21
+
+### Changed
+- All stages and the boss fights play the original songs again (`02. Power of Anger.mp3` … `12. Last Exit.mp3`, `08. Poison of Snake.mp3`). The `(loop)` copies aren't needed any more: every map sets where its song's loop ends (`musicLoopEnd` / `bossMusicLoopEnd`, now also on stage 1: 59.881 s), so the fade-out in the original files is never heard.
+
+## 2026-10-20
+
+### Fixed
+- The music of stages 2–7 and the boss music faded out before looping: their `(loop).mp3` files are full length (with the fade), and the loop only ended at the end of the file. New map properties `musicLoopEnd` / `bossMusicLoopEnd` say where the loop ends, before the fade: Fly High 56.02 s (the file ends sooner), Combat 47.20 s, Starfield 55.14 s, Burn the Wind 59.48 s, Destroy Them All 70.55 s, Last Exit 67.18 s, Poison of Snake 67.06 s. The rest of the file is never played.
+
+## 2026-10-19
+
+### Changed
+- Stage 7 plays `12. Last Exit` (was `09. Prophet Fire`).
+- Every stage song and the boss music now loop seamlessly, like stage 1: each map uses a `(loop).mp3` copy of its song that stops before the original fades out, with its loop length in `musicLoop` (boss music: new map property `bossMusicLoop`). Loop lengths found in the songs: Fly High 25.601 s, Combat 22.405 s, Starfield 25.599 s, Burn the Wind 27.198 s, Destroy Them All 33.600 s, Last Exit 32.001 s, Poison of Snake 35.207 s. The `(loop).wav` versions to convert to MP3 are in `Claude outputs/loops/`.
+
+## 2026-10-18
+
+### Changed
+- Stage 1's music no longer fades out after a minute: it loops seamlessly. `02. Power of Anger.mp3` repeats its main part every 25.599 s and fades out from 62 s. Stage 1 now plays `bgm/02. Power of Anger (loop).mp3`, a copy that stops before the fade, and jumps back 25.599 s from just before its end.
+- New map property `musicLoop`: loop length in seconds. Such a song is decoded into memory once and played through Java Sound: sample-exact loop, no gap, and the last 30 ms before the jump are blended into the loop start. Works for MP3, OGG and WAV; everything else plays as before.
+
+## 2026-10-17
+
+### Changed
+- The stage pictures moved from `assets/sprites/` to `assets/maps/`, next to the maps: the art strips `stage1_t*.png` … `stage7_t*.png`, the brick art `stage1_bricks.png` … `stage7_bricks.png`, the terrain tileset `tiles.png` and `brick_pattern.png`. `assets/sprites/` now only holds sprites. The maps (image layers, `brickArt`), `terrain.tsx`, the game and the build tools point at the new place.
+
 ## 2026-10-16
 
 ### Added

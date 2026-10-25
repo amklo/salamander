@@ -1,8 +1,8 @@
 """Shared code for turning a cleaned-up original MSX stage map into game assets (used by tools/stages_build.py).
 
 A stage is described by a dict (see stages_build.py). From it this writes:
-  assets/sprites/stage<N>_t<i>.png    the terrain art, cut in strips of at most 1024 px (image layers)
-  assets/sprites/stage<N>_bricks.png  destructible bricks (only if the stage has any), as big as the map
+  assets/maps/stage<N>_t<i>.png       the terrain art, cut in strips of at most 1024 px (image layers)
+  assets/maps/stage<N>_bricks.png     destructible bricks (only if the stage has any), as big as the map
   assets/sprites/<sprite>.png         every enemy / boss cut from the map
   assets/maps/stage<N>.tmx            the map: art layers, collision + bricks layers, objects, camera path
 
@@ -207,7 +207,8 @@ class Stage:
         self.brick_art = self.brickpx & art & brick_cells
         self.art = art & ~self.brick_art
 
-    def save(self, n, spr_dir, vertical, chunk=1024):
+    def save(self, n, spr_dir, map_dir, vertical, chunk=1024):
+        """Art strips and bricks into map_dir (next to the map), the cut-out sprites into spr_dir."""
         os.makedirs(spr_dir, exist_ok=True)
         self.art_layers = []
         L = self.H if vertical else self.W
@@ -219,19 +220,28 @@ class Stage:
             else:
                 sub, keep, off = self.code[:, a0:a1], self.art[:, a0:a1], (a0, 0)
             name = 'stage%d_t%d.png' % (n, i)
-            rgba(sub, keep).save(spr_dir + name)
+            rgba(sub, keep).save(map_dir + name)
             self.art_layers.append((name, off[0], off[1], sub.shape[1], sub.shape[0]))
         self.has_bricks = bool(self.brick.any())
         if self.has_bricks:
-            rgba(self.code, self.brick_art).save(spr_dir + 'stage%d_bricks.png' % n)
+            rgba(self.code, self.brick_art).save(map_dir + 'stage%d_bricks.png' % n)
         for name, (a, keep) in self.sprites.items():
             rgba(a, keep).save(spr_dir + name + '.png')
 
-    def tmx(self, path, props, tile_ids, path_points, checkpoints, waves=(), speeds=None, extra_objects=()):
+    def tmx(self, path, props, tile_ids, path_points, checkpoints, waves=(), speeds=None, extra_objects=(), boss_music_at=None):
         """tile_ids: kind -> objects.tsx tile id (kinds missing here are left out). path_points: centre of the screen."""
         rows, cols = self.H // CELL, self.W // CELL
         lines, oid = [], 1
         for o in sorted(self.objects, key=lambda o: (o['x'], o['y'])) + list(extra_objects):
+            if o.get('rect'):                       # a plain rectangle object (name = type), e.g. "hold", "dematwall"
+                pr = o.get('props') or {}
+                body = '/>' if not pr else '>\n   <properties>\n' + ''.join(
+                    '    <property name="%s"%s value="%s"/>\n' % (k, ' type="float"' if isinstance(v, float) else '', v)
+                    for k, v in pr.items()) + '   </properties>\n  </object>'
+                lines.append('  <object id="%d" name="%s" type="%s" x="%g" y="%g" width="%g" height="%g"%s' % (
+                    oid, o['name'], o['name'], o['x'], o['y'], o['w'], o['h'], body))
+                oid += 1
+                continue
             if o['kind'] not in tile_ids: continue
             t = tile_ids[o['kind']]
             gid = OBJ_FIRST + (t if isinstance(t, int) else t[0]) + (FH if o['fh'] else 0) + (FV if o['fv'] else 0)
@@ -263,11 +273,14 @@ class Stage:
         for cx, cy in checkpoints:
             lines.append('  <object id="%d" name="checkpoint" type="checkpoint" x="%g" y="%g" width="16" height="16"/>' % (oid, cx - 8, cy - 8))
             oid += 1
+        if boss_music_at:                            # where the stage music fades out for the boss music
+            lines.append('  <object id="%d" name="bossmusic" type="bossmusic" x="%g" y="%g" width="16" height="16"/>' % (oid, boss_music_at[0] - 8, boss_music_at[1] - 8))
+            oid += 1
 
         def csv(cells, gid):
             return '\n' + ',\n'.join(','.join(str(gid) if v else '0' for v in row) for row in cells) + '\n'
 
-        art = ''.join('  <imagelayer id="%d" name="art %d" offsetx="%d" offsety="%d">\n   <image source="../sprites/%s" width="%d" height="%d"/>\n  </imagelayer>\n'
+        art = ''.join('  <imagelayer id="%d" name="art %d" offsetx="%d" offsety="%d">\n   <image source="%s" width="%d" height="%d"/>\n  </imagelayer>\n'
                       % (i + 1, i, ox, oy, name, w, h) for i, (name, ox, oy, w, h) in enumerate(self.art_layers))
         nl = len(self.art_layers)
         pr = ''.join('  <property name="%s"%s value="%s"/>\n' % (k, (' type="bool"' if isinstance(v, bool) else

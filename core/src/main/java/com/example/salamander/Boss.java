@@ -56,7 +56,7 @@ public class Boss {
     private float[] armRegrowT;
 
     // ---- Tetran (stage 2, the vertical stage): four identical tentacles of 3 rings plus a bent tip ring turn slowly
-    // around the body like a revolving door. The rings can't be hurt: they block shots and hurt the ships. Each tip
+    // (clockwise) around the body like a revolving door. The rings can't be hurt: they block shots and hurt the ships. Each tip
     // fires aimed shots. The body (sprite) takes the damage.
     public boolean tetran;
     public static final int TENTACLES = 4, RINGS = 4;
@@ -64,8 +64,12 @@ public class Boss {
     public final float[][] ringX = new float[TENTACLES][RINGS], ringY = new float[TENTACLES][RINGS];
     /** Ring layout (from the original map), relative to the body centre along the tentacle / to its side. */
     private static final float[] RING_ALONG = {36f, 44f, 52f, 60f}, RING_SIDE = {20f, 20f, 20f, 12f};
-    /** Turning speed (radians per second, counter-clockwise), tip shot interval and speed. */
-    public static final float TETRAN_SPIN = 0.45f, TIP_SHOT_INTERVAL = 2.6f, TIP_SHOT_SPEED = 105f;
+    /** Turning speed (radians per second; the tentacles turn clockwise), tip shot interval and speed. */
+    public static final float TETRAN_SPIN = 0.675f, TIP_SHOT_INTERVAL = 2.6f, TIP_SHOT_SPEED = 105f;   // (spin was 0.45, +50%)
+    /** Tetran's flight: circles (counter-clockwise) around a point on the screen, starting from the top of the circle
+     *  where it stops after coming down. Radius in px, speed in radians per second. */
+    public static final float TETRAN_CIRCLE_R = 32f, TETRAN_CIRCLE_SPEED = 0.6f;
+    private float circleA = MathUtils.HALF_PI;
     public static final float RING_SIZE = 8f;
     private float spinA;
     private final float[] tipShotT = new float[TENTACLES];
@@ -102,15 +106,21 @@ public class Boss {
 
     /** Vertical stage: comes down from the top into the upper part of the screen and sways from side to side. */
     private void updateVertical(GameScreen g, float dt) {
-        float tx = g.scrollX + SalamanderGame.W / 2f - w / 2f + MathUtils.sin(t * 0.5f) * 40f;
+        float tx = g.scrollX + SalamanderGame.W / 2f - w / 2f + (tetran ? 0f : MathUtils.sin(t * 0.5f) * 40f);
         float ty = g.scrollY + SalamanderGame.H - 56f - h / 2f;
         x = tx;
         if (entering) {
             y -= 50f * dt;
             if (y <= ty) { y = ty; entering = false; }
+        } else if (tetran) {                         // Tetran: flies round in circles
+            circleA += TETRAN_CIRCLE_SPEED * dt;
+            float ox = g.scrollX + SalamanderGame.W / 2f - w / 2f, oy = ty - TETRAN_CIRCLE_R;   // circle centre
+            x = ox + MathUtils.cos(circleA) * TETRAN_CIRCLE_R;
+            y = oy + MathUtils.sin(circleA) * TETRAN_CIRCLE_R;
+            spinA -= TETRAN_SPIN * dt;            // (clockwise)
         } else {
             y = ty;
-            spinA += TETRAN_SPIN * dt;
+            spinA -= TETRAN_SPIN * dt;            // (clockwise)
         }
         if (tetran) {
             layoutRings();

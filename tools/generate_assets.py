@@ -181,7 +181,7 @@ for L, (base, light, dark, acc) in enumerate(PAL):
         if t == 2:
             for x in range(16): px[x, 15] = acc + (255,); px[x, 14] = light + (255,); px[x, 13] = light + (255,)
         tiles.paste(tile, (t * 16, L * 16))
-save(tiles, 'tiles')
+tiles.save(os.path.join(ROOT, 'maps', 'tiles.png'))   # (the terrain tileset lives with the maps)
 
 # ---------------------------------------------------------------- backgrounds 480x272 (tile horizontally) + star layer
 W, H = 480, 272

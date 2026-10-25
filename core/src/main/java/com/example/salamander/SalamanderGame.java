@@ -40,6 +40,19 @@ public class SalamanderGame extends Game {
         prefs.flush();
     }
 
+    /**
+     * Style, picked on the title screen (saved between runs). MSX: the stages play as measured from the MSX
+     * (map property "speedMsx", objects with style "msx"). REMAKE: the remake's own pacing and waves.
+     */
+    public boolean original;
+
+    public void setOriginal(boolean o) {
+        original = o;
+        Level.originalStyle = o;
+        prefs.putBoolean("original", o);
+        prefs.flush();
+    }
+
     /** Volume levels in steps of 10%: 0 = off, 10 = full. Saved between runs. */
     public int bgmLevel, sfxLevel;
     /** Seconds left to show the volume read-out after a change. */
@@ -53,6 +66,8 @@ public class SalamanderGame extends Game {
         prefs = Gdx.app.getPreferences("salamander");
         hiScore = prefs.getInteger("hi", 0);
         easy = prefs.getBoolean("easy", false);
+        original = prefs.getBoolean("original", false);
+        Level.originalStyle = original;
         bgmLevel = clampLevel(prefs.getInteger("bgmVolume", 7));
         sfxLevel = clampLevel(prefs.getInteger("sfxVolume", 10));
         applyVolumes();
@@ -84,6 +99,7 @@ public class SalamanderGame extends Game {
         }
         if (volumeMsgT > 0f) volumeMsgT -= Gdx.graphics.getDeltaTime();
         updateCursor();
+        bgm.update(Gdx.graphics.getDeltaTime());   // music fade-outs (stage music -> boss music)
         super.render();
     }
 

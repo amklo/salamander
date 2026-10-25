@@ -13,21 +13,43 @@ import java.util.function.Function;
 public class Level {
     public static class Spawn {
         public float x, y, phase;
+        /** Nests: what comes out ("ug" or "bug"). */
+        public String what = "";
         public Enemy.Type type;
         public int group, groupSize;
         public boolean carrier;
         /** Walkers: walks upside down on the ceiling / runs in from behind (left edge). */
         public boolean ceiling, behind;
+        /**
+         * Walkers (Kierke): leaps in from a screen edge at its object's height and drops onto the floor (or, with
+         * "ceiling", "falls" up onto the ceiling): 1 = from the left edge, -1 = from the right edge, 0 = an ordinary walker.
+         */
+        public int leap;
         /** Celtic Frost: flies the Z mirrored (starts in the upper half); seconds it waits behind the one in front. */
         public boolean upper;
         public float delay;
+        /** Legacy: hovers where it was placed (as on the MSX) instead of flying by in a wave. */
+        public boolean hover;
+        /** Possessed: a "row" group (Eioneus). */
+        public boolean row;
         /** Stage 2 wall turrets: mounted on a wall to their right (they face left); barrel starts diagonal (up / down). */
         public boolean right, diag, diagUp;
+        /** Laser Guards: Enemy.GUARD_CEIL / GUARD_FLOOR / GUARD_WALL. */
+        public int guardSide;
         /**
-         * Vertical stages: fans and rushers of a wave come in one after another, this far apart (the first at 0); a
+         * Vertical stages: fly-by Legacies of a wave come in one after another, this far apart (the first at 0); a
          * Celtic Frost wave enters along the column through midX (the middle of the object).
          */
         public float gap, midX;
+        /** Possessed: which member of its group, and whether it is a red one. */
+        public int member;
+        public boolean red;
+        /** Lavinia wall lasers: the beam (world rectangle, bottom-left). Possessed rows: place / row depth (NaN: default). */
+        public float beamX, beamY, beamW, beamH, place = Float.NaN, rowDown = Float.NaN, side;
+        /** Possessed: colours of the members in order ("r" / "c"), overriding "reds". */
+        public String colours = "";
+        /** Whiplash: comes up from the bottom edge (left edge on a horizontal stage) instead of the top (right). */
+        public boolean fromBottom;
         /**
          * Spawns when the camera's right edge reaches this x (spawns are sorted by it). Vertical stages: when the
          * camera's top edge reaches this y.
@@ -39,7 +61,7 @@ public class Level {
     public static class Art { public String image; public float x, y, w, h; }
 
     /** Stage 1 teeth: position when fully out, size, picture and timing. */
-    public static class Tooth { public float x, y, w, h, delay, period; public boolean ceiling; public String image; }
+    public static class Tooth { public float x, y, w, h, delay, period, holdOut, rest, shortBy, sinkWait; public boolean ceiling, switchSides, sink; public String image; }
 
     /** Floating shootable rock: bottom-left corner, size, picture. */
     public static class Bamda { public float x, y, w, h; public String image; }
@@ -56,7 +78,52 @@ public class Level {
      * the brick maze). -1 = only when the boss comes.
      */
     public float bossMusicAt = -1f;
+    /**
+     * Map object "bossmusic" (a point on the camera path, like a checkpoint): when the screen gets there, the stage music
+     * fades out and the boss music follows. Distance along the path; -1 = no such object.
+     */
+    public float bossMusicT = -1f;
+    /**
+     * Map object "hold" (a point on the camera path, like a checkpoint): the scrolling stops there and waits for the
+     * room fight (stage 3's Laser Guard room) to end: holdTime seconds (object property "time", default 60), then the
+     * guards retreat and the "dematwall" walls dissolve, and the scrolling goes on. Distance along the path; -1 = none.
+     */
+    public float holdT = -1f, holdTime = 60f;
+
+    /**
+     * Map object "dematwall" (a rectangle): a wall that dissolves when the hold is over. Its picture (property "image",
+     * a path in assets, drawn at the rectangle) is not part of the stage art; its collision cells are cleared when it is
+     * gone (cells completely inside the rectangle).
+     */
+    public static class DematWall { public float x, y, w, h; public String image; }
+    public final ArrayList<DematWall> dematWalls = new ArrayList<>();
+    /** The collision of the dematwall cells as loaded (to put them back on a restart before the room). */
+    private byte[] gridBackup;
+    /**
+     * Map property "musicLoop": loop length of the stage song in seconds. The song plays to just before the end of its
+     * file and then jumps back this far, seamlessly, instead of starting over. -1 = loop the whole song.
+     */
+    public float musicLoop = -1f;
+    /**
+     * Map property "musicLoopEnd": where (seconds from the start of the song) the loop ends and jumps back musicLoop
+     * seconds, before the song fades out. -1 = just before the end of the file.
+     */
+    public float musicLoopEnd = -1f;
+    /** Map properties "bossMusicLoop" / "bossMusicLoopEnd": the same for the boss music. */
+    public float bossMusicLoop = -1f, bossMusicLoopEnd = -1f;
     public float baseSpeed = 46f;
+    /**
+     * Title screen style: true = MSX, false = REMAKE. Read when a stage is loaded: the map property "speedMsx"
+     * replaces "speed", the path property "speedsMsx" replaces "speeds", and objects whose property "style" is
+     * "msx" / "remake" only appear in that style (objects without it appear in both).
+     */
+    public static boolean originalStyle;
+
+    /**
+     * MSX-style behaviours (arms, bamdas, towers, walkers) are on: MSX style, on the stages measured from a recording
+     * so far (stage 1).
+     */
+    public boolean msx() { return originalStyle && index == 0; }
     /**
      * Map object "boss" (optional): where the boss picture is in the map (bottom-left, world coordinates) and its size.
      * With "fixed" on, the boss stays there instead of flying in, and wakes up once it comes on screen.
@@ -105,14 +172,24 @@ public class Level {
     /** Stage 1 claw arms: bottom-left of the resting picture (64x40), hanging from the ceiling or standing on the floor. */
     public static class Arm { public float x, y; public boolean ceiling; }
     public final ArrayList<Arm> arms = new ArrayList<>();
+    /** Kierke chains: the top-left corner of the first ball (y up: its top edge) and how many balls it grows. */
+    public static class Chain { public float x, top; public int count; }
+    public final ArrayList<Chain> chains = new ArrayList<>();
     /** Stage 1 green-tipped towers: where the picture is when fully grown, and whether it hangs from the ceiling. */
     public static class Tower { public float x, y, w, h; public boolean ceiling, flip; public String image; }
     public final ArrayList<Tower> towers = new ArrayList<>();
     /** Stage 2 domes on the side walls (bottom-left of the picture, 18x32; right = on the right wall, facing left). */
-    public static class Dome { public float x, y; public boolean right; }
+    /** A dome: bottom-left corner of its object; on the right wall; stage 3: on the floor / ceiling (top = the object's top edge). */
+    /** gunHos: MSX style, a floor hatch that lets out this many Gun Hos instead of spitting amoebas (Lavinia). */
+    public static class Dome { public float x, y, top; public boolean right, floor, ceiling; public int gunHos; }
     public final ArrayList<Dome> domes = new ArrayList<>();
     /** Stage 2 eye rocks: bottom-left of the 32x32 rock with the eye. */
     public final ArrayList<float[]> eyes = new ArrayList<>();
+    /**
+     * Asteroid storms (map object "meteors"): {trigger, seconds}. The storm starts when the front edge of the screen
+     * (the top on a vertical stage, the right edge otherwise) reaches the object, and lasts its "time" property.
+     */
+    public final ArrayList<float[]> storms = new ArrayList<>();
 
     /**
      * Vertical stage (map property "vertical"): the camera path runs upward, the ships fly up and fire upward,
@@ -121,7 +198,7 @@ public class Level {
     public boolean vertical;
     /**
      * Picture of the bricks (map property "brickArt", same size as the map): each standing brick shows its own
-     * 8x8 piece of it. Without it the bricks use the repeating sprites/brick_pattern.png.
+     * 8x8 piece of it. Without it the bricks use the repeating maps/brick_pattern.png.
      */
     public String brickArt;
 
@@ -150,10 +227,15 @@ public class Level {
         l.worldH = l.gRows * l.cell;
         l.name = m.props.getOrDefault("name", "STAGE " + (idx + 1));
         l.baseSpeed = Float.parseFloat(m.props.getOrDefault("speed", "46"));
+        if (originalStyle && m.props.containsKey("speedMsx")) l.baseSpeed = Float.parseFloat(m.props.get("speedMsx"));
         l.laneH = Float.parseFloat(m.props.getOrDefault("lane", String.valueOf(SalamanderGame.LANE_H)));
         l.music = m.props.get("music");
         l.bossMusic = m.props.getOrDefault("bossMusic", "boss.mid");
         l.bossMusicAt = Float.parseFloat(m.props.getOrDefault("bossMusicAt", "-1"));
+        l.musicLoop = Float.parseFloat(m.props.getOrDefault("musicLoop", "-1"));
+        l.bossMusicLoop = Float.parseFloat(m.props.getOrDefault("bossMusicLoop", "-1"));
+        l.musicLoopEnd = Float.parseFloat(m.props.getOrDefault("musicLoopEnd", "-1"));
+        l.bossMusicLoopEnd = Float.parseFloat(m.props.getOrDefault("bossMusicLoopEnd", "-1"));
         l.background = m.props.get("background");
         l.vertical = Boolean.parseBoolean(m.props.getOrDefault("vertical", "false"));
         l.brickArt = m.props.get("brickArt");
@@ -198,6 +280,7 @@ public class Level {
 
     private void readObjects() {
         ArrayList<float[]> cpPoints = new ArrayList<>();
+        float[] bossMusicPoint = null, holdPoint = null;
         int group = 1;
         for (TiledMap.ObjectLayer layer : tiled.objectLayers) {
             for (TiledMap.MapObject o : layer.objects) {
@@ -209,6 +292,8 @@ public class Level {
                 TiledMap.MapObject p = new TiledMap.MapObject();
                 if (tile != null) p.props.putAll(tile.props);
                 p.props.putAll(o.props);
+                String style = p.props.getOrDefault("style", "").trim().toLowerCase();
+                if (style.equals(originalStyle ? "remake" : "msx")) continue;   // belongs to the other style
                 boolean flippedV = (o.gid & TiledMap.FLIP_V) != 0;
                 boolean flippedH = (o.gid & TiledMap.FLIP_H) != 0;
 
@@ -224,17 +309,109 @@ public class Level {
                     continue;
                 }
                 switch (type) {
-                    case "fan":
-                    case "legacy":                               // Legacy: flies like a fan (a wave of 4 by default)
-                    case "rusher": {
-                        boolean legacy = type.equals("legacy"), fan = legacy || type.equals("fan");
-                        int n = p.prop("count", legacy ? 4 : fan ? 5 : 3);
+                    case "whiplash": {                           // slides in, stops, darts off diagonally
+                        Spawn s = spawn(Enemy.Type.WHIPLASH, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
+                        s.fromBottom = p.prop("fromBottom", false);
+                        s.midX = left + w / 2f;
+                        break;
+                    }
+                    case "laserbattery": case "laserbattery_big": {   // Eioneus laser battery: a beam from its lens
+                        boolean big = type.equals("laserbattery_big");
+                        Spawn s = spawn(Enemy.Type.LASER_BATTERY, left, bottom, group++, 1, p.prop("drop", false));
+                        s.what = big ? "big" : "small";
+                        s.right = !flippedH;                     // small: beam to the right (flipped: to the left)
+                        s.ceiling = flippedV;                    // big: hangs from the ceiling, its beam goes down
+                        DematWall dw = new DematWall();          // it is an enemy now, not rock: clear its cells
+                        dw.x = left; dw.y = bottom; dw.w = w; dw.h = h;
+                        setWallGone(dw, true);
+                        break;
+                    }
+                    case "seed": {                               // Eioneus seed: lets flying mines out
+                        // the object is the 44x46 base picture (bottom-left), which is in the map art (destroyed);
+                        // the enemy is only its 20x21 middle, 12 px in from the left and 12 px up from the bottom
+                        spawn(Enemy.Type.SEED, left + 12f, bottom + 12f, group++, 1, p.prop("drop", false));
+                        break;
+                    }
+                    case "gremlin": {                            // Eioneus wall walker: comes up from the bottom edge
+                        Spawn s = spawn(Enemy.Type.GREMLIN, left, bottom, group++, 1, p.prop("drop", false));
+                        s.right = flippedH || p.prop("right", left + w / 2f > W / 2f);
+                        s.red = p.prop("red", false);
+                        s.gap = H + 40f;                         // (vertical stage: when its place reaches the bottom edge)
+                        break;
+                    }
+                    case "bluedome": {                           // Eioneus wall dome: lets green flyers out
+                        Spawn s = spawn(Enemy.Type.BLUE_DOME, left, bottom, group++, 1, p.prop("drop", false));
+                        s.right = flippedH || p.prop("right", false);   // flipped in Tiled: on the right wall
+                        break;
+                    }
+                    case "gamma": {                              // Kierke blue ball: in at the right edge, bouncing
+                        Spawn s = spawn(Enemy.Type.GAMMA, left, bottom, group++, 1, p.prop("drop", false));
+                        s.ceiling = p.prop("ceiling", false);
+                        break;
+                    }
+                    case "aberrant": case "spider": {          // Kierke plant: stays put; the root of a chain
+                        spawn(Enemy.Type.ABERRANT, left, bottom, group++, 1, p.prop("drop", false));
+                        break;
+                    }
+                    case "nest": {                               // Kierke nest: lets bugs out of its mouth
+                        // the picture's mouth faces down (a ceiling nest); flip it vertically in Tiled for the floor.
+                        // The object is the whole 38x22 picture; the nest itself is the 32x17 inside it.
+                        Spawn s = spawn(Enemy.Type.NEST, left + 3f, flippedV ? bottom + 2f : bottom + 3f, group++, 1, p.prop("drop", false));
+                        s.ceiling = !flippedV;
+                        s.what = p.prop("spawns", "ug");
+                        break;
+                    }
+                    case "chain": {                              // grows a ball at a time toward the nearest ship
+                        Chain c = new Chain();
+                        c.x = left; c.top = top; c.count = Math.max(1, p.prop("count", 7));
+                        chains.add(c);
+                        break;
+                    }
+                    case "battleaxe": {                          // a rigid row that flies a square zigzag
+                        int n = Math.max(1, Math.min(12, p.prop("count", Enemy.BATTLEAXE_COUNT)));
+                        boolean high = p.prop("high", false);
+                        for (int i = 0; i < n; i++) {
+                            Spawn s = spawn(Enemy.Type.BATTLEAXE, left, bottom + h / 2f, group, n, p.prop("drop", false));
+                            s.member = i; s.upper = high;
+                        }
+                        group++;
+                        break;
+                    }
+                    case "possessed": {                          // a group that clusters near the top and shoots
+                        int n = Math.max(1, p.prop("count", 4)), reds = Math.max(0, Math.min(n, p.prop("reds", n / 2)));
+                        for (int i = 0; i < n; i++) {
+                            Spawn s = spawn(Enemy.Type.POSSESSED, left, bottom + h / 2f, group, n, p.prop("drop", true));
+                            s.member = i; s.delay = i * Enemy.POSSESSED_GAP; s.midX = left + w / 2f;
+                            s.red = (i + 1) * reds / n > i * reds / n;   // the red ones spread evenly through the group
+                            if (p.prop("row", false)) {          // a row group (Eioneus, Lavinia)
+                                s.row = true; s.delay = i * p.prop("gap", Enemy.POSS_ROW_DELAY);
+                                s.place = p.prop("place", Float.NaN);   // horizontal stages: x of the first place on the screen
+                                s.rowDown = p.prop("down", Float.NaN);
+                                String side = p.prop("side", "");      // "left" / "right"; empty: toward the nearest ship
+                                s.side = side.equalsIgnoreCase("left") ? -1f : side.equalsIgnoreCase("right") ? 1f : 0f;
+                            }
+                            String cols = p.prop("colours", p.prop("colors", ""));
+                            if (cols.length() > i) s.red = Character.toLowerCase(cols.charAt(i)) == 'r';
+                        }
+                        group++;
+                        break;
+                    }
+                    case "legacy": {
+                        if (!p.prop("flyby", false)) {           // MSX Legacy: one that hovers where it is placed
+                            Spawn s = spawn(Enemy.Type.LEGACY, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
+                            s.hover = true;
+                            s.phase = (o.id * 2.39996f) % 6.2832f;
+                            s.midX = left + w / 2f;
+                            break;
+                        }
+                        // "flyby" = the old Legacy wave that weaves across the screen (4 by default)
+                        int n = p.prop("count", 4);
                         float phase = p.prop("phase", (o.id * 2.39996f) % 6.2832f);
                         for (int i = 0; i < n; i++) {
-                            Spawn s = spawn(legacy ? Enemy.Type.LEGACY : fan ? Enemy.Type.FAN : Enemy.Type.RUSHER, left + i * (fan ? 18f : 40f),
+                            Spawn s = spawn(Enemy.Type.LEGACY, left + i * 18f,
                                     bottom + h / 2f, group, n, p.prop("drop", true));
                             s.phase = phase;
-                            s.gap = i * (fan ? 18f : 40f);
+                            s.gap = i * 18f;
                             s.midX = left + w / 2f;
                         }
                         group++;
@@ -243,6 +420,16 @@ public class Level {
                     case "rugal":                                // Rugal: enters at the right edge, at this height
                         spawn(Enemy.Type.RUGAL, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
                         break;
+                    case "gunho": case "gun ho": case "gun_ho":
+                    case "jumper":                               // Gun Ho ("jumper" = its old name): stands where it is placed
+                        spawn(Enemy.Type.GUN_HO, left, bottom, group++, 1, p.prop("drop", false));
+                        break;
+                    case "omen":
+                    case "hatch": {                              // Omen ("hatch" = its old name): flip it (Y) for the ceiling
+                        Spawn s = spawn(Enemy.Type.OMEN, left, top, group++, 1, p.prop("drop", false));   // y: its top edge
+                        s.ceiling = flippedV || p.prop("ceiling", false);
+                        break;
+                    }
                     case "link":                                 // Missing Link: a single enemy (y = the middle of its bob)
                         spawn(Enemy.Type.LINK, left, bottom + h / 2f, group++, 1, p.prop("drop", false)).phase = (o.id * 2.39996f) % 6.2832f;
                         break;
@@ -260,6 +447,18 @@ public class Level {
                     }
                     case "walker": {
                         boolean ceiling = p.prop("ceiling", flippedV);
+                        String leap = p.prop("leap", "").trim().toLowerCase();
+                        if (leap.equals("left") || leap.equals("right")) {
+                            // Kierke: the object sits at the screen edge it leaps in from (2 px off the left edge, or its
+                            // last 12 px on the right edge, as on the MSX), at the height it comes in at; flipped
+                            // vertically (or "ceiling") = it heads for the ceiling. See Enemy.updateLeaper.
+                            Spawn s = spawn(Enemy.Type.WALKER, left, bottom, group++, 1, p.prop("drop", true));
+                            s.ceiling = flippedV || p.prop("ceiling", false);
+                            s.leap = leap.equals("left") ? 1 : -1;
+                            // (spawned once the camera's right edge + 40 reaches the trigger)
+                            s.trigger = s.leap > 0 ? left + Enemy.LEAP_IN_LEFT + W + 40f : left - Enemy.LEAP_IN_RIGHT + W + 40f;
+                            break;
+                        }
                         Spawn s = spawn(Enemy.Type.WALKER, left, ceiling ? top - 4f : bottom + 4f, group++, 1, p.prop("drop", true));
                         s.ceiling = ceiling;
                         s.behind = p.prop("behind", false);
@@ -285,7 +484,20 @@ public class Level {
                         domes.add(d);
                         break;
                     }
+                    case "floordome":
+                    case "pod": {                                // stage 3: the same dome on the floor; flip it (Y) for the ceiling
+                        Dome d = new Dome();
+                        d.x = left; d.y = bottom; d.top = top;
+                        d.ceiling = flippedV || p.prop("ceiling", false);
+                        d.floor = !d.ceiling;
+                        if (originalStyle) d.gunHos = p.prop("gunhosMsx", 0);   // MSX: a Gun Ho hatch
+                        domes.add(d);
+                        break;
+                    }
                     case "eye": eyes.add(new float[]{left, bottom}); break;
+                    case "meteors": case "asteroids": case "storm":   // asteroid storm: rocks rain down for "time" seconds
+                        storms.add(new float[]{vertical ? bottom : left, p.prop("time", 15f)});
+                        break;
                     case "bamda": case "asteroid": {           // ("asteroid" = its old name)
                         Bamda a = new Bamda();
                         a.x = left; a.y = bottom; a.w = w; a.h = h;
@@ -299,6 +511,12 @@ public class Level {
                         t.ceiling = p.prop("ceiling", true);
                         t.delay = p.prop("delay", 1f);
                         t.period = Math.max(0.5f, p.prop("period", 3.5f));
+                        t.holdOut = Math.max(0f, p.prop("holdOut", 0.3f));   // seconds it stays fully out
+                        t.rest = Math.max(0f, p.prop("rest", 8f));          // px of its tip that show while it rests
+                        t.shortBy = Math.max(0f, p.prop("short", 0f));      // px it stops short of the opposite rock
+                        t.switchSides = p.prop("switch", false);            // goes right through and comes back from there
+                        t.sink = p.prop("sink", false);                     // goes right into the opposite rock and back
+                        t.sinkWait = Math.max(0f, p.prop("sinkWait", 0.5f)); // seconds it stays sunk in there
                         t.image = tile != null ? tile.image : null;
                         if (t.image != null) teeth.add(t);
                         break;
@@ -339,6 +557,48 @@ public class Level {
                         bossFixed = p.prop("fixed", false);
                         break;
                     case "checkpoint": cpPoints.add(new float[]{o.x + w / 2f, worldH - o.y - (o.gid != 0 ? -h / 2f : h / 2f)}); break;
+                    case "hold":
+                        holdPoint = new float[]{o.x + w / 2f, worldH - o.y - (o.gid != 0 ? -h / 2f : h / 2f)};
+                        holdTime = p.prop("time", 60f);
+                        if (originalStyle) holdTime = p.prop("timeMsx", holdTime);
+                        break;
+                    case "laser": {                              // Lavinia: a beam from a wall emitter (part of the art)
+                        // the rectangle's y is the bottom of the beam (as written by tools/stagebuild.py); the
+                        // emitter is at its right end ("emitter" = right, the default) or its left end
+                        Spawn s = spawn(Enemy.Type.LASER_BATTERY, left, worldH - o.y, group++, 1, p.prop("drop", false));
+                        s.what = "wall";
+                        s.right = !p.prop("emitter", "right").equalsIgnoreCase("left");   // (emitter on the right: beam goes left)
+                        s.beamX = left; s.beamY = worldH - o.y; s.beamW = w; s.beamH = h;
+                        s.x = s.right ? left + w : left - Enemy.WALL_EMITTER_W;
+                        s.y = s.beamY + h / 2f - Enemy.WALL_EMITTER_H / 2f;
+                        s.trigger = left;
+                        DematWall dw = new DematWall();          // shots must reach the emitter: clear the rock cell it sits in
+                        dw.x = (float) Math.floor((s.x + Enemy.WALL_EMITTER_W / 2f) / cell) * cell;
+                        dw.y = (float) Math.floor((s.beamY + h / 2f) / cell) * cell;
+                        dw.w = cell; dw.h = cell;
+                        setWallGone(dw, true);
+                        break;
+                    }
+                    case "dematwall": {
+                        DematWall dw = new DematWall();
+                        dw.x = left; dw.y = bottom; dw.w = w; dw.h = h;
+                        dw.image = p.prop("image", "");
+                        if (!dw.image.isEmpty()) dematWalls.add(dw);
+                        break;
+                    }
+                    case "laserguard":
+                    case "dart": {                               // Laser Guard ("dart" = its old name): on the ceiling; flip it (Y) for the floor
+                        Spawn s = spawn(Enemy.Type.LASER_GUARD, left, flippedV ? bottom : top, group++, 1, false);   // y: the wall line
+                        s.guardSide = flippedV || p.prop("floor", false) ? Enemy.GUARD_FLOOR : Enemy.GUARD_CEIL;
+                        break;
+                    }
+                    case "laserguard_wall":
+                    case "dart_side": {                          // Laser Guard on a right-hand wall (faces left)
+                        Spawn s = spawn(Enemy.Type.LASER_GUARD, left + w, bottom, group++, 1, false);   // x: the wall line
+                        s.guardSide = Enemy.GUARD_WALL;
+                        break;
+                    }
+                    case "bossmusic": bossMusicPoint = new float[]{o.x + w / 2f, worldH - o.y - (o.gid != 0 ? -h / 2f : h / 2f)}; break;
                     default: break;   // anything else is a note for the level designer
                 }
             }
@@ -346,6 +606,9 @@ public class Level {
         if (path == null) {   // no path drawn: scroll straight along the middle of the map
             setPath(new float[][]{{0f, Math.max(0f, (worldH - H) / 2f), 1f}, {Math.max(0f, worldW - W), Math.max(0f, (worldH - H) / 2f), 0f}});
         }
+        if (bossMusicPoint != null) bossMusicT = project(bossMusicPoint[0] - W / 2f, bossMusicPoint[1] - H / 2f);
+        if (holdPoint != null) holdT = project(holdPoint[0] - W / 2f, holdPoint[1] - H / 2f);
+        gridBackup = grid.clone();
         ArrayList<Float> cps = new ArrayList<>();
         cps.add(0f);                                  // the start is always a checkpoint
         for (float[] pt : cpPoints) {
@@ -357,6 +620,7 @@ public class Level {
         for (int i = 0; i < cps.size(); i++) checkpoints[i] = cps.get(i);
         if (vertical) for (Spawn s : spawns) s.trigger = s.y + s.gap;   // the top edge of the screen reaches it
         spawns.sort((a, b) -> Float.compare(a.trigger, b.trigger));
+        storms.sort((a, b) -> Float.compare(a[0], b[0]));
     }
 
     private Spawn spawn(Enemy.Type t, float x, float y, int group, int size, boolean carrier) {
@@ -366,10 +630,12 @@ public class Level {
         return s;
     }
 
-    /** The polyline marks the centre of the screen; property "speeds" = multiplier per segment, e.g. "1,0.8,1". */
+    /** The polyline marks the centre of the screen; property "speeds" = multiplier per segment, e.g. "1,0.8,1" ("speedsMsx" in MSX style). */
     private void readPath(TiledMap.MapObject o) {
         int n = o.polyline.length / 2;
-        String[] sp = o.prop("speeds", "").split(",");
+        String speeds = o.prop("speeds", "");
+        if (originalStyle && o.props.containsKey("speedsMsx")) speeds = o.prop("speedsMsx", speeds);   // MSX style
+        String[] sp = speeds.split(",");
         float[][] p = new float[n][3];
         for (int i = 0; i < n; i++) {
             float cx = o.x + o.polyline[i * 2], cy = worldH - (o.y + o.polyline[i * 2 + 1]);
@@ -447,8 +713,8 @@ public class Level {
     /** floorTop() when there is no ground below; ceilBottom() when there is nothing above. */
     public static final float NO_FLOOR = -100000f, NO_CEILING = 100000f;
 
-    /** A cell that can be walked on / hung from: only real map cells (above and below the map is open space). */
-    private boolean groundCell(int c, int r) { return r >= 0 && r < gRows && solidCell(c, r); }
+    /** A cell that can be walked on / hung from: only real map cells (all around the map is open space). */
+    private boolean groundCell(int c, int r) { return c >= 0 && c < gCols && r >= 0 && r < gRows && solidCell(c, r); }
 
     /**
      * Height of the ceiling's underside at column wx, seen from height wy: if wy is inside solid
@@ -472,11 +738,35 @@ public class Level {
     }
 
     /** True if the rectangle touches terrain (or a brick). */
+    /** A dematwall: clears its collision (gone = true) or puts the collision back as loaded. */
+    public void setWallGone(DematWall dw, boolean gone) {
+        int c0 = (int) Math.ceil(dw.x / cell - 0.001f), c1 = (int) Math.floor((dw.x + dw.w) / cell + 0.001f);
+        int r0 = (int) Math.ceil(dw.y / cell - 0.001f), r1 = (int) Math.floor((dw.y + dw.h) / cell + 0.001f);
+        for (int r = Math.max(0, r0); r < Math.min(gRows, r1); r++)
+            for (int c = Math.max(0, c0); c < Math.min(gCols, c1); c++)
+                grid[r * gCols + c] = gone ? 0 : gridBackup[r * gCols + c];
+    }
+
     public boolean hits(float x, float y, float w, float h) {
         for (Obstacle o : obstacles)                 // (rubble left in the stage while playing)
             if (x < o.x + o.mask.w && x + w > o.x && y < o.y + o.mask.h && y + h > o.y && o.mask.overlaps(o.x, o.y, x, y, w, h)) return true;
         int c0 = (int) Math.floor(x / cell), c1 = (int) Math.floor((x + w - 0.001f) / cell);
         int r0 = (int) Math.floor(y / cell), r1 = (int) Math.floor((y + h - 0.001f) / cell);
+        for (int r = r0; r <= r1; r++)
+            for (int c = c0; c <= c1; c++)
+                if (solidCell(c, r)) return true;
+        return false;
+    }
+
+    /**
+     * Like hits(), but only what the map really has (collision, terrain, bricks, rubble): everything outside the map
+     * is open space. Missiles use this, so where the screen edge is also the map edge they just fly off the screen.
+     */
+    public boolean hitsMap(float x, float y, float w, float h) {
+        for (Obstacle o : obstacles)
+            if (x < o.x + o.mask.w && x + w > o.x && y < o.y + o.mask.h && y + h > o.y && o.mask.overlaps(o.x, o.y, x, y, w, h)) return true;
+        int c0 = Math.max(0, (int) Math.floor(x / cell)), c1 = Math.min(gCols - 1, (int) Math.floor((x + w - 0.001f) / cell));
+        int r0 = Math.max(0, (int) Math.floor(y / cell)), r1 = Math.min(gRows - 1, (int) Math.floor((y + h - 0.001f) / cell));
         for (int r = r0; r <= r1; r++)
             for (int c = c0; c <= c1; c++)
                 if (solidCell(c, r)) return true;

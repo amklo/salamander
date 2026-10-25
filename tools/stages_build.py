@@ -2,7 +2,7 @@
 
 Run from the project folder:   python3 tools/stages_build.py [3 4 5 6 7]   (no numbers = all)
 Needs numpy, scipy and pillow. Reads 'reference material/salamander_stage_*.png' and writes, per stage N:
-  assets/sprites/stageN_t*.png, stageN_bricks.png, the enemy and boss sprites, and assets/maps/stageN.tmx
+  assets/maps/stageN_t*.png, stageN_bricks.png and stageN.tmx, and the enemy and boss sprites in assets/sprites/
 (overwrites the map: waves, path and checkpoints are listed below). See tools/stagebuild.py.
 
   stage 3  Lavinia  (salamander_stage_3_lavinia.png)  side-scrolling base, drops to a lower corridor
@@ -19,7 +19,9 @@ from stagebuild import Stage, c, BG
 REF = 'reference material/'
 SPR = 'assets/sprites/'
 MAPS = 'assets/maps/'
-BOSS_MUSIC = '08. Poison of Snake.mp3'
+BOSS_MUSIC = '08. Poison of Snake.mp3'   # (all songs loop seamlessly before they fade out: see musicLoop in the README)
+BOSS_LOOP = 35.20712
+BOSS_LOOP_END = 67.036
 
 # objects.tsx tile ids of the object kinds (existing ones, and the new ones added for stages 3-7)
 TILES = {
@@ -27,7 +29,7 @@ TILES = {
     'rugal_red': (33, 16, 16), 'link': (26, 16, 16),
     'dome': 30, 'wallturret_green': 28, 'wallturret_red': 29, 'eye': 31,
     # new for stages 3-7 (the game does not use them yet: their behaviour comes stage by stage)
-    'boss': 34, 'hatch': 35, 'pod': 36, 'jumper': 37, 'dart': 38, 'dart_side': 39, 'spark': 40, 'laser': 41,
+    'boss': 34, 'omen': 35, 'floordome': 36, 'gunho': 37, 'laserguard': 38, 'laserguard_wall': 39, 'spark': 40, 'laser': 41,
     'spider': 42, 'nest': 43, 'chain': 44, 'seed': 45, 'bluedome': 46, 'cluster': 47, 'mine': 48, 'crab': 49,
     'gunpod': 50, 'orb': 51, 'vent': 52, 'coregate': 53,
 }
@@ -37,10 +39,15 @@ VFLIP = ((False, False), (False, True))
 HFLIP = ((False, False), (True, False))
 
 
+# where the stage music starts fading out for the boss music (a point on the camera path, placed about 4 s of
+# scrolling before the boss: 3 s fade + 1 s silence; earlier for the bosses that sit in the map)
+BOSS_MUSIC_AT = {3: (4901, 276), 4: (128, 349), 5: (3496, 84), 6: (384, 547), 7: (3513, 84)}
+
+
 def finish(s, n, props, path, checkpoints, waves, speeds=None, vertical=False, solid_min=12, decor=None, extra=()):
     s.grids(solid_min=solid_min, decor=decor)
-    s.save(n, SPR, vertical)
-    s.tmx(MAPS + 'stage%d.tmx' % n, props, TILES, path, checkpoints, waves, speeds, extra)
+    s.save(n, SPR, MAPS, vertical)
+    s.tmx(MAPS + 'stage%d.tmx' % n, props, TILES, path, checkpoints, waves, speeds, extra, BOSS_MUSIC_AT.get(n))
     kinds = {}
     for o in s.objects: kinds[o['kind']] = kinds.get(o['kind'], 0) + 1
     print('stage %d: %dx%d' % (n, s.W, s.H), kinds, '| solid', int(s.solid.sum()), '| bricks', int(s.brick.sum()))
@@ -64,12 +71,12 @@ def stage3():
     bx, by, bw, bh = s.take_boss('boss2', 5060, 280)
     s.objects.append(dict(kind='boss', x=bx, y=by, w=bw, h=bh, fh=False, fv=False, props={}))
     # enemies
-    s.templates('hatch', (1248, 128, 32, 16), VFLIP, sprite='hatch')            # orange-topped launcher
-    s.templates('pod', (1440, 128, 32, 16), VFLIP, sprite='pod')                # closed blue dome
-    s.templates('pod', (1728, 128, 32, 16), VFLIP, sprite='pod_open', props={'open': True})   # open blue dome
-    s.templates('jumper', (1463, 71, 26, 34), HFLIP, share=0.8, sprite='jumper', keep_mask=None)
-    s.templates('dart', (4724, 216, 22, 19), VFLIP, share=0.8, sprite='dart')
-    s.templates('dart_side', (4832, 298, 22, 18), HFLIP, share=0.8, sprite='dart_side')
+    s.templates('omen', (1248, 128, 32, 16), VFLIP, sprite='Omen')             # Omen (orange-topped turret)
+    s.templates('floordome', (1440, 128, 32, 16), VFLIP, sprite='pod')          # closed blue dome (the game draws stage 2's dome.png turned)
+    s.templates('floordome', (1728, 128, 32, 16), VFLIP, sprite='pod_open', props={'open': True})   # open blue dome
+    s.templates('gunho', (1463, 71, 26, 34), HFLIP, share=0.8, sprite='Gun Ho', keep_mask=None)   # Gun Ho
+    s.templates('laserguard', (4724, 216, 22, 19), VFLIP, share=0.8, sprite='Laser Guard')        # Laser Guard (ceiling / floor)
+    s.templates('laserguard_wall', (4832, 298, 22, 18), HFLIP, share=0.8, sprite='dart_side')   # Laser Guard (right-hand wall)
     s.templates('spark', (2304, 32, 16, 16), ALL_FLIPS, share=0.8, sprite='spark')
     # destructible: the blue spools, the blue X blocks and the red gates in the lower corridor
     s.templates(None, (2088, 32, 32, 16), HFLIP, brick=True)
@@ -80,15 +87,61 @@ def stage3():
     # camera path (centre of the screen): along the upper lane, down the shaft at x 3480, along the lower corridor
     path = [(128, 84), (3480, 84), (3480, 276), (s.W - 128, 276)]
     cps = [(1300, 84), (2300, 84), (3480, 276), (4300, 276)]
-    waves = [('rugal', 300, 60, False, {}), ('rugal', 324, 70, False, {}), ('rugal', 348, 60, False, {}),
-             ('fan', 520, 110, False, {}), ('fan', 700, 40, False, {}),
-             ('rugal_red', 860, 90, False, {'drop': True}), ('rugal', 884, 80, False, {}), ('rugal', 884, 100, False, {}),
-             ('frost', 1050, 60, False, {}), ('frost', 1600, 70, True, {}),
+    # the open space before the terrain (x < 1048): the same waves as before stage 1's terrain (stage 1 x - 26)
+    waves = [('frost', 320, 143, False, {}),
+             ('link', 355, 84, False, {}),
+             ('frost', 386, 51, True, {}),
+             ('rugal', 434, 59, False, {}),
+             ('frost', 452, 131, False, {}),
+             ('link', 487, 76, False, {}),
+             ('frost', 518, 64, True, {}),
+             ('frost', 584, 138, False, {}),
+             ('link', 619, 93, False, {}),
+             ('rugal', 634, 112, False, {}),
+             ('rugal', 634, 94, False, {}),
+             ('rugal', 634, 76, False, {}),
+             ('frost', 650, 57, True, {}),
+             ('frost', 716, 124, False, {}),
+             ('link', 751, 81, False, {}),
+             ('frost', 782, 22, True, {}),
+             ('frost', 848, 114, False, {}),
+             ('rugal', 860, 118, False, {}),
+             ('link', 883, 88, False, {}),
+             ('frost', 914, 34, True, {}),
+             ('frost', 980, 101, False, {}),
+             ('link', 1015, 84, False, {}),
+             ('rugal', 1030, 82, False, {}),
+             ('rugal', 1031, 64, False, {}),
+             ('rugal', 1032, 46, False, {}),
+             ('frost', 1046, 47, True, {}),
+             ('frost', 1600, 70, True, {}),
              ('rusher', 2600, 80, False, {}), ('frost', 3000, 64, False, {}),
              ('fan', 3700, 240, False, {}), ('frost', 4100, 250, True, {}), ('rusher', 4400, 260, False, {})]
-    props = {'name': 'OPERATION THREE', 'speed': 28.4, 'lane': 168, 'music': '04. Combat.mp3', 'bossMusic': BOSS_MUSIC,
-             'brickArt': 'sprites/stage3_bricks.png', 'brickRegrow': 0.0}
-    return finish(s, 3, props, path, cps, waves, speeds=[1, 0.7, 1])
+    props = {'name': 'OPERATION THREE', 'speed': 28.4, 'lane': 168, 'music': '04. Combat.mp3', 'musicLoop': 22.405057, 'musicLoopEnd': 47.174, 'bossMusic': BOSS_MUSIC, 'bossMusicLoop': BOSS_LOOP, 'bossMusicLoopEnd': BOSS_LOOP_END,
+             'brickArt': 'maps/stage3_bricks.png', 'brickRegrow': 0.0}
+    # the last room (x 4632..4856) is a dead end: the scrolling holds there for 60 s (the Laser Guards' fight), then
+    # the right-hand wall dissolves; its picture is cut out of the art into stage3_endwall.png (see cut_end_wall)
+    extra = [dict(rect=True, name='hold', x=4752, y=268, w=16, h=16, props={'time': 60.0}),
+             dict(rect=True, name='dematwall', x=END_WALL[0], y=END_WALL[1], w=END_WALL[2], h=END_WALL[3],
+                  props={'image': 'maps/stage3_endwall.png'})]
+    finish(s, 3, props, path, cps, waves, speeds=[1, 0.7, 1], extra=extra)
+    cut_end_wall()
+    return s
+
+
+# stage 3's dissolving wall: x, y (top), w, h in map pixels
+END_WALL = (4848, 216, 40, 120)
+
+
+def cut_end_wall():
+    """Moves the end room's right-hand wall out of stage 3's art (stage3_t4.png) into its own picture."""
+    from PIL import Image
+    x, y, w, h = END_WALL
+    t4 = Image.open(MAPS + 'stage3_t4.png').convert('RGBA')
+    box = (x - 4096, y, x - 4096 + w, y + h)
+    t4.crop(box).save(MAPS + 'stage3_endwall.png')
+    t4.paste(Image.new('RGBA', (w, h), (0, 0, 0, 0)), box)
+    t4.save(MAPS + 'stage3_t4.png')
 
 
 def vertical_path(s, top_y, x=None):
@@ -131,8 +184,8 @@ def stage4():
     waves = [('legacy', 128, 3900, False, {}), ('frost', 60, 3800, False, {}), ('frost', 196, 3700, True, {}),
              ('legacy', 128, 3600, False, {}), ('frost', 60, 3500, False, {}), ('legacy', 100, 3380, False, {}),
              ('legacy', 128, 2000, False, {}), ('frost', 196, 1500, True, {}), ('legacy', 128, 700, False, {})]
-    props = {'name': 'OPERATION FOUR', 'vertical': True, 'speed': 26.0, 'lane': 168, 'music': '05. Starfield.mp3',
-             'bossMusic': BOSS_MUSIC, 'brickArt': 'sprites/stage4_bricks.png', 'brickRegrow': 0.0}
+    props = {'name': 'OPERATION FOUR', 'vertical': True, 'speed': 26.0, 'lane': 168, 'music': '05. Starfield.mp3', 'musicLoop': 25.59873, 'musicLoopEnd': 55.113,
+             'bossMusic': BOSS_MUSIC, 'bossMusicLoop': BOSS_LOOP, 'bossMusicLoopEnd': BOSS_LOOP_END, 'brickArt': 'maps/stage4_bricks.png', 'brickRegrow': 0.0}
     return finish(s, 4, props, path, cps, waves, vertical=True)
 
 
@@ -173,7 +226,7 @@ def stage5():
              ('fan', 560, 50, False, {}), ('fan', 760, 110, False, {}), ('rugal_red', 900, 84, False, {'drop': True}),
              ('frost', 1300, 60, False, {}), ('frost', 1900, 70, True, {}), ('rusher', 2500, 84, False, {}),
              ('frost', 3000, 64, False, {})]
-    props = {'name': 'OPERATION FIVE', 'speed': 28.4, 'lane': 168, 'music': '06. Burn the Wind.mp3', 'bossMusic': BOSS_MUSIC}
+    props = {'name': 'OPERATION FIVE', 'speed': 28.4, 'lane': 168, 'music': '06. Burn the Wind.mp3', 'musicLoop': 27.19839, 'musicLoopEnd': 59.459, 'bossMusic': BOSS_MUSIC, 'bossMusicLoop': BOSS_LOOP, 'bossMusicLoopEnd': BOSS_LOOP_END}
     return finish(s, 5, props, path, cps, waves, solid_min=24)
 
 
@@ -205,8 +258,8 @@ def stage6():
     waves = [('legacy', 384, 4300, False, {}), ('frost', 310, 4200, False, {}), ('frost', 456, 4100, True, {}),
              ('legacy', 384, 3950, False, {}), ('frost', 310, 3700, False, {}), ('legacy', 384, 3000, False, {}),
              ('frost', 456, 2400, True, {}), ('legacy', 384, 1300, False, {})]
-    props = {'name': 'OPERATION SIX', 'vertical': True, 'speed': 26.0, 'lane': 168, 'music': '07. Destroy Them All.mp3',
-             'bossMusic': BOSS_MUSIC}
+    props = {'name': 'OPERATION SIX', 'vertical': True, 'speed': 26.0, 'lane': 168, 'music': '07. Destroy Them All.mp3', 'musicLoop': 33.600181, 'musicLoopEnd': 70.525,
+             'bossMusic': BOSS_MUSIC, 'bossMusicLoop': BOSS_LOOP, 'bossMusicLoopEnd': BOSS_LOOP_END}
     return finish(s, 6, props, path, cps, waves, vertical=True, solid_min=20)
 
 
@@ -230,16 +283,16 @@ def stage7():
     waves = [('rugal', 200, 50, False, {}), ('rugal', 224, 84, False, {}), ('rugal', 248, 118, False, {}),
              ('fan', 900, 84, False, {}), ('rusher', 1300, 84, False, {}), ('rugal_red', 1600, 84, False, {'drop': True}),
              ('frost', 2000, 60, False, {}), ('fan', 2500, 84, False, {}), ('frost', 3100, 70, True, {})]
-    props = {'name': 'OPERATION X', 'speed': 28.4, 'lane': 168, 'music': '09. Prophet Fire.mp3', 'bossMusic': BOSS_MUSIC,
-             'brickArt': 'sprites/stage7_bricks.png', 'brickRegrow': 0.0}
+    props = {'name': 'OPERATION X', 'speed': 28.4, 'lane': 168, 'music': '12. Last Exit.mp3', 'musicLoop': 32.000771, 'musicLoopEnd': 67.158, 'bossMusic': BOSS_MUSIC, 'bossMusicLoop': BOSS_LOOP, 'bossMusicLoopEnd': BOSS_LOOP_END,
+             'brickArt': 'maps/stage7_bricks.png', 'brickRegrow': 0.0}
     return finish(s, 7, props, path, cps, waves)
 
 
 STAGES = {3: stage3, 4: stage4, 5: stage5, 6: stage6, 7: stage7}
 
 # objects.tsx tiles for the new kinds: (kind, picture relative to assets/maps)
-NEW_TILES = [('boss', 'icons/boss.png'), ('hatch', '../sprites/hatch.png'), ('pod', '../sprites/pod.png'),
-             ('jumper', '../sprites/jumper.png'), ('dart', '../sprites/dart.png'), ('dart_side', '../sprites/dart_side.png'),
+NEW_TILES = [('boss', 'icons/boss.png'), ('omen', '../sprites/Omen.png'), ('floordome', 'icons/floordome.png'),
+             ('gunho', '../sprites/Gun Ho.png'), ('laserguard', '../sprites/Laser Guard.png'), ('laserguard_wall', 'icons/laserguard_wall.png'),
              ('spark', '../sprites/spark.png'), ('laser', 'icons/laser.png'), ('spider', '../sprites/spider.png'),
              ('nest', '../sprites/nest.png'), ('chain', '../sprites/ball.png'), ('seed', '../sprites/seed.png'),
              ('bluedome', '../sprites/bluedome.png'), ('cluster', '../sprites/cluster.png'), ('mine', '../sprites/mine.png'),

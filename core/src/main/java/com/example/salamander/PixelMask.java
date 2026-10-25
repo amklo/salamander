@@ -55,6 +55,22 @@ public final class PixelMask {
         return new PixelMask(w, h, s);
     }
 
+    /** The same mask turned a quarter counter-clockwise (what faced right now faces up), as SpriteBatch rotation 90. */
+    public PixelMask rotatedCCW() {
+        boolean[] s = new boolean[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) s[x * h + (h - 1 - y)] = solid[y * w + x];   // (x, y) -> (h-1-y, x)
+        return new PixelMask(h, w, s);
+    }
+
+    /** The same mask turned a quarter clockwise (what faced right now faces down), as SpriteBatch rotation -90. */
+    public PixelMask rotatedCW() {
+        boolean[] s = new boolean[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) s[(w - 1 - x) * h + y] = solid[y * w + x];   // (x, y) -> (y, w-1-x)
+        return new PixelMask(h, w, s);
+    }
+
     /** Does the rectangle (rx, ry, rw, rh) touch a solid pixel of the mask drawn with its bottom-left at (mx, my)? */
     public boolean overlaps(float mx, float my, float rx, float ry, float rw, float rh) {
         int x0 = Math.max(0, (int) Math.floor(rx - mx)), x1 = Math.min(w - 1, (int) Math.ceil(rx + rw - mx) - 1);

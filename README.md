@@ -68,7 +68,10 @@ Any controller SDL recognises (Xbox, PlayStation, Switch Pro, most USB pads) wor
 * **Stage 2 is vertical**: the screen scrolls up and the ship flies and fires upward. The blue bubble rocks can be shot
   away (they don't grow back); the orange rocks can't. MISSILE flies diagonally up toward the nearer side of the
   screen and then crawls up along the rock walls (with no rock on that side it flies off the screen); 2-WAY sends one
-  up each side. Wall turrets, domes that spit amoebas, and rocks with an eye that
+  up each side. Where the scenery starts, a 15 s **asteroid storm** rains rocks down the screen: they aren't enemies,
+  they bounce off the scenery and keep falling, shots pass through the small ones, and only a SHIELD or F.FIELD breaks them; shooting a big one splits it into three
+  fast small ones. Wall turrets, domes that send out waves of 7 green flyers (they circle twice, shooting
+  after the first lap, then leave), and rocks with an eye that
   shoots back guard the way to **Tetran**, whose four tentacles turn slowly around it like a revolving door; the rings
   block shots and the tips fire at you. Shoot its body.
 * With **DOUBLE**, hold Enter (pad: R1) and press a direction to aim the extra shot in one of 8 directions; the ship holds still while you aim.
@@ -78,6 +81,19 @@ Any controller SDL recognises (Xbox, PlayStation, Switch Pro, most USB pads) wor
   keeps its highlight); on **EASY** it keeps them. Every new stage starts without power-ups.
 * **Difficulty**: on the title screen, left / right switches between NORMAL and EASY (remembered between runs). EASY
   starts (and continues) with 5 ships instead of 3.
+* **Style**: on the title screen, up / down moves between difficulty and style, left / right switches the style between
+  REMAKE (the remake's own pacing, waves and enemy behaviour) and MSX (as measured from an MSX recording; remembered
+  between runs). So far only stage 1 differs. MSX scrolls at the MSX speed (19.2 px/s, the same on every stretch), has
+  the MSX opening (8 Celtic Frost waves, 2 Missing Links, 2 Rugal trios and 2 single Rugals, timed as in the recording)
+  and MSX enemy behaviour: claw arms grow straight out of the rock, then keep a straight chain that swings to point at
+  the ship (up to 65° from straight out), and their blue weak ball moves along the chain the further it leans; towers
+  throw their sprays in bursts of three, 0.85 s apart; walkers jump about half a screen high toward the ship and come
+  back down. See map property `speedMsx`, path
+  property `speedsMsx`, object property `style` and `Level.msx()`.
+* In both styles: claw arms start tucked into the rock (only the claw shows) and grow out once they are on screen;
+  their balls stop the laser, the blue weak ball too (the laser hits it there); all amoebas change colour together
+  (yellow, cream, white, green, 3 frames each); seven red walkers run in from the left in the blue tentacle passage;
+  the fangs slide in and out as measured on the MSX (see `tooth`).
 
 ## Project layout
 ```
@@ -92,8 +108,10 @@ core/src/main/java/com/example/salamander/
   Enemy, Boss, Hazard, Bullet, Player   entities
   Assets          lazy sprite/sound loader
 lwjgl3/…/Lwjgl3Launcher.java      desktop launcher
-assets/sprites, assets/sfx        art and sound (classpath resources)
-assets/maps                       the stages as Tiled maps + tilesets  <-- design stages here
+assets/sprites, assets/sfx        sprites (ships, enemies, bosses...) and sound (classpath resources)
+assets/maps                       the stages as Tiled maps + tilesets, and the stage pictures: art strips
+                                  (stageN_t*.png), brick art (stageN_bricks.png), tiles.png, brick_pattern.png
+                                  <-- design stages here
 tools/generate_assets.py          regenerates all assets (needs Python + Pillow)
 ```
 
@@ -110,12 +128,15 @@ Keep the map *not* infinite and keep layers at the top level (no layer groups).
 |---|---|
 | `name` | stage title shown in the intro and HUD |
 | `speed` | base scroll speed in px/s |
+| `speedMsx` | base scroll speed in MSX style (stage 1: 19.2, measured from the MSX); without it `speed` is used |
 | `music`, `bossMusic` | music files in `assets/bgm/` (MP3, OGG, WAV or MIDI), e.g. `02. Power of Anger.mp3` |
-| `bossMusicAt` | the boss music already starts when the middle of the screen reaches this x, and plays on into the boss fight (stage 1: 3984, the brick maze) |
+| `musicLoop`, `bossMusicLoop` | loop length of the stage song / boss song in seconds: when the song reaches the loop end it jumps back this far and carries on seamlessly (the game blends the seam). Works with MP3, OGG and WAV. Without it the song starts over from the beginning. The original songs are used as they are: `02. Power of Anger.mp3` 25.599002 (stage 1), `03. Fly High.mp3` 25.601270 (2), `04. Combat.mp3` 22.405057 (3), `05. Starfield.mp3` 25.598730 (4), `06. Burn the Wind.mp3` 27.198390 (5), `07. Destroy Them All.mp3` 33.600181 (6), `12. Last Exit.mp3` 32.000771 (7), boss fights `08. Poison of Snake.mp3` 35.207120 |
+| `musicLoopEnd`, `bossMusicLoopEnd` | where the loop ends (seconds from the start of the song), before the song fades out: there it jumps back `musicLoop` seconds, so the fade is never heard. Without it the loop ends just before the end of the file. Power of Anger 59.881, Fly High 55.998, Combat 47.174, Starfield 55.113, Burn the Wind 59.459, Destroy Them All 70.525, Last Exit 67.158, Poison of Snake 67.036 |
+| `bossMusicAt` | (old) the boss music starts when the middle of the screen reaches this x. Use the `bossmusic` object instead (see *Camera*); a map with that object ignores this property |
 | `background` | parallax backdrop sprite (`bg1`, `bg2`; leave it out for plain black space) |
 | `lane` | height the stage was laid out for (default 272). If it is taller than the 168px view, the camera drifts up and down within it to follow the ships. Stages 1 and 2 use 168 (no drift) |
 | `vertical` | `true` = a vertical stage (stages 2, 4 and 6): the path runs upward, the ship (`player_blue_vertical.png`) points up and every weapon fires up. Objects are triggered when the top of the screen reaches them |
-| `brickArt` | picture the bricks are cut from, as big as the map (stage 2: `sprites/stage2_bricks.png`, the blue bubble rocks). Each brick shows its own 8×8 piece of it. Leave it out for the repeating brick pattern |
+| `brickArt` | picture the bricks are cut from, as big as the map (stage 2: `maps/stage2_bricks.png`, the blue bubble rocks; the path is relative to `assets/`). Each brick shows its own 8×8 piece of it. Leave it out for the repeating brick pattern |
 | `brickRegrow` | seconds until a shot-away brick grows back (default 3; `0` = never, as in stage 2) |
 
 ### Layers (names matter, upper/lower case doesn't)
@@ -131,30 +152,50 @@ Keep the map *not* infinite and keep layers at the top level (no layer groups).
 | Object | Placement | Options |
 |---|---|---|
 | `fan` / `rusher` | where the wave enters the screen (its height = the wave's height). Vertical stage: fans come in from the top, one after another, and weave down around the object's column; y = where the top of the screen triggers them | `count` (5 / 3), `drop` (capsule when the whole wave is shot) |
-| `walker` | stage 1 uses the bio walker tiles (blue, and red = `drop` on), the other stages the old walker tile; standing on the floor – or flip it vertically (Y) to hang it from the ceiling | `ceiling`, `behind` (runs in from the left edge once the screen has passed this spot), `drop` |
-| `frost` | Celtic Frost wave. x = where it is triggered; y = the line it enters on (10–42% of the screen height from the bottom, or from the top when flipped); it leaves on the mirrored line. It flies a "Z": in from the right, left, diagonally back, then left and out. Flip vertically (or `upper`) to mirror the Z top to bottom. Vertical stage: the Z is turned a quarter: the wave comes down from the top along the object's column (10–42% of the screen width from the left edge; flipped = from the right edge), flies diagonally back up to the other side and leaves at the bottom | `count` (6), `drop`, `upper` |
-| `legacy` | Legacy wave (stage 2): placed and flying exactly like a `fan` wave, 4 by default. A Legacy only shoots once it has flown past a ship (below it on a vertical stage, left of it otherwise) | `count` (4), `drop` |
+| `walker` | stage 1 and Kierke use the bio walker tiles (blue, and red = `drop` on), the other stages the old walker tile; standing on the floor – or flip it vertically (Y) to hang it from the ceiling. **Kierke leapers** (`leap` = `left` / `right`, as on the MSX): put the object at the screen edge it comes in from (2 px left of the screen's left edge, or 12 px inside its right edge) at the height it comes in at; it appears when that edge reaches it, drifts in and drops onto the floor (flipped / `ceiling`: "falls" up onto the ceiling), walks toward the ship to about mid-screen, then keeps walking away from it and hopping back toward it (higher when the ship is higher up; a hop that reaches the ceiling grabs it). It doesn't shoot and is gone once it walks off an edge. Tuning: `LEAP_*` in `Enemy` | `ceiling`, `behind` (runs in from the left edge once the screen has passed this spot), `leap`, `drop` |
+| `frost` | Celtic Frost wave. x = where it is triggered; y = the line it enters on (10–42% of the screen height from the bottom, or from the top when flipped); it leaves on the mirrored line. It flies a zigzag (measured on the MSX): in from the right, left to 64% of the screen width, diagonally (45°) back toward the middle for 64 px, left to 28%, diagonally back again until the whole sprite is flush with the far screen edge, then right along that edge and out (`Enemy.frostAt`; 80 px/s on each axis, so the diagonals move as fast across as along). MSX style places them on the MSX lines: centre 23.5 px above the bottom (low) / 32.5 px below the top (high). Flip vertically (or `upper`) to mirror the Z top to bottom. Vertical stage: the wave comes down from the top along the object's column (10–42% of the screen width from the left edge; flipped = from the right edge), turns 48 px below the top, dips 45° toward the middle for 48 px, then flies 45° back up and out through the top (a "V", from the stage 2 recording) | `count` (6), `drop`, `upper` |
+| `legacy` | Legacy (stage 2, as on the MSX): one Legacy that hangs in the world where it is placed (it scrolls with the scenery), drifts or darts sideways toward the nearest ship (up to 45 px/s) and now and then dives at it; it doesn't shoot. It leans with its sideways speed (frames 0–6 of `legacy.png`) and flickers magenta / blue / red. With `flyby` on it is the old Legacy wave instead: placed and flying like a `fan` wave (4 by default), shooting once it has flown past a ship. Tuning: `LEGACY_*` in `Enemy` | `drop` (off for a hovering one), `flyby`, `count` (4, fly-by only) |
+| `possessed` | Possessed group (stage 2, as on the MSX): x = the middle of the cluster across the screen; triggered when the top edge reaches it. The members come in from the top edge one after another (0.3 s apart), each to its spot in a small cluster near the top, hover there 2.2 s shooting aimed shots at the nearest ship (every 0.6–0.9 s), then fly back up and out. Red and cyan ones (`reds` of them red, spread through the group); shooting down the whole group leaves a capsule (`drop`). Tuning: `POSSESSED_*` in `Enemy` With `row` (Eioneus): the members come in one after another (0.25 s apart) diagonally from the top, stop for 0.6 s in a row 45 px below the top edge (16 px apart, x = the first one's place; the row runs toward the nearest ship's side), shooting, then fly on diagonally up and out. On a horizontal stage (Lavinia) a row comes in from the top edge too: `place` = the first place's x on the screen, `down` = how far below the top edge the row is (default 45), `side` = `left` / `right` (default: toward the nearest ship), `gap` = seconds between members (0.25), `colours` = the members' colours in order, e.g. `ccrrc`. | `count` (4), `reds` (2), `drop`, `row`, `place`, `down`, `side`, `gap`, `colours` |
+| `whiplash` | Whiplash (stage 2, as on the MSX): x = its column; triggered when the top edge reaches it. It slides in from the top edge (or up from the bottom edge with `fromBottom`), stops 42 px inside the screen for 0.6 s, then darts off diagonally: on in the same direction and sideways toward the nearest ship, until it has left the screen. As it stops it fires one expanding laser like the Omen's, toward the far edge. Tuning: `WHIP_*` in `Enemy` | `fromBottom`, `drop` |
+| `battleaxe` | Battleaxe row (Kierke opening, as on the MSX): triggered like other objects (x); its height comes from `high`, not from where the object is. A rigid row of 6, 16 px apart, comes in from the right edge at 40 px/s; when its front place reaches x 136 on the screen the whole row goes straight up (a high row: down) at 80 px/s to the other side, left again to x 16, straight back down (up) and out through the left edge. Members that are shot leave a gap; the rest keep their places. It doesn't shoot. Tuning: `BATTLEAXE_*` in `Enemy` | `count` (6), `high`, `drop` |
+| `chain` | Kierke chain of green balls (as on the MSX): the object is the first ball (8×8, top-left). When it comes to x 216 on the screen it grows a ball every 0.25 s (each growing 4, 6, 8 px) up to `count`: each one 8 px toward the nearest ship, sideways and up or down (diagonally when both); with rock in the way it steps only sideways or only up / down, a wall ends it, and it stops once it reaches the ship. It only grows while its root, the aberrant just under the first ball, is alive. The balls stay put (also once the aberrant is shot), can't be destroyed, stop shots (lasers too) and hurt a ship. Tuning: `CHAIN_*` in `Enemy` | `count` (7) |
+| `aberrant` | Aberrant (Kierke): the plant at the root of a chain (the chain object's first ball sits just above it). Stays where it is placed and doesn't shoot. Shot down it withers (the blue frame) and stays: shots pass through it, but a ship still crashes into it. (Old name `spider` still works.) | `drop` |
+| `nest` | Kierke nest: the object is the whole 38×22 picture; as drawn it hangs from the ceiling, flip it vertically for the floor. 6 hits. `spawns` says what comes out: `ug` (default) – once its middle comes to x 232 on the screen it lets 6 Ugs out of its mouth, 0.2 s apart; `creeping death` – while its middle is between x 16 and 200 on the screen it lets out bursts of 4 Creeping Death (0.15 s apart, a burst every 2.5 s): each rises out of the mouth at 50 px/s for 1.3 s, then homes in on the nearest ship at 45 px/s. Tuning: `NEST_*`, `UG_*`, `CREEP_*` in `Enemy` | `spawns` (ug), `drop` |
+| `gamma` | Gamma (Kierke blue ball, as on the MSX): triggered like other objects (x); it comes in at the right edge at the object's height and drifts left through the world at 16 px/s, bouncing slowly on the floor (`ceiling`: on the ceiling) about 35 px high every ~2.3 s; it rides up over rock it runs into and doesn't shoot. Tuning: `GAMMA_*` in `Enemy` | `ceiling`, `drop` |
+| `bluedome` | Eioneus blue dome on a side wall (flip it horizontally for the right wall): once its middle is 40 px below the top edge it lets out bursts of 4 green flyers (0.5 s apart, a burst every 5.3 s while it is on the screen), showing `bluedome_open.png` meanwhile. Each green flyer flies the loop measured in the recording (along the top, a big loop, a smaller one, then up and out; mirrored from the right wall). 5 hits. Tuning: `BLUE_DOME_*`, `GREEN_*` in `Enemy` | `drop` |
+| `laser` | Lavinia wall laser: the beam between two pillars (the object is the beam; written by `tools/stages_build.py`). The emitter is part of the wall art at its right end (`emitter` = `left` for the other end); its rock cell is cleared so shots reach it. The beam (the Laser Guards' pattern) is on all the time, hurts a ship and lets shots through; shooting the emitter (6 hits) puts it out. | `emitter` |
+| `floordome` with `gunhosMsx` | MSX style (Lavinia): the dome is a Gun Ho hatch instead of spitting amoebas. It lets out this many Gun Hos, one each time its left edge reaches x 208, 144, 80, 16 on the screen; each hops out (up 48 px, 24 px left, down to the floor, 16 px left), then lines up with the nearest ship, fires and flies off left (80 px/s). Tuning: `GUNHO_HOP_*` in `Enemy`, `GUNHO_HATCH_*` in `Hazard` | `gunhosMsx` |
+| `laserbattery`, `laserbattery_big` | Eioneus laser battery (the object is its picture; its rock cells are cleared, it is an enemy). Small: on a wall, its beam goes sideways to the rock across (flip it horizontally + vertically to face left). Big: on the floor its beam goes up to the big battery hanging above it (flip that one horizontally + vertically). The beam (the Laser Guards' red / blue pattern) is on all the time, hurts a ship and lets shots through; it goes out when either battery is shot down (6 hits each). Tuning: `BATTERY_*` in `Enemy` | `drop` |
+| `gremlin` | Eioneus gremlin (yellow; `red` = the red one): the object marks where it comes up through the bottom edge (it appears when that place reaches the bottom of the screen) on the left wall (`right`, or placed in the right half: the right wall). It climbs its wall keeping to the rock face at 48 px/s, walks for 2 s, stops for 3 s to aim (frame 0) and fires an aimed shot, then walks on. Tuning: `GREMLIN_*` in `Enemy` | `red`, `right`, `drop` |
+| `seed` | Eioneus base (the big red pod; the object is its 44×46 picture, bottom-left). The whole base is part of the map art (`stage4_t*.png`, painted as destroyed); the enemy is only its 20×21 middle (`sprites/eioneus_base_core.png`, 4 frames: closed, opening, open, destroyed), 12 px in from the object's left and 12 px up from its bottom. Once its middle is 50 px below the top edge it opens (0.4 s) and stays open, letting out bursts of 4 flying mines from its middle (0.5 s apart, a burst every 4 s while on screen). It is drawn under the other enemies. It is ground: ships fly over it, shots hit it (8 hits); destroyed it shows its last frame and stays. Each flying mine first takes off (frames 0–2, a third of a second each; it can't hit or be hit), flying the loop measured in the recording, then (frames 3 / 4) finishes the loop and homes in on the nearest ship. About one in six is red and leaves a power capsule. Tuning: `SEED_*`, `MINE_*` in `Enemy` | `drop` |
 | `link` | Missing Link, a single enemy: x = where it is triggered, y = the middle of its bob. It comes in from the right edge, drifts left bobbing up and down and shoots at the ships | `drop` (off) |
 | `rugal` | Rugal: comes in from the right edge at this height (triggered like the flying waves) and flies left, steering toward the nearest ship and shooting back at a ship once it has flown past it. Place three a little apart for a trio. Two tiles: normal, and red (`drop` on: `rugal_red.png`, leaves a power capsule) | `drop` (off) |
 | `turret` | bio turret on the floor, or flipped vertically under the ceiling. Two tiles: blue, and red (`drop` on: leaves a power capsule) | `ceiling`, `drop` |
 | `bamda` | anywhere (the pulsing rock; its size comes from `sprites/bamda.png`) | – |
 | `tower` | where the fully grown tower stands, its root end 8 px into the rock. Flip vertically to turn it over (floor ↔ ceiling); don't resize | – |
-| `tooth` (`fang full.png`) | its x, and its tip somewhere in the passage: the game makes it come out of the ceiling (or floor) until the tip touches the floor (or ceiling) | `ceiling`, `delay` (s before the first bite), `period` (s per cycle) |
+| `tooth` (`fang full.png`) | its x, and its tip somewhere in the passage: the game makes it come out of the ceiling (or floor) until the tip touches the floor (or ceiling). As on the MSX (both styles) it slides out and back at 85 px/s, holds fully out, then rests with its tip showing; stage 1's six are timed from the recording | `ceiling`, `delay` (s before the first push), `period` (s per cycle), `holdOut` (s fully out, 0.3), `rest` (px of tip showing while resting, 8), `short` (px it stops short of the opposite rock, 0), `switch` (goes right through into the opposite rock and comes out of that side next time, back and forth; stage 1's 5th and 6th) |
 | `rock` | hanging under the ceiling; falls when a ship flies underneath | – |
 | `volcano` | on the floor | – |
 | `crusher` | on the ceiling or floor surface it pushes out from | `ceiling`, `minLen`, `maxLen`, `speed`, `phase` |
 | `wallturret` | stage 2 turret on a rock wall to its left; flip it horizontally (X) for a wall to its right. It turns its barrel toward the ship: straight out, or diagonally up / down. Two tiles: green, and red (`drop` on: leaves a power capsule). `diag` (or a vertical flip for up) only sets the barrel it starts with | `drop`, `diag` |
-| `dome` | stage 2 dome against the left wall; flip it horizontally (X) for the right wall. Closed until it has been on screen for 1 s, then it opens for good and spits sprays of 4 amoebas (one red) sideways. 12 hits, 500 points | – |
+| `dome` | stage 2 dome against the left wall; flip it horizontally (X) for the right wall. Closed until it has been on screen for 1 s, then it opens for good and sends out waves of 7 green flyers (`sprites/green_flyer.png`), one after the other: they fly a circle (radius 40) above the dome twice, shoot at the ships from the second lap on, then fly on away from the dome and off the screen. The next wave comes 2.5–4 s after the last flyer of the previous one is gone; shooting down all 7 leaves a capsule. (Stage 3's floor / ceiling domes still spit amoebas.) 12 hits, 500 points. Tuning: `DOME_FLYER_*` in `Enemy`, `DOME_WAVE_*` in `Hazard` | – |
 | `boss` | where the boss sits in the map (the box = its picture, `sprites/boss<N-1>.png`). With `fixed` on (stages 5–7), the boss stays there instead of flying in, and wakes up as soon as it comes on screen. Without it, the boss flies in as usual | `fixed` |
-| `hatch`, `pod`, `jumper`, `dart`, `dart_side`, `spark`, `laser`, `spider`, `nest`, `chain`, `seed`, `bluedome`, `cluster`, `mine`, `crab`, `gunpod`, `orb`, `vent`, `coregate` | the enemies and hazards of stages 3–7, where the original map has them (see *Stages 3–7 art*). **Not used by the game yet**: they get their behaviour stage by stage | (`open`, `red`, `blue`, `vertical`, `count`, `diag` – notes from the map) |
+| `hatch`, `pod`, `jumper`, `dart`, `dart_side`, `spark`, `laser`, `seed`, `bluedome`, `cluster`, `mine`, `crab`, `gunpod`, `orb`, `vent`, `coregate` | the enemies and hazards of stages 3–7, where the original map has them (see *Stages 3–7 art*). **Not used by the game yet**: they get their behaviour stage by stage | (`open`, `red`, `blue`, `vertical` – notes from the map) |
+| `meteors` | asteroid storm (icon: `sprites/rock_big.png`): starts when the top of the screen reaches the bottom of the icon (on a horizontal stage: when the right edge reaches its left side) and lasts `time` seconds. Small rocks (`rock_small.png`) and about one big rock (`rock_big.png`) for every five small ones fall from the top of the screen; most small ones come straight down, the rest slant up to 40° to a side; the big ones are slower. They bounce off the scenery (rock, bricks, rubble, eye rocks, domes) and are always pulled back down to their falling speed, so they keep heading for the bottom of the screen. They aren't enemies: no points, shots go through the small ones. Only a guard breaks them (the SHIELD wears down by one per rock; the F.FIELD takes a hit when one reaches the ship); without one, a rock that reaches the ship destroys it. A shot big rock splits into three small ones (straight down and 50° to either side) at 3× the big rock's speed. Tuning: constants in `Meteor.java` | `time` (15) |
 | `eye` | stage 2 eye rock (`sprites/rock_eye.png`, 32×32): the whole rock with its eye, placed where it should be (it is not part of the map art or collision). The eye shoots at the ships like a bamda; the rock is solid (its exact shape). 3 hits destroy the whole rock (300 points); it leaves rubble (`sprites/rubbles.png`) that stays as solid, indestructible terrain until the stage restarts from a checkpoint | – |
+
+**Style**: any object can have the property `style` = `msx` or `remake`; it then only appears in that style
+(title screen). Objects without it appear in both. Stage 1's opening: the remake's waves (objects 119–144) are
+`remake`, the MSX ones (from object 189 on) `msx`.
 
 **Camera** (`camera` layer):
 * `path` – a polyline drawn through the **centre of the screen**. The game scrolls along it, so a diagonal or
   vertical stretch scrolls the screen diagonally or up/down (as in stage 1). It must stay at least half a screen
   (128 px / 84 px) inside the map edges. Its `speeds` property lists a speed multiplier per segment,
-  e.g. `1,0.8,1,0.45,0.8`. Where the path ends, scrolling stops and the boss arrives.
+  e.g. `1,0.8,1,0.45,0.8` (`speedsMsx`: the same for MSX style; stage 1 has `1,1,1,1,1`).
+  Where the path ends, scrolling stops and the boss arrives.
 * `checkpoint` – point objects on (or near) the path: where stage select (S on the title screen) can start a stage.
+* `bossmusic` – one point object on (or near) the path: when the screen gets there, the stage music fades out (`BOSS_MUSIC_FADE` in `GameScreen`), a short silence follows (`BOSS_MUSIC_GAP`) and then the boss music starts and plays on into the boss fight. Every stage has one, about 4 s of scrolling before the boss (stage 1: at the start of the brick maze); drag it in Tiled to change when the music changes. Without it the change happens when the boss arrives.
 
 Tip: in the game, **H** shows the solid cells of the map in red, to check your collision painting.
 
@@ -181,7 +222,7 @@ map). It overwrites `stage2.tmx`, so run it only to start over; after that, edit
 | 4 OPERATION FOUR | Eioneus | `salamander_stage_3_eioneus.png` | up | `05. Starfield.mp3` |
 | 5 OPERATION FIVE | Kierke | `salamander_stage_3_kierke.png` | right | `06. Burn the Wind.mp3` |
 | 6 OPERATION SIX | Op 4 | `salamander_stage_4.png` | up (shaft at x 256–512) | `07. Destroy Them All.mp3` |
-| 7 OPERATION X | Op X | `salamander_stage_x.png` | right | `09. Prophet Fire.mp3` |
+| 7 OPERATION X | Op X | `salamander_stage_x.png` | right | `12. Last Exit.mp3` |
 
 For each stage it writes the art strips (`stageN_t*.png`), the destructible bricks (`stageN_bricks.png`: Lavinia's blue
 spools, X blocks and red gates, Eioneus' bubbles, Op X's pink brick walls), the collision layer, the camera path,
@@ -195,6 +236,10 @@ that, edit them in Tiled.
 Boss HP: `GameScreen.spawnBoss()`; boss attack patterns: `Boss.update()`; enemy behaviour: `Enemy.java`.
 
 ## Swapping the art
+The stage pictures are in `assets/maps/` next to the maps: the art strips `stageN_t*.png` and brick art `stageN_bricks.png`
+(edit them at the same size), `tiles.png` (48×48, the terrain tileset for Tiled in 8×8 pieces: row pair = stage, column
+pair = fill / floor surface / ceiling underside) and `brick_pattern.png` (the repeating brick picture).
+
 Overwrite any PNG in `assets/sprites/` keeping the same frame size (animated sprites are horizontal strips):
 
 | File | Size | Frames |
@@ -203,14 +248,31 @@ Overwrite any PNG in `assets/sprites/` keeping the same frame size (animated spr
 | player_blue_vertical, player_red_vertical | 3 frames side by side | the ship on a vertical stage, pointing up: banking left, level, banking right (equal widths; a dark background is made see-through). A single square frame also works (player_red_vertical has one for now); player_red = player 2 |
 | wall turret red, wall turret green | 32×16 | 2 × 16×16: barrel straight out, barrel diagonally down; facing right (mirrored / flipped for the other directions); red = drops a capsule |
 | dome | 36×32 | 2 × 18×32: closed, open; facing right (mirrored on the right wall). The dome takes its size from the picture |
+| green_flyer | 64×16 | 4 × 16×16, played forward then backward (0 1 2 3 2 1 …): the flyers stage 2's domes send out; drawn as they are (already green) |
 | rock_eye | 32×32 | 1: stage 2's rock with an eye (a dark background is made see-through) |
+| rock_small | 60×15 | 4 × 15×15, looped (the asteroid storm's small rock, tumbling) |
+| rock_big | 30×27 | 1: the asteroid storm's big rock (any size: the hit box follows the picture) |
 | rubbles | 32×32 | 1: what a destroyed eye rock leaves behind; its drawn pixels are solid like terrain |
 | tetran ring | 8×8 | 1 (one ring of Tetran's tentacles) |
 | option | 24×12 | 2 × 12×12 |
 | fan, walker (stage 2) | 32×16 | 2 × 16×16 |
-| bio walker red, bio walker blue (stage 1 walkers) | 80×16 | 5 × 16×16, played forward then backward; no left / right facing; red = drops a capsule |
+| bio walker red, bio walker blue (stage 1 and Kierke walkers) | 80×16 | 5 × 16×16, played forward then backward; no left / right facing; red = drops a capsule |
 | celtic frost | 13×15 | 1 |
-| Legacy | 64×16 | 4 × 16×16, played forward then backward (0 1 2 3 2 1 …); drawn white, painted green (#73ff73) in the game |
+| legacy | 112×16 | 7 × 16×16, white with a black outline: frame 3 = straight on, 0–2 leaning left, 4–6 leaning right. A hovering Legacy shows the frame for its lean and is tinted with the MSX cycle magenta, magenta, blue, magenta, magenta, red (2 frames each); the old fly-by wave plays the frames forward and back, painted green (#73ff73) |
+| possessed_red, possessed_cyan | 16×16 each | 1 frame each, drawn as they are: the red Possessed and the cyan one (`possessed.png` is no longer used) |
+| whiplash | 15×16 | 1 frame, drawn as it is |
+| battleaxe | 16×16 | 1 frame, drawn as it is (Kierke opening rows) |
+| chain_balls | 26×8 | the Kierke chain ball as it grows: 8×8 at x 0, 6×6 at (10, 1), 4×4 at (20, 2), drawn as they are |
+| aberrant | 32×16 | 2 frames of 16×16: alive, withered (blue) |
+| nest | 38×22 | 1 frame, the nest hanging from the ceiling (drawn upside down on the floor) |
+| ug | 48×16 | 3 frames of 16×16, cycled every 0.1 s (the Ugs that fly out of the nests) |
+| gamma | 64×16 | 4 frames of 16×16, shown in the order 0, 2, 3, 1 (as in the recording), 0.2 s each |
+| laser_battery_small, laser_battery_big | 24×16, 32×16 | 1 frame each, drawn as they are; their near-black background box is made see-through |
+| gremlin_yellow, gremlin_red | 48×16 | 3 frames of 16×16: 0 = standing still to aim, 1–2 = walking (cycled); drawn turned a quarter to stand on its wall |
+| eioneus_base | 178×46 | 4 frames of 44×46 (on a 44.5 px pitch): closed, opening, open, destroyed. Not used by the game any more: its destroyed frame is painted into the stage 4 art, and the middles are `eioneus_base_core.png` |
+| eioneus_base_core | 80×21 | the middle of `eioneus_base.png` (x 12–31, y 12–32 of each frame): 4 frames of 20×21, the base enemy |
+| flying_mines, flying_mines_red | 80×16 | 5 frames of 16×16, white / red, on black (the black is see-through): 0–2 taking off, then 3 and 4 by turns (0.1 s) |
+| creeping death | 60×15 | 4 frames of 15×15, white on a see-through background (any black pixels left in it are made see-through too): shown back and forth every 0.2 s, flickering cyan / light green or red / dark green every 0.1 s |
 | missing_link | 112×16 | 7 × 16×16 (barrel roll, looped) |
 | rugal, rugal_red | 48×16 | 3 × 16×16: level, diving (45° or more down), climbing (45° or more up); rugal_red = one that carries a capsule |
 | rusher | 36×12 | 2 × 18×12 |
@@ -226,7 +288,6 @@ Overwrite any PNG in `assets/sprites/` keeping the same frame size (animated spr
 | boss0, boss1, boss2 | any | 1 (the boss's size and hit shape come from the picture; boss1 = Tetran's body) |
 | boss1_core | any | 1: Tetran's core, its only weak spot. The game puts it over the hole cut out of `boss1.png` for it (wherever that hole is), so the body must have the core cut out. Works for any boss: `bossN_core.png` |
 | core_block | 8×2 | 1: one of the 4 blocks under Tetran's core, drawn in the dark space below the red core of `boss1_core.png` (rows 26, 30, 34, 38 from its top, `CORE_BLOCK_ROWS` in `GameScreen`). One disappears for every 20% of health the boss loses, lowest first |
-| tiles | 48×48 | terrain tileset for Tiled (8×8 pieces): row pair = stage, column pair = fill / floor surface / ceiling underside |
 | bg0–bg2 | 480×272 | parallax backdrop, must tile horizontally (the game shows a 256×168 part) |
 | stars | 480×272 | transparent star layer |
 | hud | 128×8 | bottom HUD pieces cut from the original: meter slot, highlighted slot (1P / 2P), ship icons, E icon, yellow box |

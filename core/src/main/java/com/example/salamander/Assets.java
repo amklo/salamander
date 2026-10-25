@@ -27,7 +27,7 @@ public class Assets {
         font = new BitmapFont();
         font.getRegion().getTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         font.setUseIntegerPositions(false);
-        tiles = TextureRegion.split(tex("tiles"), 16, 16);
+        tiles = TextureRegion.split(texFile("maps/tiles.png"), 16, 16);
     }
 
     public Texture tex(String name) {
@@ -40,7 +40,7 @@ public class Assets {
         return t;
     }
 
-    /** Texture by path inside the assets folder (e.g. "sprites/stage1_t0.png"), loaded once. */
+    /** Texture by path inside the assets folder (e.g. "maps/stage1_t0.png"), loaded once. */
     public Texture texFile(String path) {
         Texture t = textures.get(path);
         if (t == null) {
@@ -59,6 +59,24 @@ public class Assets {
             int n = Math.max(1, t.getWidth() / frameW);
             r = new TextureRegion[n];
             for (int i = 0; i < n; i++) r[i] = new TextureRegion(t, i * frameW, 0, frameW, t.getHeight());
+            strips.put(key, r);
+        }
+        return r;
+    }
+
+    /**
+     * A strip with a known number of frames, each ceil(width / count) wide. The last frame is clipped to
+     * the picture, so a strip whose final frame has its empty right-hand columns trimmed still works.
+     */
+    public TextureRegion[] frames(String name, int count) {
+        String key = name + "#" + count;
+        TextureRegion[] r = strips.get(key);
+        if (r == null) {
+            Texture t = tex(name);
+            int fw = (t.getWidth() + count - 1) / count;
+            r = new TextureRegion[count];
+            for (int i = 0; i < count; i++)
+                r[i] = new TextureRegion(t, i * fw, 0, Math.min(fw, t.getWidth() - i * fw), t.getHeight());
             strips.put(key, r);
         }
         return r;

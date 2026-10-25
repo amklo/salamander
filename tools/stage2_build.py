@@ -2,8 +2,8 @@
 
 Run from the project folder:   python3 tools/stage2_build.py
 Needs numpy, scipy and pillow. Reads 'reference material/salamander_stage_2.png' (256 x 4127, scrolls upward) and writes:
-  assets/sprites/stage2_t0..t3.png     orange rock art (image layers, 1032 px tall each)
-  assets/sprites/stage2_bricks.png     the blue bubble rocks (destructible, drawn per 8x8 cell, no regrow)
+  assets/maps/stage2_t0..t3.png        orange rock art (image layers, 1032 px tall each)
+  assets/maps/stage2_bricks.png        the blue bubble rocks (destructible, drawn per 8x8 cell, no regrow)
   assets/sprites/wall turret red.png   wall turrets: frame 0 = sideways, frame 1 = diagonal (pointing down)
   assets/sprites/wall turret green.png    (both face right, mounted on a wall to their left)
   assets/sprites/boss1.png             Tetran's body (64 x 64)
@@ -157,8 +157,8 @@ art_px = (rock | blue) & ~brick_px
 os.makedirs(SPR, exist_ok=True)
 CH = H // 4                                         # 1032
 for i in range(4):
-    rgba(code[i * CH:(i + 1) * CH], art_px[i * CH:(i + 1) * CH]).save(SPR + 'stage2_t%d.png' % i)
-rgba(code, brick_px).save(SPR + 'stage2_bricks.png')
+    rgba(code[i * CH:(i + 1) * CH], art_px[i * CH:(i + 1) * CH]).save(MAPS + 'stage2_t%d.png' % i)
+rgba(code, brick_px).save(MAPS + 'stage2_bricks.png')
 
 # ---------------------------------------------------------------- sprites
 def sheet(frames, keep):
@@ -246,13 +246,17 @@ oid += 1
 for cy in (3080, 2160, 1250):                       # checkpoints (map y of the screen centre)
     lines.append('  <object id="%d" type="checkpoint" x="%d" y="%d" width="16" height="16"/>' % (oid, cx - 8, cy - 8))
     oid += 1
+# asteroid storm (objects.tsx tile 54, "meteors"): starts when the top of the screen reaches the bottom of the icon,
+# where the scenery starts; lasts its "time" property (15 s by default)
+lines.append('  <object id="%d" name="asteroid storm" gid="%d" x="113" y="3600" width="30" height="27"/>' % (oid, OBJ_FIRST + 54))
+oid += 1
 
 
 def csv(cells, gid):
     return '\n' + ',\n'.join(','.join(str(gid) if v else '0' for v in row) for row in cells) + '\n'
 
 
-art = ''.join('  <imagelayer id="%d" name="art %d" offsetx="0" offsety="%d">\n   <image source="../sprites/stage2_t%d.png" width="%d" height="%d"/>\n  </imagelayer>\n'
+art = ''.join('  <imagelayer id="%d" name="art %d" offsetx="0" offsety="%d">\n   <image source="stage2_t%d.png" width="%d" height="%d"/>\n  </imagelayer>\n'
               % (i + 1, i, i * CH, i, W, CH) for i in range(4))
 tmx = '''<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="%d" height="%d" tilewidth="8" tileheight="8" infinite="0" nextlayerid="8" nextobjectid="%d">
@@ -263,7 +267,7 @@ tmx = '''<?xml version="1.0" encoding="UTF-8"?>
   <property name="lane" type="int" value="168"/>
   <property name="music" value="stg2.mid"/>
   <property name="bossMusic" value="boss.mid"/>
-  <property name="brickArt" value="sprites/stage2_bricks.png"/>
+  <property name="brickArt" value="maps/stage2_bricks.png"/>
   <property name="brickRegrow" type="float" value="0"/>
  </properties>
  <tileset firstgid="1" source="collision.tsx"/>

@@ -43,7 +43,7 @@ public class Player {
 
     /** What the power meter's name box shows for a power-up (SPEED shows the level it gives: SPEED#1 .. SPEED#0). */
     public String powerLabel(int power) { return power == SPEED ? "SPEED#" + nextSpeed() : POWER_NAMES[power]; }
-    public boolean missile;          // MISSILE, or 2-WAY on ships whose meter has it (see twoWay())
+    public boolean missile;          // MISSILE, or 2-WAY / HOMING on ships whose meter has it (see twoWay(), homing())
     public int weapon;               // W_NORMAL, W_DOUBLE, W_LASER or W_RIPPLE
     public int doubleDir = 1;        // DOUBLE extra shot direction: 0 = right, then every 45 deg counter-clockwise (1 = up-right)
     public static final int MAX_OPTIONS = 4;
@@ -64,11 +64,11 @@ public class Player {
 
     // ---- ship types: each one orders the power-up meter differently
     /** Power-ups, as stored in {@link #slots}. */
-    public static final int SPEED = 1, MISSILE = 2, DOUBLE = 3, LASER = 4, OPTION = 5, FFIELD = 6, RIPPLE = 7, TWO_WAY = 8, EXTRA = 9, SHIELD = 10;
+    public static final int SPEED = 1, MISSILE = 2, DOUBLE = 3, LASER = 4, OPTION = 5, FFIELD = 6, RIPPLE = 7, TWO_WAY = 8, EXTRA = 9, SHIELD = 10, HOMING = 11;
     /** Number of slots in the power-up meter (the 7th is "!" on every ship). */
     public static final int SLOT_COUNT = 7;
     public static final int MAX_LIVES = 9;
-    public static final String[] POWER_NAMES = {"", "SPEED", "MISSILE", "DOUBLE", "LASER", "OPTION", "F.FIELD", "RIPPLE", "2-WAY", "!", "SHIELD"};
+    public static final String[] POWER_NAMES = {"", "SPEED", "MISSILE", "DOUBLE", "LASER", "OPTION", "F.FIELD", "RIPPLE", "2-WAY", "!", "SHIELD", "HOMING"};
     /** Values of {@link #weapon}. */
     public static final int W_NORMAL = 0, W_DOUBLE = 1, W_LASER = 2, W_RIPPLE = 3;
     public static final int SHIP_TYPES = 4;
@@ -79,7 +79,7 @@ public class Player {
     private static final int[][] TYPE_SLOTS = {
             {SPEED, MISSILE, DOUBLE, LASER, OPTION, FFIELD, EXTRA},   // type 1
             {SPEED, TWO_WAY, DOUBLE, RIPPLE, OPTION, FFIELD, EXTRA},  // type 2
-            {SPEED, MISSILE, DOUBLE, RIPPLE, OPTION, FFIELD, EXTRA},  // type 3
+            {SPEED, HOMING, DOUBLE, RIPPLE, OPTION, FFIELD, EXTRA},   // type 3
             {SPEED, TWO_WAY, DOUBLE, LASER, OPTION, SHIELD, EXTRA},   // type 4
     };
     /** The classic order, for showing which slots a type moved. */
@@ -115,7 +115,10 @@ public class Player {
     }
 
     /** This ship's missiles are 2-WAY (one up, one down) instead of the normal downward missile. */
-    public boolean twoWay() { return slotOf(TWO_WAY) > 0; }
+    public boolean twoWay() { return slotOf(TWO_WAY) > 0 || homing(); }
+
+    /** This ship's missiles are HOMING: fired like 2-WAY, but they chase any enemy on screen and burst on contact. */
+    public boolean homing() { return slotOf(HOMING) > 0; }
 
     /** The power-up the highlighted meter slot gives (0 = none highlighted). */
     public int selectedPower() { return meter == 0 ? 0 : slots[meter - 1]; }
@@ -128,7 +131,9 @@ public class Player {
 
     /** SHIELD: the guard sits right in front of the ship's nose (8x16; 16x8 above the nose on a vertical stage). */
     public static final float SHIELD_W = 8, SHIELD_H = 16;
-    public float shieldX() { return vertical ? x + 8f : x + ART_R + 1f; }
+    // Vertical: the turned art fills only 15 of its 16 columns, so it starts at the ship's left edge (VART_L)
+    // to centre it on the nose (x + 16), not one pixel to the left of it.
+    public float shieldX() { return vertical ? x + VART_L : x + ART_R + 1f; }
     public float shieldY() { return vertical ? y + VART_T + 1f : y; }
     public static float shieldW() { return vertical ? SHIELD_H : SHIELD_W; }
     public static float shieldH() { return vertical ? SHIELD_W : SHIELD_H; }

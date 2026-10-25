@@ -14,6 +14,22 @@ public class Bullet {
     /** Damage of one ripple ring. */
     public static final int RIPPLE_DAMAGE = 3;
     public boolean dead, grounded;
+    /** Enemy shot drawn as a straight laser beam (Gun Ho) instead of the spinning ebullet. */
+    public boolean beam;
+    /**
+     * Omen's laser: flies straight up / down and widens sideways around anchorX (its middle, where the picture's
+     * pattern is anchored). Only its middle (the width it started with) is stopped by rock.
+     */
+    public boolean omenLaser;
+    /**
+     * Laser Guard's laser (GameScreen.steerGuardBeams): the guard that fires it, its direction (Enemy.GUARD_CEIL =
+     * down, GUARD_FLOOR = up, GUARD_WALL = left), and its front / tail along that direction. Rock stops its front.
+     */
+    public Enemy guard;
+    public int beamDir;
+    public float beamFront, beamTail, beamSide;
+    public boolean beamAttached;
+    public float anchorX, startW;
     /** Skip movement on the frame the bullet is created, so it is first drawn where it was fired. */
     public boolean fresh = true;
     /** Ground-crawling missile: FloorCrawler.LEVEL / CLIMBING / DROPPING (drawn tilted 45 degrees). */
@@ -35,6 +51,19 @@ public class Bullet {
      * then bursts it.
      */
     public boolean burst;
+    /**
+     * HOMING missile (ship type 3): launched like 2-WAY's and flies the same diagonal until there is an enemy to go
+     * after; then GameScreen sets {@link #chasing} and the target point (tx, ty) every frame and it flies at it.
+     * It never crawls: it explodes on whatever it touches, terrain (map collision) included.
+     */
+    public boolean homing;
+    /** HOMING missile that has left the 2-WAY path and is flying at a target (it never goes back to crawling). */
+    public boolean chasing;
+    /** HOMING: there is a target this frame, and where its middle is (world pixels). */
+    public boolean hasTarget;
+    public float tx, ty;
+    /** HOMING: what it is chasing (an Enemy, Hazard or Boss), kept until it dies or leaves the screen. */
+    public Object target;
     /** Enemy bullet fired from inside rock (a rock eye): rock doesn't stop it for this many seconds. */
     public float terrainGrace;
     /** Vertical missile: how far it has stepped away from the wall to get past rock in front of it. */
@@ -51,10 +80,26 @@ public class Bullet {
      * for crawling along the floor / ceiling, and for climbing / dropping at steps.
      */
     public static final float MISSILE_SPEED = 100f;
+    /** HOMING missile while chasing: speed in px/s and how fast it can turn (degrees per second). */
+    public static final float HOMING_SPEED = 150f, HOMING_TURN = 360f;
+    /** HOMING missile while chasing: small square hit box (it turns as it goes). */
+    public static final float HOMING_BOX = 4f;
     /** Speed of the normal shot and of DOUBLE's angled shot (px/s). */
     public static final float SHOT_SPEED = 400f;
-    /** Laser: fired short, its front races ahead while its tail lags until it is this long. */
-    public static final float LASER_START_LEN = 8f, LASER_MAX_LEN = 320f, LASER_GROW = 320f;
+    /** Laser: length when fired; its front then races ahead at LASER_SPEED (px/s). */
+    public static final float LASER_START_LEN = 8f, LASER_SPEED = 540f;
+    /**
+     * Laser still fixed to its gun: the tail stays at the muzzle (GameScreen.steerLasers moves it there every frame)
+     * while the front races ahead, so the beam grows out of the ship. Once the front reaches the edge of the screen
+     * GameScreen lets go of it and the whole beam flies on (still following its gun up and down) and off the screen.
+     */
+    public boolean attached;
+    /**
+     * Laser that ran into something it can't go through (rock, a tower column, armour...): its front stays pinned at
+     * the point of impact while its tail keeps flying at LASER_SPEED, so the beam shrinks into that point and is gone.
+     * It no longer follows its gun.
+     */
+    public boolean stuck;
 
     /**
      * Ripple laser: starts as sprites/ripple.png (8x16) and stretches up and down as it travels, up to the full
@@ -67,21 +112,27 @@ public class Bullet {
         if (fresh) { fresh = false; return; }
         t += dt;
         if (kind == Kind.MISSILE) {
-            if (vert) { wallMove(dt, lv); return; }
-            if (up) { if (!grounded) flyUp(dt, lv); else crawlCeiling(dt, lv); }
+            if (burst) return;                    // ran into something: GameScreen blows it up this frame
+            if (homing && hasTarget && !chasing) startChase();
+            if (chasing) { chase(dt, lv); return; }
+            if (vert) wallMove(dt, lv);
+            else if (up) { if (!grounded) flyUp(dt, lv); else crawlCeiling(dt, lv); }
             else if (!grounded) fly(dt, lv);
             else crawl(dt, lv);
+            // HOMING explodes on terrain where a normal missile would just vanish
+            if (homing && dead) { dead = false; burst = true; }
             return;
         }
-        if (kind == Kind.LASER && vert && h < LASER_MAX_LEN) {   // (vertical stage: grows upward)
-            float grow = Math.min(LASER_GROW * dt, LASER_MAX_LEN - h);
-            h += grow;
-            y -= grow;
-        } else if (kind == Kind.LASER && !vert && w < LASER_MAX_LEN) {
-            // the front keeps full speed, the tail moves slower, so the beam stretches out as it travels
-            float grow = Math.min(LASER_GROW * dt, LASER_MAX_LEN - w);
-            w += grow;
-            x -= grow;
+        if (kind == Kind.LASER && stuck) {        // pinned at the impact point: only the tail moves, the beam shrinks
+            if (vert) { float d = Math.min(vy * dt, h); y += d; h -= d; }
+            else { float d = Math.min(vx * dt, w); x += d; w -= d; }
+            if (w <= 0f || h <= 0f) dead = true;
+            return;
+        }
+        if (kind == Kind.LASER && attached) {     // growing out of the gun: only the front moves
+            if (vert) h += vy * dt;               // (vertical stage: grows upward)
+            else w += vx * dt;
+            return;
         }
         vy -= gravity * dt;
         x += vx * dt;
@@ -93,11 +144,12 @@ public class Bullet {
         x += vx * dt;
         y += vy * dt;
         float ft = lv.floorTop(x + w / 2, y + 1f);
+        if (homing && (y <= ft || lv.hitsMap(x, y, w, h))) { burst = true; return; }   // HOMING: explodes on impact
         if (y <= ft) {            // landed: from now on crawl along the terrain
             if (ft - y > 8f) { dead = true; return; }   // flew into a wall, not onto a floor
             grounded = true;
             y = ft;
-        } else if (lv.hits(x, y, w, h)) {
+        } else if (lv.hitsMap(x, y, w, h)) {
             dead = true;
         }
     }
@@ -107,11 +159,12 @@ public class Bullet {
         x += vx * dt;
         y += vy * dt;
         float cb = lv.ceilBottom(x + w / 2, y + h - 1f);
+        if (homing && (y + h >= cb || lv.hitsMap(x, y, w, h))) { burst = true; return; }   // HOMING: explodes on impact
         if (y + h >= cb) {        // reached the ceiling: from now on crawl along it
             if (y + h - cb > 8f) { dead = true; return; }   // flew into a wall, not up to a ceiling
             grounded = true;
             y = cb - h;
-        } else if (lv.hits(x, y, w, h)) {
+        } else if (lv.hitsMap(x, y, w, h)) {
             dead = true;
         }
     }
@@ -135,21 +188,61 @@ public class Bullet {
             if (!grounded) {
                 x += dir * d;
                 if (x < 0f || x + w > lv.worldW) { y += d; vx = dir; vy = 1f; continue; }   // flying out past the side
-                if (lv.hits(x, y, w, h)) { x -= dir * d; grounded = true; sideStep = 0f; }   // reached a wall
+                if (lv.hitsMap(x, y, w, h)) {                      // reached a wall
+                    x -= dir * d;
+                    if (homing) { burst = true; return; }          // HOMING: explodes on impact, doesn't climb
+                    grounded = true; sideStep = 0f;
+                }
                 y += d;
-                if (lv.hits(x, y, w, h)) { y -= d; burst = true; return; }                 // flew into rock
+                if (lv.hitsMap(x, y, w, h)) { y -= d; burst = true; return; }                 // flew into rock
                 vx = grounded ? 0f : dir; vy = 1f;
-            } else if (!lv.hits(x, y + st, w, h)) {                // crawl up along the wall
+            } else if (!lv.hitsMap(x, y + st, w, h)) {                // crawl up along the wall
                 y += st;
                 sideStep = 0f;
                 vx = 0f; vy = 1f;
-                if (!lv.hits(x + dir, y, w, h)) grounded = false;  // the wall ends: around the corner
+                if (!lv.hitsMap(x + dir, y, w, h)) grounded = false;  // the wall ends: around the corner
             } else {                                               // rock in front: step away from the wall
                 x -= dir * st;
                 sideStep += st;
                 vx = -dir; vy = 0f;
-                if (sideStep > 48f || lv.hits(x, y, w, h)) { x += dir * st; burst = true; return; }
+                if (sideStep > 48f || lv.hitsMap(x, y, w, h)) { x += dir * st; burst = true; return; }
             }
+        }
+    }
+
+    /** HOMING: leaves the floor / ceiling / wall and switches to a small square hit box, centred where it was. */
+    private void startChase() {
+        chasing = true;
+        grounded = false;
+        climb = FloorCrawler.LEVEL;
+        float cx = x + w / 2f, cy = y + h / 2f;
+        w = h = HOMING_BOX;
+        x = cx - w / 2f; y = cy - h / 2f;
+        if (vx == 0f && vy == 0f) vx = 1f;
+    }
+
+    /**
+     * HOMING: turns toward the target (at most HOMING_TURN degrees per second) and flies at HOMING_SPEED. Without a
+     * target (it was destroyed) it keeps going straight. Any rock it touches makes it burst.
+     */
+    private void chase(float dt, Level lv) {
+        float ang = (float) Math.atan2(vy, vx);
+        if (hasTarget) {
+            float want = (float) Math.atan2(ty - (y + h / 2f), tx - (x + w / 2f));
+            float diff = want - ang;
+            while (diff > Math.PI) diff -= 2f * (float) Math.PI;
+            while (diff < -Math.PI) diff += 2f * (float) Math.PI;
+            float maxTurn = HOMING_TURN * (float) Math.PI / 180f * dt;
+            ang += Math.max(-maxTurn, Math.min(maxTurn, diff));
+        }
+        vx = (float) Math.cos(ang) * HOMING_SPEED;
+        vy = (float) Math.sin(ang) * HOMING_SPEED;
+        float dist = HOMING_SPEED * dt;
+        int n = Math.max(1, (int) Math.ceil(dist / 2f));   // small steps: never skips through thin rock
+        for (int k = 0; k < n; k++) {
+            x += vx * dt / n;
+            y += vy * dt / n;
+            if (lv.hitsMap(x, y, w, h)) { burst = true; return; }
         }
     }
 

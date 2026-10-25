@@ -33,6 +33,8 @@ public class TitleScreen extends ScreenAdapter {
     private float t;
     // S: stage select (debug). Row 0 = stage (OFF, 1..3), row 1 = checkpoint.
     private boolean selectOpen;
+    // attract screen: up / down picks the setting (0 = difficulty, 1 = style), left / right changes it
+    private int attractRow;
     private int selectRow;
     private static int[] checkpointCount;          // per stage, read from the maps the first time S is pressed
 
@@ -82,10 +84,15 @@ public class TitleScreen extends ScreenAdapter {
         }
         if (selectOpen) updateSelect();             // the menu takes the controls while it is open
         else {
-        if (stage[0] == OUT && stage[1] == OUT) {    // attract screen: left / right picks the difficulty
+        if (stage[0] == OUT && stage[1] == OUT) {    // attract screen: up / down picks difficulty or style, left / right changes it
             for (int i = 0; i < Controls.PLAYERS; i++) {
+                if ((Controls.pressed(i, Action.UP) || Controls.pressed(i, Action.DOWN)) && !Gdx.input.isKeyJustPressed(Keys.S)) {
+                    attractRow = 1 - attractRow;
+                    game.assets.play("hit", 0.2f);
+                }
                 if (Controls.pressed(i, Action.LEFT) || Controls.pressed(i, Action.RIGHT)) {
-                    game.setEasy(!game.easy);
+                    if (attractRow == 0) game.setEasy(!game.easy);
+                    else game.setOriginal(!game.original);
                     game.assets.play("hit", 0.2f);
                 }
             }
@@ -138,14 +145,18 @@ public class TitleScreen extends ScreenAdapter {
         } else if (stage[0] == OUT && stage[1] == OUT) {
             // ---- attract: logo, join prompts, hi-score
             game.batch.draw(logo, (W - logo.getWidth()) / 2, H - 4 - logo.getHeight());
-            text("<  " + difficultyName() + "  >", 0, 68, W, Align.center, PixelFont.NORMAL, game.easy ? Color.GREEN : WHITE);
+            String dif = difficultyName(), sty = styleName();
+            text(attractRow == 0 ? "< " + dif + " >" : dif, 0, 68, W / 2f, Align.center, PixelFont.NORMAL,
+                    attractRow == 0 && blink ? Color.YELLOW : game.easy ? Color.GREEN : WHITE);
+            text(attractRow == 1 ? "< " + sty + " >" : sty, W / 2f, 68, W / 2f, Align.center, PixelFont.NORMAL,
+                    attractRow == 1 && blink ? Color.YELLOW : game.original ? Color.CYAN : WHITE);
             joinPrompt(0, 8, 54, Color.CYAN, blink);
             joinPrompt(1, W / 2 + 4, 54, P2_TINT, blink);
             text("HI-SCORE  " + String.format("%06d", game.hiScore), 0, 42, W, Align.center, PixelFont.NORMAL, WHITE);
         } else {
             // ---- ship select: one column per player
             text("SELECT YOUR SHIP", 0, 174, W, Align.center, PixelFont.BOLD, WHITE);
-            text(difficultyName(), 0, 165, W, Align.center, PixelFont.SMALL, game.easy ? Color.GREEN : DIM);
+            text(difficultyName() + "   " + styleName(), 0, 165, W, Align.center, PixelFont.SMALL, game.easy ? Color.GREEN : DIM);
             drawColumn(0, 4, Color.CYAN, blink);
             drawColumn(1, W / 2 + 4, P2_TINT, blink);
             if (stage[0] == READY || stage[1] == READY) {
@@ -263,6 +274,8 @@ public class TitleScreen extends ScreenAdapter {
     }
 
     private String difficultyName() { return game.easy ? "EASY" : "NORMAL"; }
+
+    private String styleName() { return game.original ? "MSX" : "REMAKE"; }
 
     private boolean anyChoosing() {
         for (int s : stage) if (s == CHOOSING || s == GUARD) return true;
