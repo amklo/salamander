@@ -27,11 +27,11 @@ BOSS_LOOP_END = 67.036
 TILES = {
     'fan': (0, 16, 16), 'rusher': (1, 18, 12), 'frost': (25, 13, 15), 'rugal': (27, 16, 16), 'legacy': (32, 16, 16),
     'rugal_red': (33, 16, 16), 'link': (26, 16, 16),
-    'dome': 30, 'wallturret_green': 28, 'wallturret_red': 29, 'eye': 31,
+    'dome_type1': 30, 'wallturret_green': 28, 'wallturret_red': 29, 'eye': 31,
     # new for stages 3-7 (the game does not use them yet: their behaviour comes stage by stage)
-    'boss': 34, 'omen': 35, 'floordome': 36, 'gunho': 37, 'laserguard': 38, 'laserguard_wall': 39, 'spark': 40, 'laser': 41,
-    'spider': 42, 'nest': 43, 'chain': 44, 'seed': 45, 'bluedome': 46, 'cluster': 47, 'mine': 48, 'crab': 49,
-    'gunpod': 50, 'orb': 51, 'vent': 52, 'coregate': 53,
+    'boss': 34, 'omen': 35, 'dome_type2': 36, 'gunho': 37, 'laserguard': 38, 'laserguard_wall': 39, 'spark': 40, 'laser': 41,
+    'aberrant': 42, 'nest': 43, 'chain': 44, 'seed': 45, 'dome_type3': 46, 'cluster': 47, 'mine': 48, 'moai': 49,
+    'gunpod': 50, 'orb': 51, 'vent': 52, 'coregate': 53, 'dome_type4': 64,
 }
 
 ALL_FLIPS = ((False, False), (True, False), (False, True), (True, True))
@@ -72,11 +72,11 @@ def stage3():
     s.objects.append(dict(kind='boss', x=bx, y=by, w=bw, h=bh, fh=False, fv=False, props={}))
     # enemies
     s.templates('omen', (1248, 128, 32, 16), VFLIP, sprite='Omen')             # Omen (orange-topped turret)
-    s.templates('floordome', (1440, 128, 32, 16), VFLIP, sprite='pod')          # closed blue dome (the game draws stage 2's dome.png turned)
-    s.templates('floordome', (1728, 128, 32, 16), VFLIP, sprite='pod_open', props={'open': True})   # open blue dome
+    s.templates('dome_type2', (1440, 128, 32, 16), VFLIP)          # closed blue dome (the game draws stage 2's dome.png turned)
+    s.templates('dome_type2', (1728, 128, 32, 16), VFLIP, props={'open': True})   # open blue dome
     s.templates('gunho', (1463, 71, 26, 34), HFLIP, share=0.8, sprite='Gun Ho', keep_mask=None)   # Gun Ho
     s.templates('laserguard', (4724, 216, 22, 19), VFLIP, share=0.8, sprite='Laser Guard')        # Laser Guard (ceiling / floor)
-    s.templates('laserguard_wall', (4832, 298, 22, 18), HFLIP, share=0.8, sprite='dart_side')   # Laser Guard (right-hand wall)
+    s.templates('laserguard_wall', (4832, 298, 22, 18), HFLIP, share=0.8)   # Laser Guard (right-hand wall)
     s.templates('spark', (2304, 32, 16, 16), ALL_FLIPS, share=0.8, sprite='spark')
     # destructible: the blue spools, the blue X blocks and the red gates in the lower corridor
     s.templates(None, (2088, 32, 32, 16), HFLIP, brick=True)
@@ -174,8 +174,8 @@ def stage4():
     s.templates('seed', (88, 1046, 40, 42), sprite='seed_open', props={'open': True}, match=[c(216, 216, 32), c(216, 216, 144)], share=0.9)
     s.templates('seed', (46, 380, 44, 48), sprite='seed')
     s.templates('mine', (208, 1406, 16, 18), sprite='mine', share=0.8)
-    s.templates('bluedome', (31, 3237, 18, 38), HFLIP, sprite='bluedome_open', share=0.8, props={'open': True})
-    s.templates('bluedome', (15, 1413, 14, 38), HFLIP, sprite='bluedome', share=0.8)
+    s.templates('dome_type3', (31, 3237, 18, 38), HFLIP, share=0.8, props={'open': True})
+    s.templates('dome_type3', (15, 1413, 14, 38), HFLIP, share=0.8)   # (drawn with stage 2's dome.png)
     s.remove_stars()
     s.brickpx |= np.isin(s.code, BLUE) & ~s.cleared
     s.mark_decor(12)
@@ -196,7 +196,7 @@ def stage5():
     balls. The boss is the machine wall at the end."""
     s = Stage(REF + 'salamander_stage_3_kierke.png')
     GREEN = [c(32, 216, 32), c(32, 144, 32), c(104, 247, 104)]
-    SPIDER = GREEN + [c(216, 216, 32), c(216, 216, 144)]
+    ABERRANT = GREEN + [c(216, 216, 32), c(216, 216, 144)]
     s.remove_box((76, 56, 26, 20))                                  # the player's ship
     bx, by, bw, bh = s.take_boss('boss4', 3740, 84, dil=3)
     s.objects.append(dict(kind='boss', x=bx, y=by, w=bw, h=bh, fh=False, fv=False, props={'fixed': True}))
@@ -204,7 +204,7 @@ def stage5():
     s.templates('nest', (1554, 6, 38, 22), VFLIP, share=0.8, match=GREEN + [c(247, 247, 247)],
                 keep_mask=np.isin(t, GREEN + [c(247, 247, 247)]), sprite='nest')
     t = s.cut((1378, 37, 22, 22))
-    s.templates('spider', (1378, 37, 22, 22), ALL_FLIPS, share=0.75, match=SPIDER, keep_mask=np.isin(t, SPIDER), sprite='spider')
+    s.templates('aberrant', (1378, 37, 22, 22), ALL_FLIPS, share=0.75, match=ABERRANT, keep_mask=np.isin(t, ABERRANT))   # (game art: sprites/aberrant.png)
     # chains of green balls: whatever green is left in the open
     ball = np.isin(s.code, GREEN + [c(216, 216, 144)]) & ~s.cleared
     lab, n = ndimage.label(ndimage.binary_dilation(ball, np.ones((3, 3))), np.ones((3, 3)))
@@ -234,7 +234,7 @@ def stage5():
 # =====================================================================================================================
 def stage6():
     """Op 4 (Crush Salamander): vertical. Rock with blue clusters, then a shaft of blue pipes (x 256-512) with mines,
-    gun ports, beam barriers and red crabs. A side room opens to the left (x 0-256). The boss: four gun units with
+    gun ports, beam barriers and red moai heads. A side room opens to the left (x 0-256). The boss: four gun units with
     coloured eyes and the sphere below them."""
     s = Stage(REF + 'salamander_stage_4.png')
     RED = [c(247, 32, 32), c(176, 32, 32), c(247, 104, 104)]
@@ -247,11 +247,11 @@ def stage6():
             b = s.thin_beam(x0, x1, y, y + 8, RED + BLUE)
             bx, by, bw, bh = b or (x0, y + 2, x1 - x0, 3)
             s.objects.append(dict(kind='laser', x=bx, y=by, w=bw, h=bh, fh=False, fv=False, props={}))
-    s.templates('crab', (311, 799, 50, 36), HFLIP, share=0.75, sprite='crab', clear_box=True)
+    s.templates('moai', (311, 799, 50, 36), HFLIP, share=0.75, sprite='moai', clear_box=True)
     s.templates('cluster', (312, 3960, 32, 31), ALL_FLIPS, share=0.8, sprite='cluster', clear_box=True)
     s.templates('mine', (336, 2593, 24, 24), share=0.85, sprite='mine6')
     s.templates('mine', (417, 3073, 22, 22), share=0.85, sprite='mine6_open', props={'open': True})
-    s.templates('bluedome', (272, 4096, 16, 32), HFLIP, share=0.85, sprite='bluedome6')
+    s.templates('dome_type4', (272, 4096, 16, 32), HFLIP, share=0.85)   # (drawn with stage 2's dome.png)
     s.remove_stars()
     path = vertical_path(s, 84, x=384)
     cps = [(384, 3600), (384, 2800), (384, 2000), (384, 1100)]
@@ -291,13 +291,15 @@ def stage7():
 STAGES = {3: stage3, 4: stage4, 5: stage5, 6: stage6, 7: stage7}
 
 # objects.tsx tiles for the new kinds: (kind, picture relative to assets/maps)
-NEW_TILES = [('boss', 'icons/boss.png'), ('omen', '../sprites/Omen.png'), ('floordome', 'icons/floordome.png'),
-             ('gunho', '../sprites/Gun Ho.png'), ('laserguard', '../sprites/Laser Guard.png'), ('laserguard_wall', 'icons/laserguard_wall.png'),
-             ('spark', '../sprites/spark.png'), ('laser', 'icons/laser.png'), ('spider', '../sprites/spider.png'),
-             ('nest', '../sprites/nest.png'), ('chain', '../sprites/ball.png'), ('seed', '../sprites/seed.png'),
-             ('bluedome', '../sprites/bluedome.png'), ('cluster', '../sprites/cluster.png'), ('mine', '../sprites/mine.png'),
-             ('crab', '../sprites/crab.png'), ('gunpod', '../sprites/gunpod.png'), ('orb', '../sprites/orb.png'),
-             ('vent', '../sprites/vent_red.png'), ('coregate', '../sprites/coregate.png')]
+NEW_TILES = [('boss', 'icons/boss.png'), ('omen', '../sprites/Omen.png'), ('dome_type2', 'icons/dome_type2.png'),
+             ('gunho', '../sprites/Gun Ho.png'), ('laserguard', '../sprites/Laser Guard.png'),
+             ('laserguard_wall', 'icons/laserguard_wall.png'), ('spark', '../sprites/spark.png'),
+             ('laser', 'icons/laser.png'), ('aberrant', 'icons/aberrant.png'), ('nest', '../sprites/nest.png'),
+             ('chain', '../sprites/ball.png'), ('seed', 'icons/eioneus_base.png'), ('dome_type3', 'icons/dome.png'),
+             ('dome_type4', 'icons/dome.png'), ('cluster', '../sprites/cluster.png'),
+             ('mine', '../sprites/mine.png'), ('moai', '../sprites/moai.png'), ('gunpod', '../sprites/gunpod.png'),
+             ('orb', '../sprites/orb.png'), ('vent', '../sprites/vent_red.png'),
+             ('coregate', '../sprites/coregate.png')]
 
 
 def update_tileset():
@@ -314,13 +316,18 @@ def update_tileset():
     ImageDraw.Draw(im).rectangle([0, 1, 15, 2], fill=(247, 32, 32, 255))
     im.save(icons + 'laser.png')
     t = open(MAPS + 'objects.tsx').read()
-    t = re.sub(r' <tile id="(3[4-9]|[4-9]\d)" .*?</tile>\n', '', t, flags=re.S)       # (the old copies of the new tiles)
     add = ''
-    for kind, pic in NEW_TILES:
+    for kind, pic in NEW_TILES:                     # refresh the class and picture; keeps tile properties and tiles 54+
         w, h = Image.open(MAPS + pic).size
-        add += ' <tile id="%d" class="%s">\n  <image source="%s" width="%d" height="%d"/>\n </tile>\n' % (TILES[kind], kind, pic, w, h)
+        img = '<image source="%s" width="%d" height="%d"/>' % (pic, w, h)
+        m = re.search(r' <tile id="%d" [^>]*>.*?</tile>\n' % TILES[kind], t, flags=re.S)
+        if m:
+            tile = re.sub(r'class="[^"]*"', 'class="%s"' % kind, m.group(0), count=1)
+            t = t[:m.start()] + re.sub(r'<image [^>]*/>', img, tile) + t[m.end():]
+        else:
+            add += ' <tile id="%d" class="%s">\n  %s\n </tile>\n' % (TILES[kind], kind, img)
     t = t.replace('</tileset>', add + '</tileset>')
-    t = re.sub(r'tilecount="\d+"', 'tilecount="%d"' % (34 + len(NEW_TILES)), t)
+    t = re.sub(r'tilecount="\d+"', 'tilecount="%d"' % len(re.findall(r'<tile id=', t)), t)
     open(MAPS + 'objects.tsx', 'w').write(t)
 
 

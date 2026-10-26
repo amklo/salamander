@@ -13,7 +13,7 @@ import java.util.function.Function;
 public class Level {
     public static class Spawn {
         public float x, y, phase;
-        /** Nests: what comes out ("ug" or "bug"). */
+        /** Nests: what comes out ("ug", "creeping death", "mines" or "none"). */
         public String what = "";
         public Enemy.Type type;
         public int group, groupSize;
@@ -50,6 +50,9 @@ public class Level {
         public String colours = "";
         /** Whiplash: comes up from the bottom edge (left edge on a horizontal stage) instead of the top (right). */
         public boolean fromBottom;
+        /** Op 4 moai heads: stay at their wall (don't step out). Op 4 domes: flyers per burst. */
+        public boolean still;
+        public int count;
         /**
          * Spawns when the camera's right edge reaches this x (spawns are sorted by it). Vertical stages: when the
          * camera's top edge reaches this y.
@@ -73,6 +76,11 @@ public class Level {
 
     public final int index;
     public String name = "", music, bossMusic = "boss.mid", background;
+    /**
+     * Where no stars are drawn, plain black instead (map property "noStars"): a world range along the scrolling, x on a
+     * horizontal stage, y on a vertical one (noStarsLo < noStarsHi). NaN = stars everywhere.
+     */
+    public float noStarsLo = Float.NaN, noStarsHi = Float.NaN;
     /**
      * Map property "bossMusicAt": the boss music already starts when the middle of the screen reaches this x (stage 1:
      * the brick maze). -1 = only when the boss comes.
@@ -167,7 +175,7 @@ public class Level {
     public final ArrayList<Bamda> bamdas = new ArrayList<>();
     public final ArrayList<Tooth> teeth = new ArrayList<>();
     public final ArrayList<float[]> rocks = new ArrayList<>();       // {left x, bottom y}
-    public final ArrayList<float[]> volcanoes = new ArrayList<>();   // {centre x, floor y}
+    public final ArrayList<float[]> volcanoes = new ArrayList<>();   // {centre x, floor y, 0}; side volcano: {centre x, centre y, -1 / +1}
     public final ArrayList<Crusher> crushers = new ArrayList<>();
     /** Stage 1 claw arms: bottom-left of the resting picture (64x40), hanging from the ceiling or standing on the floor. */
     public static class Arm { public float x, y; public boolean ceiling; }
@@ -180,7 +188,7 @@ public class Level {
     public final ArrayList<Tower> towers = new ArrayList<>();
     /** Stage 2 domes on the side walls (bottom-left of the picture, 18x32; right = on the right wall, facing left). */
     /** A dome: bottom-left corner of its object; on the right wall; stage 3: on the floor / ceiling (top = the object's top edge). */
-    /** gunHos: MSX style, a floor hatch that lets out this many Gun Hos instead of spitting amoebas (Lavinia). */
+    /** gunHos: a floor hatch (both styles) that lets out this many Gun Hos instead of spitting amoebas (Lavinia). */
     public static class Dome { public float x, y, top; public boolean right, floor, ceiling; public int gunHos; }
     public final ArrayList<Dome> domes = new ArrayList<>();
     /** Stage 2 eye rocks: bottom-left of the 32x32 rock with the eye. */
@@ -238,6 +246,15 @@ public class Level {
         l.bossMusicLoopEnd = Float.parseFloat(m.props.getOrDefault("bossMusicLoopEnd", "-1"));
         l.background = m.props.get("background");
         l.vertical = Boolean.parseBoolean(m.props.getOrDefault("vertical", "false"));
+        // map property "noStars" ("a,b" in Tiled coordinates along the scrolling: x on a horizontal stage, y on a
+        // vertical one): plain black between a and b, where the terrain covers the sky. Just "a": from a to the end.
+        if (m.props.containsKey("noStars")) {
+            String[] ns = m.props.get("noStars").split(",");
+            float a = Float.parseFloat(ns[0].trim());
+            float b = ns.length > 1 ? Float.parseFloat(ns[1].trim()) : (l.vertical ? 0f : Float.MAX_VALUE);
+            if (l.vertical) { a = l.worldH - a; b = l.worldH - b; }   // (Tiled y runs down)
+            l.noStarsLo = Math.min(a, b); l.noStarsHi = Math.max(a, b);
+        }
         l.brickArt = m.props.get("brickArt");
         l.brickRegrowTime = Float.parseFloat(m.props.getOrDefault("brickRegrow", String.valueOf(BRICK_REGROW_TIME)));
 
@@ -339,7 +356,52 @@ public class Level {
                         s.gap = H + 40f;                         // (vertical stage: when its place reaches the bottom edge)
                         break;
                     }
-                    case "bluedome": {                           // Eioneus wall dome: lets green flyers out
+                    case "exodus": {                             // Op 4: a row of (3) that comes in at the top edge
+                        // the object is the first (left) one, at the height where it comes in; the others follow
+                        // to its right, "gap" px apart; "colours" = c / r per member (r = red, leaves a capsule)
+                        int n = Math.max(1, Math.min(8, p.prop("count", 3)));
+                        float gap = p.prop("gap", Enemy.EXODUS_GAP);
+                        String cols = p.prop("colours", p.prop("colors", ""));
+                        for (int i = 0; i < n; i++) {
+                            boolean red = cols.length() > i && Character.toLowerCase(cols.charAt(i)) == 'r';
+                            Spawn s = spawn(Enemy.Type.EXODUS, left + i * gap, bottom + h / 2f, group++, 1, red || p.prop("drop", false));
+                            s.red = red;
+                        }
+                        break;
+                    }
+                    case "artillery": {                          // Op 4 wall gun: flip it (X) for the right wall
+                        Spawn s = spawn(Enemy.Type.ARTILLERY, left, bottom, group++, 1, p.prop("red", false) || p.prop("drop", false));
+                        s.right = flippedH || p.prop("right", false);
+                        s.red = p.prop("red", false);
+                        break;
+                    }
+                    case "cluster":                              // Op 4 blue rock clump: sinks slowly
+                        spawn(Enemy.Type.CLUSTER, left, bottom, group++, 1, p.prop("drop", false));
+                        break;
+                    case "moai": {                               // Op 4 moai on the left wall; flip it (X) for the right wall
+                        Spawn s = spawn(Enemy.Type.MOAI, left, bottom, group++, 1, p.prop("drop", false));
+                        s.right = flippedH || p.prop("right", false);
+                        s.still = !p.prop("walk", true);
+                        break;
+                    }
+                    case "orb6": {                               // Op 4 bouncing ball: comes in at the top edge at its x
+                        spawn(Enemy.Type.ORB, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
+                        break;
+                    }
+                    case "base6": {                              // Op 4 base: lets one burst of mines out
+                        Spawn s = spawn(Enemy.Type.SEED, left, bottom, group++, 1, p.prop("drop", false));
+                        s.what = "op4";
+                        break;
+                    }
+                    case "dome_type4": {                         // Op 4 wall dome: flip it (X) for the right wall
+                        Spawn s = spawn(Enemy.Type.BLUE_DOME, left, bottom, group++, 1, p.prop("drop", false));
+                        s.right = flippedH || p.prop("right", false);
+                        s.what = "op4";
+                        s.count = p.prop("burst", Enemy.BLUE_DOME_BURST);
+                        if (originalStyle) s.count = p.prop("burstMsx", s.count);
+                        break;
+                    }
+                    case "dome_type3": {                         // Eioneus wall dome: lets green flyers out
                         Spawn s = spawn(Enemy.Type.BLUE_DOME, left, bottom, group++, 1, p.prop("drop", false));
                         s.right = flippedH || p.prop("right", false);   // flipped in Tiled: on the right wall
                         break;
@@ -349,7 +411,7 @@ public class Level {
                         s.ceiling = p.prop("ceiling", false);
                         break;
                     }
-                    case "aberrant": case "spider": {          // Kierke plant: stays put; the root of a chain
+                    case "aberrant": {                         // Kierke plant: stays put; the root of a chain
                         spawn(Enemy.Type.ABERRANT, left, bottom, group++, 1, p.prop("drop", false));
                         break;
                     }
@@ -420,12 +482,19 @@ public class Level {
                     case "rugal":                                // Rugal: enters at the right edge, at this height
                         spawn(Enemy.Type.RUGAL, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
                         break;
+                    case "block_small": case "lavinia_block_small":   // Lavinia: slides up and down between ceiling and floor
+                    case "block_big": case "lavinia_block_big": {      // Lavinia: slides left through its slot
+                        boolean big = type.endsWith("big");
+                        spawn(big ? Enemy.Type.BLOCK_BIG : Enemy.Type.BLOCK_SMALL, left, bottom, group++, 1, p.prop("drop", false));
+                        break;
+                    }
+                    case "heathen":                              // Lavinia: a pillar that rushes in at the right edge (its picture is random)
+                        spawn(Enemy.Type.HEATHEN, left, bottom, group++, 1, false);
+                        break;
                     case "gunho": case "gun ho": case "gun_ho":
-                    case "jumper":                               // Gun Ho ("jumper" = its old name): stands where it is placed
                         spawn(Enemy.Type.GUN_HO, left, bottom, group++, 1, p.prop("drop", false));
                         break;
-                    case "omen":
-                    case "hatch": {                              // Omen ("hatch" = its old name): flip it (Y) for the ceiling
+                    case "omen": {                               // Omen: flip it (Y) for the ceiling
                         Spawn s = spawn(Enemy.Type.OMEN, left, top, group++, 1, p.prop("drop", false));   // y: its top edge
                         s.ceiling = flippedV || p.prop("ceiling", false);
                         break;
@@ -478,19 +547,18 @@ public class Level {
                         s.diagUp = flippedV;
                         break;
                     }
-                    case "dome": {                               // stage 2 dome on a side wall: flip it (X) for the right wall
+                    case "dome_type1": {                         // stage 2 dome on a side wall: flip it (X) for the right wall
                         Dome d = new Dome();
                         d.x = left; d.y = bottom; d.right = flippedH || p.prop("right", false);
                         domes.add(d);
                         break;
                     }
-                    case "floordome":
-                    case "pod": {                                // stage 3: the same dome on the floor; flip it (Y) for the ceiling
+                    case "dome_type2": {                         // stage 3: the same dome on the floor; flip it (Y) for the ceiling
                         Dome d = new Dome();
                         d.x = left; d.y = bottom; d.top = top;
                         d.ceiling = flippedV || p.prop("ceiling", false);
                         d.floor = !d.ceiling;
-                        if (originalStyle) d.gunHos = p.prop("gunhosMsx", 0);   // MSX: a Gun Ho hatch
+                        d.gunHos = p.prop("gunhos", 0);                      // a Gun Ho hatch (both styles)
                         domes.add(d);
                         break;
                     }
@@ -498,7 +566,7 @@ public class Level {
                     case "meteors": case "asteroids": case "storm":   // asteroid storm: rocks rain down for "time" seconds
                         storms.add(new float[]{vertical ? bottom : left, p.prop("time", 15f)});
                         break;
-                    case "bamda": case "asteroid": {           // ("asteroid" = its old name)
+                    case "bamda": {
                         Bamda a = new Bamda();
                         a.x = left; a.y = bottom; a.w = w; a.h = h;
                         a.image = tile != null && tile.image != null ? tile.image : "sprites/bamda.png";
@@ -522,7 +590,12 @@ public class Level {
                         break;
                     }
                     case "rock": rocks.add(new float[]{left, bottom}); break;
-                    case "volcano": volcanoes.add(new float[]{left + w / 2f, bottom}); break;
+                    case "volcano": {                            // spits = up (lava, on the floor), left / right (red rocks, Eioneus)
+                        String sp = p.prop("spits", "up");
+                        int dir = sp.equalsIgnoreCase("left") ? -1 : sp.equalsIgnoreCase("right") ? 1 : 0;
+                        volcanoes.add(dir == 0 ? new float[]{left + w / 2f, bottom, 0f} : new float[]{left + w / 2f, bottom + h / 2f, dir});
+                        break;
+                    }
                     case "tower": {                              // the object marks the fully grown tower
                         Tower tw = new Tower();
                         tw.x = left; tw.y = bottom; tw.w = w; tw.h = h;
@@ -586,14 +659,12 @@ public class Level {
                         if (!dw.image.isEmpty()) dematWalls.add(dw);
                         break;
                     }
-                    case "laserguard":
-                    case "dart": {                               // Laser Guard ("dart" = its old name): on the ceiling; flip it (Y) for the floor
+                    case "laserguard": {                         // Laser Guard: on the ceiling; flip it (Y) for the floor
                         Spawn s = spawn(Enemy.Type.LASER_GUARD, left, flippedV ? bottom : top, group++, 1, false);   // y: the wall line
                         s.guardSide = flippedV || p.prop("floor", false) ? Enemy.GUARD_FLOOR : Enemy.GUARD_CEIL;
                         break;
                     }
-                    case "laserguard_wall":
-                    case "dart_side": {                          // Laser Guard on a right-hand wall (faces left)
+                    case "laserguard_wall": {                    // Laser Guard on a right-hand wall (faces left)
                         Spawn s = spawn(Enemy.Type.LASER_GUARD, left + w, bottom, group++, 1, false);   // x: the wall line
                         s.guardSide = Enemy.GUARD_WALL;
                         break;

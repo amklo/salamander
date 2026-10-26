@@ -3,7 +3,8 @@ package com.example.salamander;
 import com.badlogic.gdx.math.MathUtils;
 
 public class Enemy {
-    public enum Type { WALKER, TURRET_FLOOR, TURRET_CEIL, FROST, LINK, AMOEBA, RUGAL, TURRET_WALL, LEGACY, GUN_HO, OMEN, LASER_GUARD, DOME_FLYER, POSSESSED, WHIPLASH, BATTLEAXE, CHAIN, ABERRANT, NEST, CREEPING_DEATH, UG, GAMMA, BLUE_DOME, GREEN_FLYER, LASER_BATTERY, GREMLIN, SEED, FLYING_MINE }
+    public enum Type { WALKER, TURRET_FLOOR, TURRET_CEIL, FROST, LINK, AMOEBA, RUGAL, TURRET_WALL, LEGACY, GUN_HO, OMEN, LASER_GUARD, DOME_FLYER, POSSESSED, WHIPLASH, BATTLEAXE, CHAIN, ABERRANT, NEST, CREEPING_DEATH, UG, GAMMA, BLUE_DOME, GREEN_FLYER, LASER_BATTERY, GREMLIN, SEED, FLYING_MINE,
+        EXODUS, ARTILLERY, CLUSTER, MOAI, ORB, HEATHEN, BLOCK_SMALL, BLOCK_BIG, RAGE }
 
     /** Red "carrier" waves drop a power-up capsule when every member is shot down. */
     public static class Group {
@@ -314,9 +315,11 @@ public class Enemy {
      */
     public static final int NEST_HP = 6;
     public boolean nestDown;     // a nest: its mouth faces down (hangs from the ceiling); Creeping Death / Ug: came out going down
-    /** A nest: what comes out of it (NEST_UGS or NEST_CREEPING), how many it has left (Ugs) or in this burst (Creeping Death). */
+    /**
+     * A nest: what comes out of it (NEST_UGS, NEST_CREEPING; NEST_MINES = the flying mines of the four web nests
+     * (mineKierke); NEST_NONE = nothing), how many it has left (Ugs) or in this burst (Creeping Death). */
     public int nestKind, nestLeft;
-    public static final int NEST_UGS = 0, NEST_CREEPING = 1;
+    public static final int NEST_UGS = 0, NEST_CREEPING = 1, NEST_MINES = 2, NEST_NONE = 3;
     public float nestT;          // a nest: time to its next one
     public Enemy nest;           // the nest it came out of
 
@@ -422,7 +425,8 @@ public class Enemy {
     }
 
     /**
-     * Blue dome (Eioneus, on the side walls; sprites/bluedome.png, bluedome_open.png while letting flyers out). As in
+     * Blue dome (Eioneus and Op 4, on the side walls; drawn with stage 2's sprites/dome.png, 18x32: closed, and open
+     * while letting flyers out). As in
      * the recording: once its middle is BLUE_DOME_START px below the top edge it lets out a burst of BLUE_DOME_BURST
      * green flyers, BLUE_DOME_GAP s apart, and another burst every BLUE_DOME_REPEAT s while it is on the screen.
      * Stays where it is placed; domeRight = on the right wall (mirrored), its flyers fly the mirrored path.
@@ -430,6 +434,9 @@ public class Enemy {
     public static final int BLUE_DOME_HP = 5, BLUE_DOME_BURST = 4;
     public static final float BLUE_DOME_START = 40f, BLUE_DOME_GAP = 0.5f, BLUE_DOME_REPEAT = 5.3f;
     public boolean domeRight;
+    /** Op 4 dome (stage 6): its flyers home in (gfHoming); domeBurst flyers per burst. */
+    public boolean domeOp4;
+    public int domeBurst = BLUE_DOME_BURST;
     public float domeT = -1f;     // time to its next flyer (-1 = not started)
     public int domeLeft;          // flyers left in this burst
 
@@ -446,7 +453,17 @@ public class Enemy {
     public float gfX, gfY;        // where it came out (screen, y up)
     public boolean gfMirror;
 
-    private void updateGreenFlyer(GameScreen g) {
+    /**
+     * Op 4 (stage 6) flyers (gfHoming), from the stage 6 recording (66-74 s): out of the dome's mouth straight away
+     * from the wall at GREEN6_SPEED px/s for GREEN6_OUT s, then they curve round toward the nearest ship (turning at
+     * most GREEN6_TURN rad/s) for GREEN6_HOME s, and fly on straight after that. Screen-relative; they don't shoot.
+     */
+    public static final float GREEN6_SPEED = 60f, GREEN6_OUT = 0.3f, GREEN6_TURN = 2.5f, GREEN6_HOME = 6f;
+    public boolean gfHoming;
+    private float gfAng = Float.NaN;
+
+    private void updateGreenFlyer(GameScreen g, float dt) {
+        if (gfHoming) { updateHomingFlyer(g, dt); return; }
         float u = Math.max(0f, t) / GREEN_STEP;
         int n = GREEN_PATH.length, i = (int) u;
         float dx, dy;
@@ -463,8 +480,30 @@ public class Enemy {
         setScreen(g, gfX + (gfMirror ? -dx : dx), gfY - dy);
     }
 
+    private void updateHomingFlyer(GameScreen g, float dt) {
+        if (Float.isNaN(gfAng)) gfAng = gfMirror ? MathUtils.PI : 0f;   // straight out of the mouth, away from its wall
+        if (t > GREEN6_OUT && t < GREEN6_OUT + GREEN6_HOME) {
+            Player p = g.target(x + w / 2f, y + h / 2f);
+            if (p != null) {
+                float want = MathUtils.atan2((p.y + Player.H / 2f) - (y + h / 2f), (p.x + Player.W / 2f) - (x + w / 2f));
+                float d = want - gfAng;
+                while (d > MathUtils.PI) d -= MathUtils.PI2;
+                while (d < -MathUtils.PI) d += MathUtils.PI2;
+                gfAng += MathUtils.clamp(d, -GREEN6_TURN * dt, GREEN6_TURN * dt);
+            }
+        }
+        gfX += MathUtils.cos(gfAng) * GREEN6_SPEED * dt;
+        gfY += MathUtils.sin(gfAng) * GREEN6_SPEED * dt;
+        setScreen(g, gfX, gfY);
+    }
+
     /** Green flyer that has flown out of the screen at the end of its loop (it is removed). */
     public boolean greenGone(GameScreen g) {
+        if (gfHoming) {
+            if (t < GREEN6_OUT + 1f) return false;
+            float sx = x - g.scrollX, sy = y - g.scrollY;
+            return sy > SalamanderGame.H || sy + h < 0f || sx > SalamanderGame.W || sx + w < 0f;
+        }
         if (t < GREEN_STEP * (GREEN_PATH.length - 1)) return false;
         float sx = x - g.scrollX, sy = y - g.scrollY;
         return sy > SalamanderGame.H || sy + h < 0f || sx > SalamanderGame.W || sx + w < 0f;
@@ -536,6 +575,14 @@ public class Enemy {
      */
     public static final int SEED_HP = 8, SEED_BURST = 4;
     public static final float SEED_START = 50f, SEED_OPENING = 0.4f, SEED_GAP = 0.5f, SEED_REPEAT = 4f;
+    /**
+     * Op 4 base (stage 6, Tiled class "base6"; Albert's sprites/stage_6_back_ground_base.png, 4 frames of 22x22: closed,
+     * opening, open, destroyed): the same as an Eioneus base, but the whole 22x22 picture is the enemy and, as in the
+     * stage 6 recording, it lets out one burst of SEED6_BURST mines, SEED6_GAP s apart (the mines: mineOp4).
+     */
+    public boolean seedOp4;
+    public static final int SEED6_BURST = 5;
+    public static final float SEED6_GAP = 0.55f;
     public float seedT = -1f;     // time to its next mine (-1 = not started)
     public int seedLeft;          // mines left in this burst (0 = closed, waiting)
     public boolean seedOpening;   // opening, the first burst comes next
@@ -561,17 +608,80 @@ public class Enemy {
             {-37, -28}, {-43, -33}, {-46, -36}, {-53, -39}};
     public float mineX, mineY;     // where it came out (world, y up)
     public boolean mineRed;
+    /**
+     * Op 4 (stage 6) mines (mineOp4), measured in the stage 6 recording (72-105 s): during the take-off they rise
+     * straight up the screen MINE6_RISE px out of the base's middle, then fly the loop MINE6_PATH (world offsets from
+     * there, x right, y down, a point every MINE_STEP s: up and to the left, then round to the right), then home in
+     * on the nearest ship like the Eioneus ones. The loop doesn't depend on where the ship is.
+     */
+    public boolean mineOp4;
+    public static final float MINE6_RISE = 24f;
+    private static final float[][] MINE6_PATH = {{0, 0}, {-5, -2}, {-10, -6}, {-14, -13}, {-18, -20}, {-21, -26},
+            {-24, -33}, {-26, -40}, {-27, -46}, {-26, -50}, {-24, -53}, {-20, -55}, {-15, -55}, {-10, -53}, {-5, -50},
+            {0, -47}, {6, -43}};
+
+    /**
+     * Kierke mines (mineKierke), measured in the Kierke recording (100-104, 119-124, 138-142, 160-165 s): the four
+     * nests floating in the web (Tiled nest, spawns "mines") let out one burst of MINEK_BURST, MINEK_GAP s apart, once
+     * the nest's middle comes to MINEK_START_X on the screen. Each appears to the right of the nest (taking off for
+     * MINEK_TAKEOFF s, frames 0-2), then curls anticlockwise up and over the nest (MINEK_PATH: world offsets from the
+     * nest's middle, x right, y down, a point every MINE_STEP s) and dives off toward the nearest ship, faster than
+     * the other mines (MINEK_ACCEL, MINEK_SPEED; in the recording ~180 px/s, down-left toward the ship).
+     */
+    public boolean mineKierke;
+    public static final int MINEK_BURST = 5;
+    public static final float MINEK_START_X = 208f, MINEK_GAP = 0.5f, MINEK_TAKEOFF = 0.4f, MINEK_ACCEL = 400f, MINEK_SPEED = 180f;
+    private static final float[][] MINEK_PATH = {{38, -2}, {35, 3}, {31, 7}, {26, 10}, {22, 12}, {17, 9}, {13, 4},
+            {11, -3}, {9, -10}, {5, -16}, {0, -20}, {-6, -22}, {-13, -22}, {-21, -20}, {-30, -17}, {-40, -13}, {-50, -8}};
+
+    /** How long it takes off (can't hit or be hit yet). */
+    private float mineTakeoff() { return mineKierke ? MINEK_TAKEOFF : MINE_TAKEOFF; }
 
     /** Taking off (can't hit or be hit yet). */
-    public boolean intangible() { return type == Type.FLYING_MINE && t < MINE_TAKEOFF; }
+    public boolean intangible() { return type == Type.FLYING_MINE && t < mineTakeoff(); }
 
     /** Its frame: 0-2 taking off, then 3 / 4 by turns. */
     public int mineFrame() {
-        if (t < MINE_TAKEOFF) return Math.min(2, (int) (Math.max(0f, t) / (MINE_TAKEOFF / 3f)));
-        return 3 + ((int) ((t - MINE_TAKEOFF) / MINE_FRAME) & 1);
+        float to = mineTakeoff();
+        if (t < to) return Math.min(2, (int) (Math.max(0f, t) / (to / 3f)));
+        return 3 + ((int) ((t - to) / MINE_FRAME) & 1);
     }
 
     private void updateFlyingMine(GameScreen g, float dt) {
+        if (mineKierke) {
+            float u = Math.max(0f, t) / MINE_STEP;
+            int n = MINEK_PATH.length, i = (int) u;
+            if (i < n - 1) {                             // the curl over the nest (offsets: x right, y down)
+                float k = u - i;
+                float[] a = MINEK_PATH[i], b = MINEK_PATH[i + 1];
+                x = mineX + a[0] + (b[0] - a[0]) * k - w / 2f; y = mineY - (a[1] + (b[1] - a[1]) * k) - h / 2f;
+                vx = (b[0] - a[0]) / MINE_STEP; vy = -(b[1] - a[1]) / MINE_STEP;
+                return;
+            }
+            homeMine(g, dt, MINEK_ACCEL, MINEK_SPEED);
+            return;
+        }
+        if (mineOp4 && t < MINE_TAKEOFF + MINE_STEP * (MINE6_PATH.length - 1)) {
+            float ox, oy, ovx, ovy;
+            if (t < MINE_TAKEOFF) {                      // rising out of the base
+                float k = Math.max(0f, t) / MINE_TAKEOFF;
+                ox = 0f; oy = -MINE6_RISE * k; ovx = 0f; ovy = -MINE6_RISE / MINE_TAKEOFF;
+            } else {
+                float u = (t - MINE_TAKEOFF) / MINE_STEP;
+                int i = Math.min((int) u, MINE6_PATH.length - 2);
+                float k = u - i;
+                float[] a = MINE6_PATH[i], b = MINE6_PATH[i + 1];
+                ox = a[0] + (b[0] - a[0]) * k; oy = -MINE6_RISE + a[1] + (b[1] - a[1]) * k;
+                ovx = (b[0] - a[0]) / MINE_STEP; ovy = (b[1] - a[1]) / MINE_STEP;
+            }
+            x = mineX + ox - w / 2f; y = mineY - oy - h / 2f;
+            vx = ovx; vy = -ovy;
+            return;
+        }
+        if (mineOp4) {                                   // then home in on the nearest ship
+            homeMine(g, dt, MINE_ACCEL, MINE_SPEED);
+            return;
+        }
         float u = Math.max(0f, t) / MINE_STEP;
         int n = MINE_PATH.length, i = (int) u;
         if (i < n - 1) {                                 // the loop (offsets: x right, y down)
@@ -582,13 +692,17 @@ public class Enemy {
             vx = (MINE_PATH[i + 1][0] - MINE_PATH[i][0]) / MINE_STEP; vy = -(MINE_PATH[i + 1][1] - MINE_PATH[i][1]) / MINE_STEP;
             return;
         }
+        homeMine(g, dt, MINE_ACCEL, MINE_SPEED);
+    }
+
+    private void homeMine(GameScreen g, float dt, float accel, float maxSpeed) {
         Player p = g.target(x + w / 2f, y + h / 2f);     // then home in on the nearest ship
         if (p != null) {
             float dx = (p.x + Player.W / 2f) - (x + w / 2f), dy = (p.y + Player.H / 2f) - (y + h / 2f), d = (float) Math.sqrt(dx * dx + dy * dy);
-            if (d > 1f) { vx += dx / d * MINE_ACCEL * dt; vy += dy / d * MINE_ACCEL * dt; }
+            if (d > 1f) { vx += dx / d * accel * dt; vy += dy / d * accel * dt; }
         }
         float sp = (float) Math.sqrt(vx * vx + vy * vy);
-        if (sp > MINE_SPEED) { vx *= MINE_SPEED / sp; vy *= MINE_SPEED / sp; }
+        if (sp > maxSpeed) { vx *= maxSpeed / sp; vy *= maxSpeed / sp; }
         x += vx * dt; y += vy * dt;
     }
 
@@ -652,7 +766,7 @@ public class Enemy {
     public static final float GUNHO_GUN_Y = 22f;
     public static final int GUNHO_COMING = 0, GUNHO_AIMING = 1, GUNHO_FIRED = 2, GUNHO_LEAVING = 3, GUNHO_HOPPING = 4;
     /**
-     * MSX style (Lavinia recording): a Gun Ho comes out of a floor hatch (Tiled floordome with "gunhosMsx") and, keeping
+     * Lavinia (both styles, as in the recording): a Gun Ho comes out of a floor hatch (Tiled dome_type2 with "gunhos") and, keeping
      * its place on the screen, hops out of it: up GUNHO_HOP_UP px, GUNHO_HOP_LEFT1 px to the left, down to the floor
      * again, GUNHO_HOP_LEFT2 px to the left (GUNHO_HOP_VY / GUNHO_HOP_VX px/s). Then it lines up with the nearest ship,
      * fires and leaves as usual, at GUNHO_LEAVE_MSX px/s.
@@ -833,12 +947,17 @@ public class Enemy {
             case CREEPING_DEATH: hp = 1; score = 100; w = 15; h = 15; break;
             case UG: hp = 1; score = 100; w = 16; h = 16; break;
             case GAMMA: hp = 1; score = 100; w = 16; h = 16; break;
-            case BLUE_DOME: hp = BLUE_DOME_HP; score = 500; w = 14; h = 38; break;
+            case BLUE_DOME: hp = BLUE_DOME_HP; score = 500; w = 18; h = 32; break;   // (sprites/dome.png, as on stage 2)
             case GREEN_FLYER: hp = 1; score = 100; w = 16; h = 16; break;
             case LASER_BATTERY: hp = BATTERY_HP; score = 300; w = 24; h = 16; break;
             case GREMLIN: hp = 1; score = 200; w = 16; h = 16; break;
             case SEED: hp = SEED_HP; score = 1000; w = 20; h = 21; break;   // the middle of the base
             case FLYING_MINE: hp = 1; score = 100; w = 16; h = 16; break;
+            case EXODUS: hp = 1; score = 100; w = 16; h = 15; break;
+            case ARTILLERY: hp = 3 + levelIdx; score = 300; w = 16; h = 16; break;   // (as tough as the turrets: default below)
+            case CLUSTER: hp = 1; score = 0; w = 34; h = 33; break;   // (can't be destroyed)
+            case MOAI: hp = MOAI_HP; score = 1000; w = 50; h = 38; break;
+            case ORB: hp = ORB_HP; score = 300; w = 18; h = 18; break;
             case CHAIN: hp = 1; score = 0; w = Enemy.CHAIN_BALL; h = Enemy.CHAIN_BALL; break;   // (can't be destroyed)
             case WALKER: hp = 2 + levelIdx / 2; score = 200; vx = -28f; break;
             case FROST:  hp = 1; score = 100; break;
@@ -846,12 +965,110 @@ public class Enemy {
             case AMOEBA: hp = 1; score = 50; break;
             case RUGAL:  hp = 1; score = 100; break;
             case GUN_HO: hp = 3; score = 300; w = 26; h = 34; break;
+            case HEATHEN: hp = 1; score = 0; w = 40; h = 120; break;
+            case BLOCK_SMALL: hp = 1; score = 0; w = 32; h = 16; break;
+            case BLOCK_BIG: hp = BLOCK_BIG_HP; score = 500; w = 32; h = 32; break;
+            case RAGE: hp = 1; score = 100; w = 16; h = 15; break;
             case OMEN:   hp = 3; score = 200; w = 34; h = 18; break;
             case LASER_GUARD: hp = 1; score = 0; w = 22; h = 20; break;   // (can't be destroyed)
             case DOME_FLYER: hp = 1; score = 100; break;
             default:     hp = 3 + levelIdx; score = 300; break;
         }
         shootT = MathUtils.random(0.6f, 1.8f);
+    }
+
+    /** Laser Guards, Kierke chain balls and Op 4 clusters: shots stop on them, homing shots and guards ignore them. */
+    public boolean indestructible() { return type == Type.LASER_GUARD || type == Type.CHAIN || type == Type.CLUSTER || type == Type.HEATHEN || type == Type.BLOCK_SMALL; }
+
+    /**
+     * Lavinia blocks (Albert's sprites/lavinia_block_small.png 32x16, lavinia_block_big.png 32x32), as in the MSX
+     * recording. Each waits until it is BLOCK_START px inside the right edge, then:
+     * small: slides up and down between the ceiling and the floor at BLOCK_SMALL_SPEED px/s (it starts toward the far
+     * side: the map's start position is one end of its run); it can't be destroyed and stops shots and lasers.
+     * big: slides left through its slot at BLOCK_BIG_SPEED px/s through the world; BLOCK_BIG_HP hits destroy it. A laser
+     * that hits it still hurts it, but is reflected back to the left (GameScreen.reflectLaser) and can hit a ship.
+     */
+    public static final float BLOCK_START = 32f, BLOCK_SMALL_SPEED = 40f, BLOCK_BIG_SPEED = 20f;
+    public static final int BLOCK_BIG_HP = 20;
+    /** Small block: its run (world y of its bottom, low and high end), direction (+1 up), started. */
+    public float blockLo = Float.NaN, blockHi = Float.NaN, blockDir = 1f;
+    public boolean blockOn;
+
+    /**
+     * Rage (Albert's sprites/rage.png, 16x15, faces left): launched by the Lavinia warship out of its open hatch. As in
+     * the recording it flies straight left at RAGE_SPEED px/s across the screen; its laser (the red / blue enemy
+     * laser pattern, RAGE_LASER_W px wide, through its middle) grows up and down from it at RAGE_LASER_GROW px/s each
+     * way until it reaches the screen edges (or rock). The laser hurts a ship; shots pass it. 1 hit.
+     */
+    public static final float RAGE_SPEED = 77f, RAGE_LASER_GROW = 40f, RAGE_LASER_W = 5f, RAGE_LASER_X = 1f;
+    public float rageUp, rageDown;
+
+    private void updateBlock(GameScreen g, float dt) {
+        if (!blockOn) {
+            if (x > g.scrollX + SalamanderGame.W - BLOCK_START) return;   // waits until it is well on the screen
+            blockOn = true;
+        }
+        if (type == Type.BLOCK_BIG) { x -= BLOCK_BIG_SPEED * dt; return; }
+        if (Float.isNaN(blockLo)) { blockLo = y; blockHi = y; }
+        y += blockDir * BLOCK_SMALL_SPEED * dt;
+        if (y >= blockHi) { y = blockHi; blockDir = -1f; }
+        if (y <= blockLo) { y = blockLo; blockDir = 1f; }
+    }
+
+    private void updateRage(GameScreen g, float dt) {
+        x += (g.scrollVX - RAGE_SPEED) * dt;          // straight left across the screen
+        float cy = y + h / 2f, bx = x + RAGE_LASER_X;
+        float top = g.scrollY + SalamanderGame.H, bottom = g.scrollY;
+        float up = rageUp + RAGE_LASER_GROW * dt, down = rageDown + RAGE_LASER_GROW * dt;
+        up = Math.min(up, top - cy); down = Math.min(down, cy - bottom);
+        if (!g.level.hits(bx, cy + rageUp, RAGE_LASER_W, Math.max(0f, up - rageUp))) rageUp = up;
+        if (!g.level.hits(bx, cy - down, RAGE_LASER_W, Math.max(0f, down - rageDown))) rageDown = down;
+        beamX = bx; beamY = cy - rageDown; beamW = RAGE_LASER_W; beamH = rageUp + rageDown;
+    }
+
+    /**
+     * Heathen (Lavinia lower corridor, as in the MSX recording; Albert's sprites/heathen_top.png, heathen_center.png,
+     * heathen_bottom.png, 40x120, and heathen_bar.png): a pillar as tall as the corridor that comes in at the right
+     * edge and rushes left at HEATHEN_SPEED px/s across the screen (in 8 px steps on the MSX). It can't be destroyed:
+     * only a gap with HEATHEN_BARS breakable bars (HEATHEN_BAR_HP hits each, like Tetran's core blocks but weaker)
+     * lets a ship through once they are shot away; shots break the front bar first. Which of the three pictures
+     * (where the gap is: heathenKind 0 = top, 1 = centre, 2 = bottom) is random every time one comes.
+     */
+    public static final float HEATHEN_SPEED = 100f;
+    public static final int HEATHEN_BARS = 4, HEATHEN_BAR_HP = 3, HEATHEN_BAR_SCORE = 100;
+    /** Bars: top row of each picture's bars (from the top of the picture), first bar's x, spacing and size. */
+    public static final int[] HEATHEN_BAR_TOP = {19, 51, 83};
+    public static final int HEATHEN_BAR_X = 10, HEATHEN_BAR_STEP = 8, HEATHEN_BAR_W = 4, HEATHEN_BAR_H = 18;
+    public int heathenKind;
+    public final int[] heathenBarHp = new int[HEATHEN_BARS];
+    /** One key per bar, so a laser hurts each bar once. */
+    public final Object[] heathenBarKey = {new Object(), new Object(), new Object(), new Object()};
+    /** The pillar without its bars (its non-black pixels; set when it comes). */
+    public PixelMask heathenMask;
+
+    public float heathenBarX(int k) { return x + HEATHEN_BAR_X + k * HEATHEN_BAR_STEP; }
+    public float heathenBarY() { return y + h - HEATHEN_BAR_TOP[heathenKind] - HEATHEN_BAR_H; }
+
+    /** The front-most (leftmost) bar still there that the rectangle touches, or -1. */
+    public int heathenBarAt(float rx, float ry, float rw, float rh) {
+        float by = heathenBarY();
+        if (ry >= by + HEATHEN_BAR_H || ry + rh <= by) return -1;
+        for (int k = 0; k < HEATHEN_BARS; k++) {
+            float bx = heathenBarX(k);
+            if (heathenBarHp[k] > 0 && rx < bx + HEATHEN_BAR_W && rx + rw > bx) return k;
+        }
+        return -1;
+    }
+
+    /** Does the rectangle touch the pillar itself (not its gap)? */
+    public boolean heathenBodyTouches(float rx, float ry, float rw, float rh) {
+        if (rx >= x + w || rx + rw <= x || ry >= y + h || ry + rh <= y) return false;
+        return heathenMask == null || heathenMask.overlaps(x, y, rx, ry, rw, rh);
+    }
+
+    /** Does the rectangle touch the pillar or a bar still there (what hurts a ship)? */
+    public boolean heathenTouches(float rx, float ry, float rw, float rh) {
+        return heathenBodyTouches(rx, ry, rw, rh) || heathenBarAt(rx, ry, rw, rh) >= 0;
     }
 
     public void update(GameScreen g, float dt) {
@@ -882,7 +1099,7 @@ public class Enemy {
             case BLUE_DOME:                              // (GameScreen.releaseNestBugs lets its flyers out)
                 break;
             case GREEN_FLYER:
-                updateGreenFlyer(g);
+                updateGreenFlyer(g, dt);
                 break;
             case LASER_BATTERY:                          // (its beam: GameScreen)
                 break;
@@ -893,6 +1110,21 @@ public class Enemy {
                 break;
             case FLYING_MINE:
                 updateFlyingMine(g, dt);
+                break;
+            case EXODUS:
+                updateExodus(g, dt);
+                break;
+            case ARTILLERY:
+                updateArtillery(g, dt);
+                break;
+            case CLUSTER:
+                updateCluster(g, dt);
+                break;
+            case MOAI:
+                updateMoai(g, dt);
+                break;
+            case ORB:
+                updateOrb(g, dt);
                 break;
             case LEGACY: {                               // weaves along; fires back at a ship it has flown past
                 if (hover) { updateHoverLegacy(g, dt); break; }
@@ -968,6 +1200,9 @@ public class Enemy {
                 break;
             }
             case GUN_HO: updateGunHo(g, dt); break;
+            case HEATHEN: x += (g.scrollVX - HEATHEN_SPEED) * dt; break;   // rushes left across the screen
+            case BLOCK_SMALL: case BLOCK_BIG: updateBlock(g, dt); break;
+            case RAGE: updateRage(g, dt); break;
             case DOME_FLYER: updateDomeFlyer(g, dt); break;
             case LASER_GUARD: updateLaserGuard(g, dt); break;
             case OMEN: {                                  // stationary: a burst every OMEN_REPEAT s while on screen
@@ -1236,7 +1471,7 @@ public class Enemy {
         gunT += dt;
         Player tp = g.target(x + w / 2f, y + GUNHO_GUN_Y);
         switch (gunState) {
-            case GUNHO_HOPPING: {                         // MSX: hops out of its hatch (screen-relative)
+            case GUNHO_HOPPING: {                         // hops out of its hatch (screen-relative)
                 x += g.scrollVX * dt;
                 float[] legs = {GUNHO_HOP_UP, GUNHO_HOP_LEFT1, GUNHO_HOP_UP, GUNHO_HOP_LEFT2};
                 if (Float.isNaN(gunHopLeft)) gunHopLeft = legs[0];
@@ -1323,6 +1558,159 @@ public class Enemy {
     }
 
     /** Only shoots while it is on screen (its middle at least a few px inside the edges). */
+    // ================================================================ Op 4 (stage 6), from the stage 6 recording
+
+    /**
+     * Exodus (Albert's sprites/exodus_cyan.png / exodus_red.png, 3 frames of 16x15). They come in threes, side by side
+     * EXODUS_GAP px apart, in at the top edge (the recording: columns 16 / 34 / 52 or 208 / 226 / 244 on the screen).
+     * Each drops straight down at EXODUS_DROP px/s until its top is EXODUS_DROP_TO px inside the screen, then makes
+     * for the nearest ship, moving at EXODUS_SPEED px/s on each axis (as the MSX does: straight, sideways or at 45
+     * degrees), relative to the screen. After EXODUS_CHASE s it gives up and drops out through the bottom. They don't
+     * shoot. A red one leaves a power capsule.
+     */
+    public static final float EXODUS_GAP = 18f, EXODUS_DROP = 80f, EXODUS_DROP_TO = 24f, EXODUS_SPEED = 42f,
+            EXODUS_CHASE = 10f, EXODUS_FRAME = 0.12f;
+    public boolean exRed;
+    private float exSx = Float.NaN, exSy, exVx, exVy;
+
+    private void updateExodus(GameScreen g, float dt) {
+        float H = SalamanderGame.H;
+        if (Float.isNaN(exSx)) { exSx = x - g.scrollX; exSy = H; }    // (sprite bottom-left on the screen, y up)
+        float top = H - (exSy + h);                                     // how far its top is inside the screen
+        if (top < EXODUS_DROP_TO && t < EXODUS_CHASE) {
+            exSy -= EXODUS_DROP * dt;
+        } else if (t < EXODUS_CHASE) {
+            Player p = g.target(x + w / 2f, y + h / 2f);
+            exVx = 0f; exVy = 0f;
+            if (p != null) {
+                float dx = (p.x + Player.W / 2f) - (x + w / 2f), dy = (p.y + Player.H / 2f) - (y + h / 2f);
+                if (Math.abs(dx) > 3f) exVx = Math.signum(dx) * EXODUS_SPEED;
+                if (Math.abs(dy) > 3f) exVy = Math.signum(dy) * EXODUS_SPEED;
+            } else exVy = -EXODUS_SPEED;
+            exSx += exVx * dt; exSy += exVy * dt;
+        } else {                                                        // gives up: out through the bottom
+            exSy -= EXODUS_DROP * dt;
+        }
+        x = g.scrollX + exSx; y = g.scrollY + exSy;
+    }
+
+    /** Its frame: cycles 0 1 2. */
+    public int exodusFrame() { return (int) (Math.max(0f, t) / EXODUS_FRAME) % 3; }
+
+    /**
+     * Artillery (Albert's sprites/artillery_green.png, artillery_red.png: one 16x16 frame pointing up), the gun on the
+     * shaft walls. Drawn turned a quarter so it points away from its wall (artRight = on the right wall). As in the
+     * recording it stays put and fires an aimed shot ARTILLERY_FIRST s after it has come on screen, then every
+     * ARTILLERY_PERIOD s, at ARTILLERY_SHOT px/s. A red one leaves a power capsule. It takes as many hits as the
+     * floor / ceiling turrets (3 + levelIdx; Albert, 2026-10-25).
+     */
+    public static final float ARTILLERY_FIRST = 1.4f, ARTILLERY_PERIOD = 1.3f, ARTILLERY_SHOT = 80f;
+    public boolean artRight, artRed;
+    private float artT = -1f;
+
+    private void updateArtillery(GameScreen g, float dt) {
+        if (!canShoot(g)) return;
+        if (artT < 0f) artT = ARTILLERY_FIRST;
+        if ((artT -= dt) > 0f) return;
+        artT = ARTILLERY_PERIOD;
+        g.aimedShot(artRight ? x + 2f : x + w - 2f, y + h / 2f, ARTILLERY_SHOT, 0f);   // from its muzzle
+    }
+
+    /**
+     * Cluster (sprites/cluster.png, the blue rock clump cut from the map): it sinks slowly down through the world (the
+     * recording: 5 to 32 px/s, a different speed for each) once it is on the screen. It can't be destroyed (Albert, 2026-10-25): shots stop on it with a spark, as on the
+     * Laser Guards, and homing shots ignore it.
+     */
+    public static final float CLUSTER_SINK_MIN = 5f, CLUSTER_SINK_MAX = 30f;
+    private float clusterSink = -1f;
+
+    private void updateCluster(GameScreen g, float dt) {
+        if (y > g.scrollY + SalamanderGame.H) return;                  // waits until it is on the screen
+        if (clusterSink < 0f) clusterSink = MathUtils.random(CLUSTER_SINK_MIN, CLUSTER_SINK_MAX);
+        y -= clusterSink * dt;
+    }
+
+    /**
+     * Moai (sprites/moai.png, 50x36, cut from the map; it faces right, on the left wall; moaiRight = on the right wall,
+     * mirrored). As in the recording (171-210 s) it fires rings at the nearest ship from its mouth: bursts of
+     * MOAI_BURST, MOAI_RING_GAP s apart, a burst every MOAI_PERIOD s while its mouth is on screen; the rings fly at
+     * MOAI_RING_SPEED px/s, each aimed when it leaves, and a whole burst is yellow or white (by turns). Most moai heads
+     * (moaiWalk) also step away from their wall: MOAI_WAIT s at the wall, out MOAI_OUT px at MOAI_STEP px/s, back.
+     * Albert (2026-10-26): sprites/moai.png has 2 frames of 50x38, mouth shut and mouth open. It starts against its wall
+     * (GameScreen snaps it there). Its mouth is open from MOAI_OPEN_LEAD s before a burst until MOAI_OPEN_LEAD s after
+     * it, and only the open mouth (MOAI_MOUTH: x, y from the bottom-left, w, h, facing right) takes damage; shots that
+     * hit the rest of it just stop. Its rings can be shot down (GameScreen.collide).
+     */
+    public static final float MOAI_OPEN_LEAD = 0.3f;
+    private static final float[] MOAI_MOUTH = {12f, 0f, 19f, 14f};
+    public boolean moaiOpen;
+
+    /** Does the rectangle touch its open mouth (the only place it can be hurt)? */
+    public boolean moaiMouthHit(float rx, float ry, float rw, float rh) {
+        if (!moaiOpen) return false;
+        float mx = moaiRight ? x + w - MOAI_MOUTH[0] - MOAI_MOUTH[2] : x + MOAI_MOUTH[0];
+        return rx < mx + MOAI_MOUTH[2] && rx + rw > mx && ry < y + MOAI_MOUTH[1] + MOAI_MOUTH[3] && ry + rh > y + MOAI_MOUTH[1];
+    }
+    public static final int MOAI_HP = Hazard.BAMDA_HP,   // as tough as stage 1's bamdas (Albert, 2026-10-25)
+            MOAI_BURST = 6;
+    public static final float MOAI_RING_GAP = 0.4f, MOAI_PERIOD = 3.7f, MOAI_RING_SPEED = 52f,
+            MOAI_WAIT = 1f, MOAI_OUT = 32f, MOAI_STEP = 24f;
+    public boolean moaiRight, moaiWalk = true;
+    public float moaiWallX;
+    private float moaiT = -1f, moaiMoveT, moaiOff;
+    private int moaiLeft, moaiBursts;
+
+    private void updateMoai(GameScreen g, float dt) {
+        if (moaiWalk && y < g.scrollY + SalamanderGame.H) {             // steps out from its wall and back
+            moaiMoveT += dt;
+            float out = MOAI_OUT / MOAI_STEP, cycle = MOAI_WAIT + 2f * out, k = moaiMoveT % cycle;
+            moaiOff = k < MOAI_WAIT ? 0f : k < MOAI_WAIT + out ? (k - MOAI_WAIT) * MOAI_STEP : MOAI_OUT - (k - MOAI_WAIT - out) * MOAI_STEP;
+            x = moaiWallX + (moaiRight ? -moaiOff : moaiOff);
+        }
+        float mx = moaiMouthX(), my = y - 6f;
+        if (!g.inView(mx, my, 2f)) { moaiOpen = false; return; }
+        if (moaiT < 0f) { moaiT = MOAI_OPEN_LEAD; moaiLeft = MOAI_BURST; }   // (opens its mouth first)
+        float pause = MOAI_PERIOD - MOAI_RING_GAP * (MOAI_BURST - 1);
+        moaiT -= dt;
+        // open during a burst, and MOAI_OPEN_LEAD s before / after it
+        moaiOpen = moaiLeft > 0 || moaiT < MOAI_OPEN_LEAD || moaiT > pause - MOAI_OPEN_LEAD;
+        if (moaiT > 0f) return;
+        if (moaiLeft <= 0) { moaiLeft = MOAI_BURST; moaiBursts++; }
+        moaiLeft--;
+        moaiT = moaiLeft > 0 ? MOAI_RING_GAP : MOAI_PERIOD - MOAI_RING_GAP * (MOAI_BURST - 1);
+        g.ringShot(mx, my, MOAI_RING_SPEED, (moaiBursts & 1) == 1);
+    }
+
+    /** Where its rings come out (x, world): just under its mouth. */
+    private float moaiMouthX() { return moaiRight ? x + 41f : x + 17f; }
+
+    /**
+     * Orb (sprites/orb.png, 18x18; Tiled class "orb6"), the blue balls of the side room (117-150 s in the recording).
+     * It comes in at the top edge and bounces up and down fast (ORB_VY px/s, through the world) between the screen's
+     * top and bottom edges and the rock, drifting sideways toward the nearest ship at ORB_VX px/s (bouncing off rock).
+     * After ORB_LIFE s it stops bouncing off the bottom edge and leaves.
+     */
+    public static final int ORB_HP = 3;
+    public static final float ORB_VY = 150f, ORB_VX = 12f, ORB_LIFE = 15f;
+
+    private void updateOrb(GameScreen g, float dt) {
+        if (t <= dt) {
+            vy = -ORB_VY;
+            Player p = g.target(x + w / 2f, y + h / 2f);
+            vx = (p != null && p.x + Player.W / 2f < x + w / 2f) ? -ORB_VX : ORB_VX;
+        }
+        Level lv = g.level;
+        float nx = x + vx * dt;
+        if (lv.hits(nx, y + 2f, w, h - 4f)) vx = -vx; else x = nx;
+        float ny = y + vy * dt;
+        if (lv.hits(x + 2f, ny, w - 4f, h)) vy = -vy;
+        else {
+            y = ny;
+            if (vy > 0f && y + h > g.scrollY + SalamanderGame.H && t > 0.5f) { y = g.scrollY + SalamanderGame.H - h; vy = -vy; }
+            if (vy < 0f && y < g.scrollY && t < ORB_LIFE) { y = g.scrollY; vy = -vy; }
+        }
+    }
+
     private boolean canShoot(GameScreen g) {
         return g.inView(x + w / 2f, y + h / 2f, 6f);
     }

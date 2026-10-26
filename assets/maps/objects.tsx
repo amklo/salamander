@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="60" columns="0">
+<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="68" columns="0">
  <grid orientation="orthogonal" width="1" height="1" />
  <tile id="2" class="walker">
   <properties>
@@ -27,6 +27,9 @@
   <image source="../sprites/rock.png" width="16" height="16" />
  </tile>
  <tile id="7" class="volcano">
+  <properties>
+   <property name="spits" value="up"/>
+  </properties>
   <image source="icons/volcano.png" width="12" height="6" />
  </tile>
  <tile id="8" class="crusher">
@@ -188,7 +191,7 @@
   </properties>
   <image source="icons/wall_turret_red.png" width="16" height="16"/>
  </tile>
- <tile id="30" class="dome">
+ <tile id="30" class="dome_type1">
   <image source="icons/dome.png" width="18" height="32"/>
  </tile>
  <tile id="31" class="eye">
@@ -213,8 +216,8 @@
  <tile id="35" class="omen">
   <image source="../sprites/Omen.png" width="32" height="16"/>
  </tile>
- <tile id="36" class="floordome">
-  <image source="icons/floordome.png" width="32" height="18"/>
+ <tile id="36" class="dome_type2">
+  <image source="icons/dome_type2.png" width="32" height="18"/>
  </tile>
  <tile id="37" class="gunho">
   <image source="../sprites/Gun Ho.png" width="26" height="34"/>
@@ -256,8 +259,8 @@
   </properties>
   <image source="icons/eioneus_base.png" width="44" height="46"/>
  </tile>
- <tile id="46" class="bluedome">
-  <image source="../sprites/bluedome.png" width="14" height="38"/>
+ <tile id="46" class="dome_type3">
+  <image source="icons/dome.png" width="18" height="32"/>
  </tile>
  <tile id="47" class="cluster">
   <image source="../sprites/cluster.png" width="32" height="31"/>
@@ -265,8 +268,11 @@
  <tile id="48" class="mine">
   <image source="../sprites/mine.png" width="16" height="18"/>
  </tile>
- <tile id="49" class="crab">
-  <image source="../sprites/crab.png" width="50" height="36"/>
+ <tile id="49" class="moai">
+  <properties>
+   <property name="walk" type="bool" value="true"/>
+  </properties>
+  <image source="../sprites/moai.png" width="50" height="36"/>
  </tile>
  <tile id="50" class="gunpod">
   <image source="../sprites/gunpod.png" width="42" height="74"/>
@@ -335,5 +341,44 @@
    <property name="drop" type="bool" value="false"/>
   </properties>
   <image source="icons/gremlin.png" width="16" height="16"/>
+ </tile>
+ <tile id="62" class="exodus">
+  <properties>
+   <property name="count" type="int" value="3"/>
+   <property name="gap" type="float" value="18"/>
+   <property name="colours" value="ccc"/>
+   <property name="drop" type="bool" value="false"/>
+  </properties>
+  <image source="icons/exodus.png" width="16" height="15"/>
+ </tile>
+ <tile id="63" class="artillery">
+  <properties>
+   <property name="red" type="bool" value="false"/>
+  </properties>
+  <image source="icons/artillery.png" width="16" height="16"/>
+ </tile>
+ <tile id="64" class="dome_type4">
+  <properties>
+   <property name="burst" type="int" value="4"/>
+  </properties>
+  <image source="icons/dome.png" width="18" height="32"/>
+ </tile>
+ <tile id="65" class="base6">
+  <properties>
+   <property name="drop" type="bool" value="false"/>
+  </properties>
+  <image source="icons/base6.png" width="22" height="22"/>
+ </tile>
+ <tile id="66" class="orb6">
+  <image source="../sprites/orb.png" width="18" height="18"/>
+ </tile>
+ <tile id="67" class="heathen">
+  <image source="../sprites/heathen_center.png" width="40" height="120"/>
+ </tile>
+ <tile id="68" class="block_small">
+  <image source="../sprites/lavinia_block_small.png" width="32" height="16"/>
+ </tile>
+ <tile id="69" class="block_big">
+  <image source="../sprites/lavinia_block_big.png" width="32" height="32"/>
  </tile>
 </tileset>

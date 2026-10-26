@@ -77,12 +77,24 @@
    </properties>
   </object>
   <object id="15" gid="81" x="1765" y="152" width="16" height="16"/>
-  <object id="16" gid="1073741906" x="1850" y="154" width="38" height="22"/>
+  <object id="16" gid="1073741906" x="1850" y="154" width="38" height="22">
+   <properties>
+    <property name="spawns" value="creeping death"/>
+   </properties>
+  </object>
   <object id="17" gid="81" x="1893" y="24" width="16" height="16"/>
-  <object id="18" gid="82" x="1946" y="28" width="38" height="22"/>
+  <object id="18" gid="82" x="1946" y="28" width="38" height="22">
+   <properties>
+    <property name="spawns" value="creeping death"/>
+   </properties>
+  </object>
   <object id="19" gid="81" x="1957" y="160" width="16" height="16"/>
   <object id="20" gid="81" x="2053" y="152" width="16" height="16"/>
-  <object id="21" gid="1073741906" x="2074" y="90" width="38" height="22"/>
+  <object id="21" gid="1073741906" x="2074" y="90" width="38" height="22">
+   <properties>
+    <property name="spawns" value="mines"/>
+   </properties>
+  </object>
   <object id="22" gid="81" x="2181" y="24" width="16" height="16"/>
   <object id="23" gid="81" x="2181" y="160" width="16" height="16"/>
   <object id="24" gid="81" x="2245" y="120" width="16" height="16"/>
@@ -91,11 +103,23 @@
     <property name="count" type="int" value="7"/>
    </properties>
   </object>
-  <object id="26" gid="1073741906" x="2298" y="154" width="38" height="22"/>
+  <object id="26" gid="1073741906" x="2298" y="154" width="38" height="22">
+   <properties>
+    <property name="spawns" value="creeping death"/>
+   </properties>
+  </object>
   <object id="27" gid="81" x="2373" y="152" width="16" height="16"/>
-  <object id="28" gid="1073741906" x="2458" y="122" width="38" height="22"/>
+  <object id="28" gid="1073741906" x="2458" y="122" width="38" height="22">
+   <properties>
+    <property name="spawns" value="mines"/>
+   </properties>
+  </object>
   <object id="29" gid="81" x="2565" y="24" width="16" height="16"/>
-  <object id="30" gid="82" x="2586" y="28" width="38" height="22"/>
+  <object id="30" gid="82" x="2586" y="28" width="38" height="22">
+   <properties>
+    <property name="spawns" value="creeping death"/>
+   </properties>
+  </object>
   <object id="31" gid="81" x="2597" y="120" width="16" height="16"/>
   <object id="32" gid="83" x="2604" y="104" width="8" height="8">
    <properties>
@@ -103,7 +127,11 @@
    </properties>
   </object>
   <object id="33" gid="81" x="2789" y="152" width="16" height="16"/>
-  <object id="34" gid="1073741906" x="2810" y="58" width="38" height="22"/>
+  <object id="34" gid="1073741906" x="2810" y="58" width="38" height="22">
+   <properties>
+    <property name="spawns" value="mines"/>
+   </properties>
+  </object>
   <object id="35" gid="81" x="2917" y="56" width="16" height="16"/>
   <object id="36" gid="81" x="2917" y="160" width="16" height="16"/>
   <object id="37" gid="83" x="2924" y="40" width="8" height="8">
@@ -127,7 +155,11 @@
   <object id="43" gid="82" x="3066" y="28" width="38" height="22"/>
   <object id="44" gid="1073741906" x="3066" y="154" width="38" height="22"/>
   <object id="45" gid="81" x="3141" y="24" width="16" height="16"/>
-  <object id="46" gid="1073741906" x="3258" y="90" width="38" height="22"/>
+  <object id="46" gid="1073741906" x="3258" y="90" width="38" height="22">
+   <properties>
+    <property name="spawns" value="mines"/>
+   </properties>
+  </object>
   <object id="47" gid="81" x="3301" y="152" width="16" height="16"/>
   <object id="48" gid="81" x="3365" y="24" width="16" height="16"/>
   <object id="49" gid="81" x="3365" y="144" width="16" height="16"/>

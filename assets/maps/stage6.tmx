@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="64" height="584" tilewidth="8" tileheight="8" infinite="0" nextlayerid="9" nextobjectid="39">
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="64" height="584" tilewidth="8" tileheight="8" infinite="0" nextlayerid="9" nextobjectid="74">
  <properties>
   <property name="name" value="OPERATION SIX"/>
   <property name="vertical" type="bool" value="true"/>
   <property name="speed" type="float" value="26.0"/>
+  <property name="speedMsx" type="float" value="21"/>
   <property name="lane" type="int" value="168"/>
+  <property name="noStars" value="0,4214"/>
   <property name="music" value="07. Destroy Them All.mp3"/>
   <property name="musicLoop" type="float" value="33.600181"/>
   <property name="musicLoopEnd" type="float" value="70.525"/>
@@ -620,73 +622,212 @@
 </data>
  </layer>
  <objectgroup id="8" name="objects">
-  <object id="1" gid="73" x="272" y="359" width="240" height="358">
+  <object id="1" gid="73" x="266" y="361" width="250" height="361">
    <properties>
     <property name="fixed" type="bool" value="true"/>
    </properties>
   </object>
-  <object id="2" gid="85" x="272" y="4128" width="16" height="32"/>
-  <object id="3" gid="88" x="287" y="1451" width="50" height="36"/>
+  <object id="2" gid="103" x="272" y="4128" width="18" height="32">
+   <properties>
+    <property name="burstMsx" type="int" value="0"/>
+   </properties>
+  </object>
+  <object id="3" gid="88" x="287" y="1451" width="50" height="36">
+   <properties>
+    <property name="walk" type="bool" value="false"/>
+   </properties>
+  </object>
   <object id="4" gid="80" x="290" y="1614" width="56" height="4"/>
   <object id="5" gid="80" x="290" y="1678" width="56" height="4"/>
   <object id="6" gid="80" x="290" y="1742" width="56" height="4"/>
   <object id="7" gid="88" x="295" y="955" width="50" height="36"/>
   <object id="8" gid="88" x="295" y="1083" width="50" height="36"/>
   <object id="9" gid="88" x="311" y="835" width="50" height="36"/>
-  <object id="10" gid="86" x="312" y="3991" width="32" height="31"/>
-  <object id="11" gid="85" x="320" y="3288" width="16" height="32"/>
-  <object id="12" gid="87" x="336" y="2617" width="24" height="24"/>
-  <object id="13" gid="86" x="360" y="3831" width="32" height="31"/>
-  <object id="14" gid="87" x="361" y="3191" width="22" height="22">
-   <properties>
-    <property name="open" type="bool" value="true"/>
-   </properties>
-  </object>
+  <object id="11" gid="103" x="320" y="3288" width="18" height="32"/>
   <object id="15" gid="80" x="404" y="1614" width="70" height="7"/>
   <object id="16" gid="80" x="404" y="1742" width="70" height="7"/>
   <object id="17" gid="2147483736" x="407" y="931" width="50" height="36"/>
   <object id="18" gid="2147483736" x="407" y="1043" width="50" height="36"/>
   <object id="19" gid="80" x="408" y="1678" width="66" height="7"/>
   <object id="20" gid="2147483736" x="415" y="803" width="50" height="36"/>
-  <object id="21" gid="87" x="417" y="3095" width="22" height="22">
+  <object id="22" gid="2147483736" x="431" y="1411" width="50" height="36">
    <properties>
-    <property name="open" type="bool" value="true"/>
+    <property name="walk" type="bool" value="false"/>
    </properties>
   </object>
-  <object id="22" gid="2147483736" x="431" y="1411" width="50" height="36"/>
-  <object id="23" gid="2147483733" x="432" y="3288" width="16" height="32"/>
-  <object id="24" gid="2147483733" x="480" y="4096" width="16" height="32"/>
+  <object id="23" gid="2147483751" x="430" y="3288" width="18" height="32"/>
+  <object id="24" gid="2147483751" x="478" y="4096" width="18" height="32">
+   <properties>
+    <property name="burstMsx" type="int" value="0"/>
+   </properties>
+  </object>
   <object id="25" gid="71" x="376" y="4308" width="16" height="16">
    <properties>
     <property name="flyby" type="bool" value="true"/>
+       <property name="style" value="remake"/>
    </properties>
   </object>
-  <object id="26" gid="64" x="304" y="4207" width="13" height="15"/>
-  <object id="27" gid="1073741888" x="450" y="4107" width="13" height="15"/>
+  <object id="26" gid="64" x="304" y="4207" width="13" height="15">
+   <properties>
+    <property name="style" value="remake"/>
+   </properties>
+  </object>
+  <object id="27" gid="1073741888" x="450" y="4107" width="13" height="15">
+   <properties>
+    <property name="style" value="remake"/>
+   </properties>
+  </object>
   <object id="28" gid="71" x="376" y="3958" width="16" height="16">
    <properties>
     <property name="flyby" type="bool" value="true"/>
+       <property name="style" value="remake"/>
    </properties>
   </object>
-  <object id="29" gid="64" x="304" y="3707" width="13" height="15"/>
+  <object id="29" gid="64" x="304" y="3707" width="13" height="15">
+   <properties>
+    <property name="style" value="remake"/>
+   </properties>
+  </object>
   <object id="30" gid="71" x="376" y="3008" width="16" height="16">
    <properties>
     <property name="flyby" type="bool" value="true"/>
+       <property name="style" value="remake"/>
    </properties>
   </object>
-  <object id="31" gid="1073741888" x="450" y="2407" width="13" height="15"/>
+  <object id="31" gid="1073741888" x="450" y="2407" width="13" height="15">
+   <properties>
+    <property name="style" value="remake"/>
+   </properties>
+  </object>
   <object id="32" gid="71" x="376" y="1308" width="16" height="16">
    <properties>
     <property name="flyby" type="bool" value="true"/>
+       <property name="style" value="remake"/>
    </properties>
   </object>
   <object id="33" name="path" x="384" y="4588">
-   <polyline points="0,0 0,-4504"/>
+   <properties>
+    <property name="speedsMsx" value="1,1.32,1.19,1.1,1"/>
+   </properties>
+   <polyline points="0,0 0,-2400 -256,-2400 -256,-2592 0,-2592 0,-4504"/>
   </object>
   <object id="34" name="checkpoint" type="checkpoint" x="376" y="3592" width="16" height="16"/>
   <object id="35" name="checkpoint" type="checkpoint" x="376" y="2792" width="16" height="16"/>
   <object id="36" name="checkpoint" type="checkpoint" x="376" y="1992" width="16" height="16"/>
   <object id="37" name="checkpoint" type="checkpoint" x="376" y="1092" width="16" height="16"/>
   <object id="38" name="bossmusic" type="bossmusic" x="376" y="539" width="16" height="16"/>
+  <object id="39" name="exodus 16.1s" gid="101" x="464" y="4244" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="rcc"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="40" name="exodus 16.5s" gid="101" x="272" y="4235" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="crc"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="41" name="exodus 17.1s" gid="101" x="464" y="4225" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="ccr"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="42" name="exodus 21.5s" gid="101" x="464" y="4138" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="ccc"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="43" name="exodus 22.0s" gid="101" x="272" y="4128" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="rcc"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="44" name="exodus 22.6s" gid="101" x="464" y="4117" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="crc"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="45" name="exodus 27.1s" gid="101" x="464" y="4024" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="ccr"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="46" name="exodus 27.6s" gid="101" x="272" y="4016" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="3"/>
+    <property name="colours" value="ccc"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="47" name="exodus 28.2s" gid="101" x="464" y="4008" width="16" height="15">
+   <properties>
+    <property name="style" value="msx"/>
+    <property name="count" type="int" value="1"/>
+    <property name="colours" value="r"/>
+    <property name="drop" type="bool" value="false"/>
+   </properties>
+  </object>
+  <object id="48" name="whiplash 15.9s" gid="95" x="384" y="4248" width="15" height="16">
+   <properties>
+    <property name="style" value="msx"/>
+   </properties>
+  </object>
+  <object id="49" name="whiplash 19.0s" gid="95" x="384" y="4186" width="15" height="16">
+   <properties>
+    <property name="style" value="msx"/>
+   </properties>
+  </object>
+  <object id="50" name="whiplash 73.3s" gid="95" x="320" y="3072" width="15" height="16">
+   <properties>
+    <property name="style" value="msx"/>
+   </properties>
+  </object>
+  <object id="51" name="whiplash 79.2s" gid="95" x="416" y="2968" width="15" height="16">
+   <properties>
+    <property name="style" value="msx"/>
+   </properties>
+  </object>
+  <object id="52" gid="86" x="311" y="3976" width="34" height="33"/>
+  <object id="53" gid="86" x="431" y="3904" width="34" height="33"/>
+  <object id="54" gid="86" x="383" y="3896" width="34" height="33"/>
+  <object id="55" gid="86" x="359" y="3832" width="34" height="33"/>
+  <object id="56" gid="86" x="383" y="3712" width="34" height="33"/>
+  <object id="57" gid="102" x="288" y="3137" width="16" height="16"/>
+  <object id="58" gid="102" x="288" y="2961" width="16" height="16"/>
+  <object id="59" gid="2147483750" x="464" y="2961" width="16" height="16"/>
+  <object id="60" gid="102" x="288" y="2897" width="16" height="16"/>
+  <object id="61" gid="2147483750" x="464" y="2897" width="16" height="16"/>
+  <object id="62" gid="102" x="288" y="2625" width="16" height="16"/>
+  <object id="63" gid="2147483750" x="464" y="2625" width="16" height="16"/>
+  <object id="64" gid="102" x="288" y="2513" width="16" height="16"/>
+  <object id="65" gid="2147483750" x="464" y="2513" width="16" height="16"/>
+  <object id="66" gid="104" x="361" y="3191" width="22" height="22"/>
+  <object id="67" gid="104" x="417" y="3095" width="22" height="22"/>
+  <object id="68" gid="104" x="337" y="2615" width="22" height="22"/>
+  <object id="70" name="orb 117.7s" gid="105" x="388" y="2121" width="18" height="18"/>
+  <object id="71" name="orb 118.5s" gid="105" x="388" y="2105" width="18" height="18"/>
+  <object id="72" name="orb 129.1s" gid="105" x="71" y="2065" width="18" height="18"/>
+  <object id="73" name="orb 132.8s" gid="105" x="62" y="1977" width="18" height="18"/>
  </objectgroup>
 </map>

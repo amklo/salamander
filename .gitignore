@@ -16,7 +16,7 @@ bin/
 .DS_Store
 
 # Reference screenshots of the original game: large and not ours to publish
-reference matterial/
+reference material/
 
 # Logs / crash dumps
 *.log
@@ -24,3 +24,6 @@ hs_err_pid*
 
 # Intermediate output of tools/stage1_build.py
 tools/stage1_out/
+
+# Files waiting to be deleted (check, then move to the Bin)
+_to_delete/

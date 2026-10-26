@@ -24,6 +24,65 @@ public class Boss {
     private int eyePhase = EYE_WAIT;   // closed until the boss has finished entering
     private float eyePos, eyeShutT;    // eyePos: 0 = closed .. eyeFrames-1 = open
 
+    // ---- hatch (Lavinia warship; Albert's sprites/lavinia_boss_hatch.png: 3 frames of 16x30, closed / open / destroyed),
+    // drawn over its nose. As in the MSX recording: the warship comes in from the LEFT edge (HATCH_ENTER_SPEED px/s) to
+    // the right of the screen and then moves straight up and down between the top and the bottom (HATCH_MOVE px/s).
+    // Every HATCH_PERIOD s the hatch opens for HATCH_OPEN s and a Rage comes out of it. Only the open hatch can be hurt.
+    // When the boss has lost half of its health the hatch is destroyed: for HATCH_DOWN s nothing comes out, it can't
+    // be hurt and it rushes up and down (HATCH_RAGE_MOVE px/s); then the hatch is back. The second time it is beaten.
+    public boolean hasHatch;
+    public float hatchX, hatchY, hatchW, hatchH;
+    public static final float HATCH_ENTER_SPEED = 40f, HATCH_MOVE = 48f, HATCH_RAGE_MOVE = 250f, HATCH_PERIOD = 1.33f,
+            HATCH_OPEN = 0.4f, HATCH_DOWN = 5.1f, HATCH_RIGHT = 7f;
+    public static final int HATCH_CLOSED = 0, HATCH_OPENED = 1, HATCH_BROKEN = 2;
+    public int hatchState = HATCH_CLOSED;
+    private float hatchT = 1f, hatchDownT, hatchDir = -1f;
+    private boolean hatchBrokeOnce;
+
+    /** Can the hatch be hurt now? */
+    public boolean hatchOpen() { return hasHatch && hatchState == HATCH_OPENED; }
+
+    /** The boss lost health: the hatch breaks at half health (once; the second time the boss is beaten). */
+    public void onHatchHit() {
+        if (hasHatch && !hatchBrokeOnce && hp <= maxHp / 2f && hp > 0f) {
+            hatchBrokeOnce = true;
+            hp = maxHp / 2f;
+            hatchState = HATCH_BROKEN;
+            hatchDownT = HATCH_DOWN;
+        }
+        if (hp <= 0f) hatchState = HATCH_BROKEN;
+    }
+
+    private void updateHatchBoss(GameScreen g, float dt) {
+        float W = SalamanderGame.W, H = SalamanderGame.H, tx = g.scrollX + W - w - HATCH_RIGHT;
+        if (entering) {                                  // from behind the ships, along the middle
+            x += (g.scrollVX + HATCH_ENTER_SPEED) * dt;
+            if (x >= tx) { x = tx; entering = false; }
+            return;
+        }
+        x = tx;
+        boolean raging = hatchState == HATCH_BROKEN;
+        float lo = g.scrollY + 1f, hi = g.scrollY + H - h - 1f;
+        y += hatchDir * (raging ? HATCH_RAGE_MOVE : HATCH_MOVE) * dt;
+        if (y <= lo) { y = lo; hatchDir = 1f; }
+        if (y >= hi) { y = hi; hatchDir = -1f; }
+        if (raging) {
+            hatchDownT -= dt;
+            if (hatchDownT <= 0f && hp > 0f) { hatchState = HATCH_CLOSED; hatchT = HATCH_PERIOD - HATCH_OPEN; }
+            return;
+        }
+        hatchT -= dt;
+        if (hatchT > 0f) return;
+        if (hatchState == HATCH_CLOSED) {                 // opens, and a Rage comes out
+            hatchState = HATCH_OPENED;
+            hatchT = HATCH_OPEN;
+            g.launchRage(x + hatchX - 15f, y + hatchY + hatchH / 2f - 7.5f);
+        } else {
+            hatchState = HATCH_CLOSED;
+            hatchT = HATCH_PERIOD - HATCH_OPEN;
+        }
+    }
+
     // ---- core (stage 2, Tetran): a separate picture (sprites/boss1_core.png) drawn over a hole cut in the body. When a
     // boss has one, only the core takes damage; the rest of the body just stops shots.
     public boolean hasCore;
@@ -245,6 +304,10 @@ public class Boss {
                 g.a.play("boom", 0.2f);
             }
             if (dieT > 2.4f) g.bossDefeated();
+            return;
+        }
+        if (hasHatch) {                              // (Lavinia warship: its own movement, the Rages)
+            updateHatchBoss(g, dt);
             return;
         }
         if (tetran) {                                // (Tetran: its own movement and shots)

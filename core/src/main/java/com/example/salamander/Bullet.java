@@ -16,6 +16,10 @@ public class Bullet {
     public boolean dead, grounded;
     /** Enemy shot drawn as a straight laser beam (Gun Ho) instead of the spinning ebullet. */
     public boolean beam;
+    /** A ship's laser reflected by a Lavinia big block: drawn like the ships' laser, it hurts the ships. */
+    public boolean reflected;
+    /** Op 4 moai ring (sprites/ring_laser.png): 1 = yellow, 2 = white. */
+    public int ring;
     /**
      * Omen's laser: flies straight up / down and widens sideways around anchorX (its middle, where the picture's
      * pattern is anchored). Only its middle (the width it started with) is stopped by rock.

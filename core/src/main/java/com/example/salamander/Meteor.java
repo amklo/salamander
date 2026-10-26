@@ -32,7 +32,24 @@ public class Meteor {
     public static final float STRAIGHT_MAX = 8f, SIDE_MIN = 12f, SIDE_MAX = 40f, SIDE_SHARE = 0.45f;
     public static final float BIG_ANGLE_MAX = 12f;
 
+    // ---- side volcanoes (Eioneus; map object "volcano" with spits = left / right): red rocks thrown out of a rock tip
+    // sideways, pulled back toward their wall, as measured in the MSX recording (3 volcanoes, ~35 rocks)
+    /** Sideways launch speed (random in this range, px/s) and the pull back toward the wall (px/s^2). */
+    public static final float SIDE_SPEED_MIN = 45f, SIDE_SPEED_MAX = 90f, SIDE_PULL = 85f;
+    /** Up / down speed through the world (random in this range, px/s; + = up). */
+    public static final float SIDE_VY_MIN = -40f, SIDE_VY_MAX = 80f;
+    /** A burst of SIDE_BURST_MIN..MAX rocks, SIDE_GAP s apart, every SIDE_EVERY_MIN..MAX s while the tip is on screen. */
+    public static final int SIDE_BURST_MIN = 3, SIDE_BURST_MAX = 5;
+    public static final float SIDE_GAP = 0.12f, SIDE_EVERY_MIN = 1.8f, SIDE_EVERY_MAX = 3.0f;
+
     public final boolean big;
+    /**
+     * A side volcano's red rock: it moves through the WORLD (wx, wy = bottom-left; GameScreen works out sx / sy from
+     * them), vx changes by ax every second (the pull back toward its wall), and it keeps one picture (frame; no tumbling).
+     */
+    public boolean red;
+    public float wx, wy, ax;
+    public int frame = -1;
     /** Bottom-left on the screen, velocity, size, animation clock. */
     public float sx, sy, vx, vy, w, h, t;
     public boolean dead;
@@ -58,6 +75,12 @@ public class Meteor {
 
     public void update(float dt) {
         t += dt;
+        if (red) {                                  // (GameScreen places it on the screen and ends it)
+            vx += ax * dt;
+            wx += vx * dt;
+            wy += vy * dt;
+            return;
+        }
         sx += vx * dt;
         sy += vy * dt;
         // gone once it has left the screen (the bottom, or a side)

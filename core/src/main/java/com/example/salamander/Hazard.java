@@ -13,6 +13,11 @@ public class Hazard {
     public final Type type;
     public float x, y, w, h, vy, t, timer;
     public int hp;
+    /** VOLCANO: 0 = spits lava up (on the floor); -1 / +1 = a side volcano on a rock tip, spitting red rocks to the left / right. */
+    public int spit;
+    /** Side VOLCANO: rocks still to come in this burst, and the time to the next one. */
+    public int burstLeft;
+    public float burstT;
     public boolean dead, falling, fromCeil;
     public float phase, minLen, maxLen, speed;
     // FANG (stage 1 teeth): position when fully out (CRUSHER: mount surface), start delay, cycle length, picture, exact shape
@@ -340,7 +345,7 @@ public class Hazard {
     private float flyCx, flyCy, flyLead;
 
     /**
-     * MSX style, Lavinia (Tiled floordome property "gunhosMsx"): a floor hatch that lets out gunHos Gun Hos instead of
+     * Lavinia, both styles (Tiled dome_type2 property "gunhos"): a floor hatch that lets out gunHos Gun Hos instead of
      * spitting amoebas, as in the recording: one each time its left edge reaches GUNHO_HATCH_FIRST,
      * GUNHO_HATCH_FIRST - GUNHO_HATCH_STEP, ... on the screen (every 64 px of scrolling), 7 px in from its left edge.
      */
@@ -447,6 +452,16 @@ public class Hazard {
                 break;
             case VOLCANO:
                 timer -= dt;
+                if (spit != 0) {                         // side volcano (Eioneus): bursts of red rocks, one after another
+                    if (burstLeft > 0) {
+                        if ((burstT -= dt) <= 0f) { g.volcanoRock(x, y, spit); burstLeft--; burstT = Meteor.SIDE_GAP; }
+                    } else if (timer <= 0f && g.inView(x, y, 0f)) {
+                        timer = MathUtils.random(Meteor.SIDE_EVERY_MIN, Meteor.SIDE_EVERY_MAX);
+                        burstLeft = MathUtils.random(Meteor.SIDE_BURST_MIN, Meteor.SIDE_BURST_MAX);
+                        burstT = 0f;
+                    }
+                    break;
+                }
                 if (timer <= 0f && g.inView(x, y, 0f)) {   // only spits while its mouth is on screen
                     timer = MathUtils.random(1.8f, 3.0f);
                     int n = MathUtils.random(3, 5);
