@@ -124,15 +124,36 @@ public class Boss {
     public static final int ARM_HP = Hazard.ARM_HP * 5;
     private float[] armRegrowT;
 
-    // ---- Tetran (stage 2, the vertical stage): four identical tentacles of 3 rings plus a bent tip ring turn slowly
+    // ---- Tetran (stage 2, the vertical stage): four identical tentacles of rings ending in a bent tip ring turn slowly
     // (clockwise) around the body like a revolving door. The rings can't be hurt: they block shots and hurt the ships. Each tip
     // fires aimed shots. The body (sprite) takes the damage.
+    // Albert (2026-10-30): an extra ring at the root (no gap between the body and the tentacles: RINGS = 5). Below
+    // TETRAN_LONG_HP of its health the tentacles grow to twice their length (RINGS_MAX, one ring every TETRAN_GROW_T s)
+    // and each curls in and out (its own rhythm): every ring bends CURL_IN (inward, the way the tip is bent) or
+    // CURL_OUT (outward) radians more than the one before, over CURL_PERIOD s; the curl fades in over TETRAN_CURL_FADE s.
     public boolean tetran;
-    public static final int TENTACLES = 4, RINGS = 4;
-    /** Ring centres, world coordinates: [tentacle][ring], ring 3 = the tip. */
-    public final float[][] ringX = new float[TENTACLES][RINGS], ringY = new float[TENTACLES][RINGS];
-    /** Ring layout (from the original map), relative to the body centre along the tentacle / to its side. */
-    private static final float[] RING_ALONG = {36f, 44f, 52f, 60f}, RING_SIDE = {20f, 20f, 20f, 12f};
+    public static final int TENTACLES = 4, RINGS = 5, RINGS_MAX = 10;
+    /** Rings per tentacle now (the last one is the tip): RINGS, growing to RINGS_MAX below half health. */
+    public int ringCount = RINGS;
+    /** Ring centres, world coordinates: [tentacle][ring], ring ringCount - 1 = the tip. */
+    public final float[][] ringX = new float[TENTACLES][RINGS_MAX], ringY = new float[TENTACLES][RINGS_MAX];
+    /** Ring layout (the original map's, plus the root ring): the first ring RING_ALONG0 px out from the body centre and
+     *  RING_SIDE0 px to the side; each next one RING_STEP px further out; the tip also TIP_BACK px back to the other side. */
+    private static final float RING_ALONG0 = 28f, RING_SIDE0 = 20f, RING_STEP = 8f, TIP_BACK = 8f;
+    public static final float TETRAN_LONG_HP = 0.5f, TETRAN_GROW_T = 0.12f, TETRAN_CURL_FADE = 1f,
+            CURL_IN = 0.24f, CURL_OUT = 0.12f, CURL_PERIOD = 3.2f;
+    /** Each tentacle's place in its curl rhythm (radians), so they never curl together. */
+    private static final float[] CURL_PHASE = {0f, 2.2f, 4.1f, 1.1f};
+    private boolean tetranLong;
+    private float growT, curlT;
+    /**
+     * Albert (2026-10-30): each tentacle also runs inward from its root ring to the body's centre (INNER_RINGS rings,
+     * evenly spaced, the first one at the centre), so the four meet in the middle. They are drawn under the body and only
+     * show through its gaps (the core's hole once its bars are shot away). They don't block shots or hurt the ships:
+     * the core sits on top of them.
+     */
+    public static final int INNER_RINGS = 4;
+    public final float[][] innerX = new float[TENTACLES][INNER_RINGS], innerY = new float[TENTACLES][INNER_RINGS];
     /** Turning speed (radians per second; the tentacles turn clockwise), tip shot interval and speed. */
     public static final float TETRAN_SPIN = 0.675f, TIP_SHOT_INTERVAL = 2.6f, TIP_SHOT_SPEED = 105f;   // (spin was 0.45, +50%)
     /** Tetran's flight: circles (counter-clockwise) around a point on the screen, starting from the top of the circle
@@ -143,15 +164,31 @@ public class Boss {
     private float spinA;
     private final float[] tipShotT = new float[TENTACLES];
 
-    /** Lays the tentacles out around the body for the current turn. */
+    /** How far tentacle k curls now (radians per ring; + = inward, the way the tip is bent). */
+    private float curl(int k) {
+        if (!tetranLong) return 0f;
+        float s = MathUtils.sin(MathUtils.PI2 * curlT / CURL_PERIOD + CURL_PHASE[k]);
+        return Math.min(1f, curlT / TETRAN_CURL_FADE) * (s > 0f ? CURL_IN * s : CURL_OUT * s);
+    }
+
+    /** Lays the tentacles out around the body for the current turn: a chain of rings, each bent by the curl. */
     private void layoutRings() {
         float cx = x + w / 2f, cy = y + h / 2f;
         for (int k = 0; k < TENTACLES; k++) {
             float a = spinA + k * MathUtils.PI / 2f, dx = MathUtils.cos(a), dy = MathUtils.sin(a);
             float sx = dy, sy = -dx;                 // to the side: the tentacle's direction turned clockwise
-            for (int i = 0; i < RINGS; i++) {
-                ringX[k][i] = cx + dx * RING_ALONG[i] + sx * RING_SIDE[i];
-                ringY[k][i] = cy + dy * RING_ALONG[i] + sy * RING_SIDE[i];
+            float px = cx + dx * RING_ALONG0 + sx * RING_SIDE0, py = cy + dy * RING_ALONG0 + sy * RING_SIDE0, c = curl(k);
+            ringX[k][0] = px; ringY[k][0] = py;
+            for (int j = 0; j < INNER_RINGS; j++) {   // from the centre out to the root ring
+                innerX[k][j] = cx + (px - cx) * j / INNER_RINGS;
+                innerY[k][j] = cy + (py - cy) * j / INNER_RINGS;
+            }
+            for (int i = 1; i < ringCount; i++) {
+                float back = i == ringCount - 1 ? TIP_BACK : 0f;   // (the tip bends back)
+                float vx = dx * RING_STEP - sx * back, vy = dy * RING_STEP - sy * back;
+                float th = c * i, cs = MathUtils.cos(th), sn = MathUtils.sin(th);   // turned toward the tip's side
+                px += vx * cs - vy * sn; py += vx * sn + vy * cs;
+                ringX[k][i] = px; ringY[k][i] = py;
             }
         }
     }
@@ -160,7 +197,7 @@ public class Boss {
     public boolean ringTouches(float rx, float ry, float rw, float rh) {
         if (!tetran || dying) return false;
         for (int k = 0; k < TENTACLES; k++)
-            for (int i = 0; i < RINGS; i++) {
+            for (int i = 0; i < ringCount; i++) {
                 float bx = ringX[k][i] - 3f, by = ringY[k][i] - 3f;
                 if (rx < bx + 6f && rx + rw > bx && ry < by + 6f && ry + rh > by) return true;
             }
@@ -170,7 +207,7 @@ public class Boss {
     /** The boss is beaten: the rings burst. */
     public void explodeRings(GameScreen g) {
         if (!tetran) return;
-        for (int k = 0; k < TENTACLES; k++) for (int i = 0; i < RINGS; i++) g.boom(ringX[k][i], ringY[k][i], 0.7f);
+        for (int k = 0; k < TENTACLES; k++) for (int i = 0; i < ringCount; i++) g.boom(ringX[k][i], ringY[k][i], 0.7f);
     }
 
     /** Vertical stage: comes down from the top into the upper part of the screen and sways from side to side. */
@@ -192,13 +229,18 @@ public class Boss {
             spinA -= TETRAN_SPIN * dt;            // (clockwise)
         }
         if (tetran) {
+            if (!entering && !tetranLong && hp <= maxHp * TETRAN_LONG_HP) tetranLong = true;   // half health: longer, curling
+            if (tetranLong) {
+                curlT += dt;
+                if (ringCount < RINGS_MAX && (growT += dt) >= TETRAN_GROW_T) { growT -= TETRAN_GROW_T; ringCount++; }
+            }
             layoutRings();
             if (entering) return;
             for (int k = 0; k < TENTACLES; k++) {
                 tipShotT[k] -= dt;
                 if (tipShotT[k] > 0f) continue;
                 tipShotT[k] = TIP_SHOT_INTERVAL + MathUtils.random(0f, 0.6f);
-                g.aimedShot(ringX[k][RINGS - 1], ringY[k][RINGS - 1], TIP_SHOT_SPEED, 0f);
+                g.aimedShot(ringX[k][ringCount - 1], ringY[k][ringCount - 1], TIP_SHOT_SPEED, 0f);
             }
         }
     }

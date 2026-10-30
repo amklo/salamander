@@ -644,6 +644,7 @@ public class GameScreen extends ScreenAdapter {
         scrollVX = 0f;
         scrollVY = 0f;
         float sx = scrollX, fr = front();
+        resetDarkness(sx);
         pBullets.clear(); eBullets.clear(); enemies.clear(); caps.clear(); groups.clear();
         aimBeamList.clear();
         level.obstacles.clear();                      // rubble goes (the eye rocks come back)
@@ -3793,6 +3794,72 @@ public class GameScreen extends ScreenAdapter {
     }
 
     private TextureRegion blockSmallR, blockBigR, rageR, laserGunR;
+
+    /**
+     * Lavinia's darkness (as in the MSX recording): from a "dark_zone" on, the stage's lights are off - no background,
+     * stars or terrain are drawn (it is all still there and still solid); only the ships, enemies, domes, shots and
+     * the item_spark show. A ship touching the spark turns the lights straight back on.
+     */
+    private boolean[] darkLit = new boolean[0];
+    /** The item_sparks still to be picked up ({x, y} bottom-left). */
+    private final ArrayList<float[]> sparkItems = new ArrayList<>();
+    private TextureRegion sparkR;
+    private float sparkT;
+    public static final float SPARK_SIZE = 16f;
+
+    /** The lights are off: the camera is inside a dark zone whose spark hasn't been picked up. */
+    boolean lightsOut() {
+        float camL = scrollX;
+        for (int i = 0; i < level.darkZones.size(); i++) {
+            float[] z = level.darkZones.get(i);
+            if (camL >= z[0] && camL < z[1] && !(i < darkLit.length && darkLit[i])) return true;
+        }
+        return false;
+    }
+
+    /** Darkness after a (re)start at camera x sx: sparks behind the camera count as picked up. */
+    private void resetDarkness(float sx) {
+        if (darkLit.length != level.darkZones.size()) darkLit = new boolean[level.darkZones.size()];
+        sparkItems.clear();
+        for (int i = 0; i < darkLit.length; i++) darkLit[i] = false;
+        for (float[] s : level.sparks) {
+            if (s[0] + SPARK_SIZE < sx) lightUp(s[0]);
+            else sparkItems.add(new float[]{s[0], s[1]});
+        }
+    }
+
+    /** A spark at x picked up: the lights come on in the dark zone it is in (in every zone that has started, if none). */
+    private void lightUp(float x) {
+        boolean any = false;
+        for (int i = 0; i < darkLit.length; i++) {
+            float[] z = level.darkZones.get(i);
+            if (x >= z[0] && x < z[1]) { darkLit[i] = true; any = true; }
+        }
+        if (!any) for (int i = 0; i < darkLit.length; i++) if (scrollX >= level.darkZones.get(i)[0]) darkLit[i] = true;
+    }
+
+    private void collideSparks(Player p) {
+        for (int i = sparkItems.size() - 1; i >= 0; i--) {
+            float[] s = sparkItems.get(i);
+            if (overlap(p.x + 2f, p.y, 28f, 16f, s[0], s[1], SPARK_SIZE, SPARK_SIZE)) {
+                sparkItems.remove(i);
+                lightUp(s[0]);
+                p.score += 300;
+                a.play("pickup", 0.35f);
+            }
+        }
+    }
+
+    private void drawSparks() {
+        if (sparkItems.isEmpty()) return;
+        if (sparkR == null) {
+            String f = Gdx.files.internal("sprites/item_spark.png").exists() ? "item_spark" : "spark";
+            sparkR = new TextureRegion(a.tex(f));
+        }
+        sparkT += Gdx.graphics.getDeltaTime();
+        if (((int) (sparkT * 8f)) % 4 == 3) return;   // a little twinkle
+        for (float[] s : sparkItems) batch.draw(sparkR, s[0], s[1], SPARK_SIZE, SPARK_SIZE);
+    }
     private TextureRegion[] ledZepF, gammaRedF;
     /** Lavinia Led Zeps: seconds to the next one. */
     private float ledZepT = 1f;
@@ -4774,6 +4841,7 @@ public class GameScreen extends ScreenAdapter {
         }
         collideMeteors(p);
         if (p.dead) return;
+        collideSparks(p);
         for (Capsule c : caps) {
             if (!c.dead() && overlap(p.x + 2f, p.y, 28f, 16f, c.x, c.y, capW, capH)) {
                 c.x = -99999f;   // consumed (culled next frame)
@@ -4939,15 +5007,19 @@ public class GameScreen extends ScreenAdapter {
         batch.setProjectionMatrix(cam.combined);
         batch.begin();
         float camL = Math.round(scrollX), camB = Math.round(scrollY);
-        if (level.background != null) {   // map property "background"; stage 1 is plain black space
+        boolean dark = lightsOut();   // Lavinia: the lights are off (only what moves is seen)
+        if (level.background != null && !dark) {   // map property "background"; stage 1 is plain black space
             batch.draw(bgTex, camL, camB, W, H, (int) (scrollX * 0.25f), 0, W, H, false, false);
         }
         batch.setColor(STAR_TINT[levelIdx]);
-        drawStars(camL, camB);
+        if (!dark) drawStars(camL, camB);
         batch.setColor(Color.WHITE);
 
-        drawFangs();          // teeth first, so the ground hides the part that is pulled in
-        drawTerrain();
+        if (!dark) {
+            drawFangs();      // teeth first, so the ground hides the part that is pulled in
+            drawTerrain();
+        }
+        drawSparks();
         drawPods();           // Eioneus's gun pods
         drawDissolving();     // pictures breaking up (dissolveDeath)
         drawGround();         // bases and destroyed enemies that stay: under everything in play
@@ -5553,8 +5625,11 @@ public class GameScreen extends ScreenAdapter {
     private void drawTentacles() {
         if (!boss.tetran || boss.dying) return;
         float rs = Boss.RING_SIZE;
+        for (int k = 0; k < Boss.TENTACLES; k++)   // the inner rings, from the centre to the root (under the body)
+            for (int j = 0; j < Boss.INNER_RINGS; j++)
+                batch.draw(ringR, Math.round(boss.innerX[k][j] - rs / 2f), Math.round(boss.innerY[k][j] - rs / 2f), rs, rs);
         for (int k = 0; k < Boss.TENTACLES; k++)
-            for (int i = 0; i < Boss.RINGS; i++)
+            for (int i = 0; i < boss.ringCount; i++)
                 batch.draw(ringR, Math.round(boss.ringX[k][i] - rs / 2f), Math.round(boss.ringY[k][i] - rs / 2f), rs, rs);
     }
 

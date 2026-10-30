@@ -205,6 +205,13 @@ public class Level {
     /** Lavinia: where Led Zeps keep coming ({x0, x1, mean seconds between them}; the camera's right edge in x0..x1). */
     public final ArrayList<float[]> ledZepZones = new ArrayList<>();
     /**
+     * Lavinia's darkness (map object "dark_zone", a rectangle): {x0, x1}. The lights go off when the camera's left edge
+     * reaches x0 and stay off until a ship picks up an item_spark (or, if it was missed, the camera's left edge reaches x1).
+     */
+    public final ArrayList<float[]> darkZones = new ArrayList<>();
+    /** Map objects "item_spark" (tile, bottom-left {x, y}): touching one turns the lights back on. */
+    public final ArrayList<float[]> sparks = new ArrayList<>();
+    /**
      * Background lights (map objects "back_ground_lights"; Op 4 and Lavinia): {left x, bottom y, first frame}. The sprite
      * is the stage's sprites/stage_<N>_back_ground_lights.png (square frames in a row). Decoration only: drawn just over
      * the stage art, under everything else; never hit, never in the way.
@@ -540,6 +547,12 @@ public class Level {
                         }
                         break;
                     }
+                    case "dark_zone":
+                        darkZones.add(new float[]{left, left + w});
+                        break;
+                    case "item_spark": case "spark":
+                        sparks.add(new float[]{left, bottom});
+                        break;
                     case "ledzep_zone": {                        // Lavinia: Led Zeps come at random while the camera's right edge is in here
                         ledZepZones.add(new float[]{left, left + w, p.prop("interval", 2.5f)});
                         break;

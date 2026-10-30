@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="71" columns="0">
+<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="72" columns="0">
  <grid orientation="orthogonal" width="1" height="1" />
  <tile id="2" class="walker">
   <properties>
@@ -388,5 +388,8 @@
  </tile>
  <tile id="73" class="back_ground_lights">
   <image source="icons/back_ground_lights_3.png" width="8" height="8"/>
+ </tile>
+ <tile id="74" class="item_spark">
+  <image source="../sprites/item_spark.png" width="16" height="16"/>
  </tile>
 </tileset>
