@@ -333,8 +333,8 @@ public class GameScreen extends ScreenAdapter {
         walkF = a.strip("walker", 16);
         bioWalkRedF = levelIdx == 0 || levelIdx == 4 ? a.strip("bio walker red", 16) : null;     // stage 1 and Kierke
         bioWalkBlueF = levelIdx == 0 || levelIdx == 4 ? a.strip("bio walker blue", 16) : null;
-        capF = scanFrames("sprites/PowerCapsule.png");   // frames separated by empty columns
-        capGreenF = Gdx.files.internal("sprites/powercapsule_green.png").exists() ? scanFrames("sprites/powercapsule_green.png") : capF;
+        capF = Sprites.scanFrames(a, "sprites/PowerCapsule.png");   // frames separated by empty columns
+        capGreenF = Gdx.files.internal("sprites/powercapsule_green.png").exists() ? Sprites.scanFrames(a, "sprites/powercapsule_green.png") : capF;
         capW = capF[0].getRegionWidth();
         capH = capF[0].getRegionHeight();
         boomF = a.strip("explosion", 24);
@@ -391,29 +391,29 @@ public class GameScreen extends ScreenAdapter {
         greenMineF = Gdx.files.internal("sprites/green_mine.png").exists() ? a.strip("green_mine", 16) : null;
         gammaF = Gdx.files.internal("sprites/gamma_blue.png").exists() ? a.strip("gamma_blue", 16)   // (Albert's blue / red pictures)
                 : Gdx.files.internal("sprites/gamma.png").exists() ? a.strip("gamma", 16) : null;
-        artilleryGreenR = keyedDark("sprites/artillery_green.png");   // artillery: Op 4 and Lavinia (any stage that has it)
-        artilleryRedR = keyedDark("sprites/artillery_red.png");
-        artilleryGreenF = squareFrames(artilleryGreenR);
-        artilleryRedF = squareFrames(artilleryRedR);
+        artilleryGreenR = Sprites.keyedDark("sprites/artillery_green.png");   // artillery: Op 4 and Lavinia (any stage that has it)
+        artilleryRedR = Sprites.keyedDark("sprites/artillery_red.png");
+        artilleryGreenF = Sprites.squareFrames(artilleryGreenR);
+        artilleryRedF = Sprites.squareFrames(artilleryRedR);
         // blue rock clumps: Op 4 and stage 2 (~120-130 s in the stage 2 recording)
         blueAsteroidR = (levelIdx == 1 || levelIdx == 5) && Gdx.files.internal("sprites/blue_asteroid.png").exists() ? a.one("blue_asteroid") : null;
         if (levelIdx == 5) {                          // Op 4 (Albert's sprites; black is see-through)
-            exodusCyanF = keyedFrames("sprites/exodus_cyan.png", 16);
-            exodusRedF = keyedFrames("sprites/exodus_red.png", 16);
+            exodusCyanF = Sprites.keyedFrames("sprites/exodus_cyan.png", 16);
+            exodusRedF = Sprites.keyedFrames("sprites/exodus_red.png", 16);
             base6F = Gdx.files.internal("sprites/stage_6_back_ground_base.png").exists() ? a.strip("stage_6_back_ground_base", 22) : null;
             moaiF = Gdx.files.internal("sprites/moai.png").exists() ? a.strip("moai", 50) : null;
             orbR = Gdx.files.internal("sprites/orb.png").exists() ? a.one("orb") : null;
-            ring6R = keyedDark("sprites/ring_laser.png");
+            ring6R = Sprites.keyedDark("sprites/ring_laser.png");
             optionEaterF = Gdx.files.internal("sprites/option_eater.png").exists() ? a.strip("option_eater", 16) : null;
         }
-        batterySmallR = keyedDark("sprites/laser_battery_small.png");
+        batterySmallR = Sprites.keyedDark("sprites/laser_battery_small.png");
         // the middle of the Eioneus base, 4 frames of 20x21 (closed, opening, open, destroyed); the rest of the base is map art
         baseF = Gdx.files.internal("sprites/eioneus_base_core.png").exists() ? a.strip("eioneus_base_core", 20) : null;
-        mineWhiteF = keyedFrames("sprites/flying_mines.png", 16);
-        mineRedF = keyedFrames("sprites/flying_mines_red.png", 16);
+        mineWhiteF = Sprites.keyedFrames("sprites/flying_mines.png", 16);
+        mineRedF = Sprites.keyedFrames("sprites/flying_mines_red.png", 16);
         gremlinYellowF = Gdx.files.internal("sprites/gremlin_yellow.png").exists() ? a.strip("gremlin_yellow", 16) : null;
         gremlinRedF = Gdx.files.internal("sprites/gremlin_red.png").exists() ? a.strip("gremlin_red", 16) : null;
-        batteryBigR = keyedDark("sprites/laser_battery_big.png");
+        batteryBigR = Sprites.keyedDark("sprites/laser_battery_big.png");
         greenF = Gdx.files.internal("sprites/green_flyer.png").exists() ? a.strip("green_flyer", 16) : null;
         if (Gdx.files.internal("sprites/chain_balls.png").exists()) {
             TextureRegion all = a.one("chain_balls");
@@ -424,7 +424,7 @@ public class GameScreen extends ScreenAdapter {
         shieldF = Gdx.files.internal("sprites/shield.png").exists() ? a.strip("shield", 8) : null;   // drawn as it is (its own transparency)
         shieldRedF = Gdx.files.internal("sprites/shield_red.png").exists() ? a.strip("shield_red", 8) : null;
         linkF = a.strip("missing_link", 16);
-        amoebaF = framesOuterBlackKeyed("sprites/amoeba.png", 16);
+        amoebaF = Sprites.framesOuterBlackKeyed("sprites/amoeba.png", 16);
         rugalF = a.strip("rugal", 16);
         rugalRedF = Gdx.files.internal("sprites/rugal_red.png").exists() ? a.strip("rugal_red", 16) : null;
         rippleTex = a.texFile("sprites/ripple.png");   // drawn as it is (its own transparency)
@@ -436,9 +436,9 @@ public class GameScreen extends ScreenAdapter {
         if (levelIdx == 3 && orbR == null && Gdx.files.internal("sprites/orb.png").exists()) orbR = a.one("orb");   // (the pod room's bubbles)
         loadKierkeBoss();
         boolean v = level.vertical;   // pictures only the vertical stage uses
-        playerVF = v ? verticalShipFrames(keyedBackground("sprites/player_blue_vertical.png")) : null;
+        playerVF = v ? Sprites.verticalShipFrames(Sprites.keyedBackground("sprites/player_blue_vertical.png")) : null;
         playerVRedF = v && Gdx.files.internal("sprites/player_red_vertical.png").exists()
-                ? verticalShipFrames(keyedBackground("sprites/player_red_vertical.png")) : playerVF;   // player 2
+                ? Sprites.verticalShipFrames(Sprites.keyedBackground("sprites/player_red_vertical.png")) : playerVF;   // player 2
         wallTurretRedF = v ? a.strip("wall turret red", 16) : null;
         wallTurretGreenF = v ? a.strip("wall turret green", 16) : null;
         boolean domes = v || !level.domes.isEmpty();   // (stage 3 has them too, on the floor and the ceiling)
@@ -450,7 +450,7 @@ public class GameScreen extends ScreenAdapter {
             for (int i = 0; i < dm.length; i++) domeMasks[i] = new PixelMask[]{dm[i], dm[i].flippedH(), dm[i].rotatedCCW(), dm[i].rotatedCW()};
         }
         PixelMask[] eyeMask = new PixelMask[1];
-        rockEyeR = v ? keyedBackground("sprites/rock_eye.png", eyeMask) : null;
+        rockEyeR = v ? Sprites.keyedBackground("sprites/rock_eye.png", eyeMask) : null;
         rockEyeMask = eyeMask[0];
         boolean rubble = v && Gdx.files.internal("sprites/rubbles.png").exists();
         rubbleR = rubble ? a.one("rubbles") : null;
@@ -1950,7 +1950,7 @@ public class GameScreen extends ScreenAdapter {
             if (sd.dead || sd.withered || sd.type != Enemy.Type.SEED) continue;
             float below = scrollY + H - (sd.y + sd.h / 2f);  // how far its middle is below the top edge
             if (below < Enemy.SEED_START || sd.y + sd.h < scrollY) continue;
-            if (sd.seedT < 0f) { sd.seedT = Enemy.SEED_OPENING; sd.seedOpening = true; }   // it comes on: opens
+            if (sd.seedT < 0f && !sd.seedOpen) { sd.seedT = Enemy.SEED_OPENING; sd.seedOpening = true; }   // it comes on: opens (once)
             if (sd.seedOpening) {
                 if ((sd.seedT -= dt) > 0f) continue;
                 sd.seedOpening = false; sd.seedOpen = true;   // open now, and it stays open
@@ -2085,40 +2085,6 @@ public class GameScreen extends ScreenAdapter {
         g.size = 1;
         g.carrier = true;
         return g;
-    }
-
-    /** A strip of square frames side by side (each as tall as the picture); null for null. */
-    private static TextureRegion[] squareFrames(TextureRegion r) {
-        if (r == null) return null;
-        int fh = r.getRegionHeight(), n = Math.max(1, r.getRegionWidth() / fh);
-        TextureRegion[] f = new TextureRegion[n];
-        for (int i = 0; i < n; i++) f[i] = new TextureRegion(r, i * fh, 0, fh, fh);
-        return f;
-    }
-
-    /** A picture whose near-black pixels (its background box) are made see-through; null if the file is missing. */
-    private static TextureRegion keyedDark(String file) {
-        if (!Gdx.files.internal(file).exists()) return null;
-        com.badlogic.gdx.graphics.Pixmap src = new com.badlogic.gdx.graphics.Pixmap(Gdx.files.internal(file));
-        com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(src.getWidth(), src.getHeight(), com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-        pm.setBlending(com.badlogic.gdx.graphics.Pixmap.Blending.None);
-        for (int yy = 0; yy < src.getHeight(); yy++) for (int xx = 0; xx < src.getWidth(); xx++) {
-            int c = src.getPixel(xx, yy), r = c >>> 24 & 255, gg = c >>> 16 & 255, bb = c >>> 8 & 255, al = c & 255;
-            pm.drawPixel(xx, yy, al == 0 || (r < 16 && gg < 16 && bb < 16) ? 0 : c);
-        }
-        TextureRegion t = new TextureRegion(new Texture(pm));
-        pm.dispose(); src.dispose();
-        return t;
-    }
-
-    /** A strip of frames (frameW wide) whose near-black pixels are made see-through; null if the file is missing. */
-    private static TextureRegion[] keyedFrames(String file, int frameW) {
-        TextureRegion all = keyedDark(file);
-        if (all == null) return null;
-        int n = Math.max(1, all.getRegionWidth() / frameW);
-        TextureRegion[] f = new TextureRegion[n];
-        for (int i = 0; i < n; i++) f[i] = new TextureRegion(all, i * frameW, 0, frameW, all.getRegionHeight());
-        return f;
     }
 
     /** Kierke chains: start when they come to Enemy.CHAIN_START_X on the screen, then grow a ball at a time. */
@@ -2444,137 +2410,12 @@ public class GameScreen extends ScreenAdapter {
      * own height. Also tells Hazard the frame sizes, so the hit box pulses with the picture.
      */
     private TextureRegion[] loadBamdaFrames() {
-        TextureRegion[] f = scanFrames("sprites/bamda.png");
+        TextureRegion[] f = Sprites.scanFrames(a, "sprites/bamda.png");
         Hazard.bamdaW = new float[f.length];
         Hazard.bamdaH = new float[f.length];
         for (int i = 0; i < f.length; i++) {
             Hazard.bamdaW[i] = f[i].getRegionWidth();
             Hazard.bamdaH[i] = f[i].getRegionHeight();
-        }
-        return f;
-    }
-
-    /**
-     * Frames of a fixed width from a picture drawn on solid black: the black around each figure (connected to the
-     * frame's edge) becomes see-through, black enclosed by the figure stays. A picture that already has
-     * transparency is used as it is.
-     */
-    private TextureRegion[] framesOuterBlackKeyed(String file, int frameW) {
-        Pixmap pm = new Pixmap(Gdx.files.internal(file));
-        if (pm.getFormat() != Pixmap.Format.RGBA8888) {
-            Pixmap c = new Pixmap(pm.getWidth(), pm.getHeight(), Pixmap.Format.RGBA8888);
-            c.setBlending(Pixmap.Blending.None);
-            c.drawPixmap(pm, 0, 0);
-            pm.dispose();
-            pm = c;
-        }
-        pm.setBlending(Pixmap.Blending.None);
-        int W = pm.getWidth(), H = pm.getHeight();
-        boolean[] seen = new boolean[W * H];
-        java.util.ArrayDeque<int[]> q = new java.util.ArrayDeque<>();
-        for (int f = 0; f * frameW < W; f++) {
-            int x0 = f * frameW, x1 = Math.min(W, x0 + frameW) - 1;
-            for (int x = x0; x <= x1; x++) { q.add(new int[]{x, 0, x0, x1}); q.add(new int[]{x, H - 1, x0, x1}); }
-            for (int y = 0; y < H; y++) { q.add(new int[]{x0, y, x0, x1}); q.add(new int[]{x1, y, x0, x1}); }
-        }
-        while (!q.isEmpty()) {                                  // flood the black from each frame's border
-            int[] c = q.poll();
-            int x = c[0], y = c[1];
-            if (x < c[2] || x > c[3] || y < 0 || y >= H || seen[y * W + x]) continue;
-            int px = pm.getPixel(x, y);
-            boolean blackOrClear = (px & 0xff) == 0 || (px >>> 8) == 0;
-            if (!blackOrClear) continue;
-            seen[y * W + x] = true;
-            pm.drawPixel(x, y, 0);
-            q.add(new int[]{x + 1, y, c[2], c[3]}); q.add(new int[]{x - 1, y, c[2], c[3]});
-            q.add(new int[]{x, y + 1, c[2], c[3]}); q.add(new int[]{x, y - 1, c[2], c[3]});
-        }
-        Texture tex = new Texture(pm);
-        tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        pm.dispose();
-        int n = Math.max(1, W / frameW);
-        TextureRegion[] fr = new TextureRegion[n];
-        for (int i = 0; i < n; i++) fr[i] = new TextureRegion(tex, i * frameW, 0, frameW, H);
-        return fr;
-    }
-
-    /**
-     * A single picture drawn on a solid dark background (like sprites/player_blue_vertical.png): the background colour
-     * (the top-left pixel) connected to the edges becomes see-through. A picture with transparency is used as it is.
-     */
-    private TextureRegion keyedBackground(String file) { return keyedBackground(file, null); }
-
-    /** keyedBackground, and maskOut[0] = the exact shape of the result (when maskOut is given). */
-    private TextureRegion keyedBackground(String file, PixelMask[] maskOut) {
-        Pixmap pm = new Pixmap(Gdx.files.internal(file));
-        if (pm.getFormat() != Pixmap.Format.RGBA8888) {
-            Pixmap c = new Pixmap(pm.getWidth(), pm.getHeight(), Pixmap.Format.RGBA8888);
-            c.setBlending(Pixmap.Blending.None);
-            c.drawPixmap(pm, 0, 0);
-            pm.dispose();
-            pm = c;
-        }
-        pm.setBlending(Pixmap.Blending.None);
-        int W = pm.getWidth(), H = pm.getHeight(), bg = pm.getPixel(0, 0);
-        boolean dark = (bg & 0xff) == 0xff && ((bg >>> 24) & 0xff) < 24 && ((bg >>> 16) & 0xff) < 24 && ((bg >>> 8) & 0xff) < 24;
-        if (dark) {
-            boolean[] seen = new boolean[W * H];
-            java.util.ArrayDeque<int[]> q = new java.util.ArrayDeque<>();
-            for (int x = 0; x < W; x++) { q.add(new int[]{x, 0}); q.add(new int[]{x, H - 1}); }
-            for (int y = 0; y < H; y++) { q.add(new int[]{0, y}); q.add(new int[]{W - 1, y}); }
-            while (!q.isEmpty()) {
-                int[] c = q.poll();
-                int x = c[0], y = c[1];
-                if (x < 0 || x >= W || y < 0 || y >= H || seen[y * W + x] || pm.getPixel(x, y) != bg) continue;
-                seen[y * W + x] = true;
-                pm.drawPixel(x, y, 0);
-                q.add(new int[]{x + 1, y}); q.add(new int[]{x - 1, y}); q.add(new int[]{x, y + 1}); q.add(new int[]{x, y - 1});
-            }
-        }
-        if (maskOut != null) maskOut[0] = PixelMask.fromPixmap(pm, 0, W);
-        Texture tex = new Texture(pm);
-        tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        pm.dispose();
-        return new TextureRegion(tex);
-    }
-
-    /**
-     * The vertical ship's frames: three of equal width side by side (left, level, right). A picture no wider than it
-     * is tall is a single frame, used for all three.
-     */
-    private static TextureRegion[] verticalShipFrames(TextureRegion sheet) {
-        int w = sheet.getRegionWidth(), h = sheet.getRegionHeight();
-        if (w <= h) return new TextureRegion[]{sheet, sheet, sheet};
-        int fw = w / 3;
-        TextureRegion[] f = new TextureRegion[3];
-        for (int i = 0; i < 3; i++) f[i] = new TextureRegion(sheet, i * fw, 0, fw, h);
-        return f;
-    }
-
-    /** Frames side by side in one picture, separated by empty columns; each frame is trimmed to its own height. */
-    private TextureRegion[] scanFrames(String file) {
-        Pixmap pm = new Pixmap(Gdx.files.internal(file));
-        ArrayList<int[]> frames = new ArrayList<>();          // {x, y, w, h}
-        int start = -1;
-        for (int x = 0; x <= pm.getWidth(); x++) {
-            boolean empty = true;
-            if (x < pm.getWidth()) for (int y = 0; y < pm.getHeight() && empty; y++) if ((pm.getPixel(x, y) & 0xff) != 0) empty = false;
-            if (!empty && start < 0) start = x;
-            if (empty && start >= 0) {
-                int top = pm.getHeight(), bottom = -1;
-                for (int y = 0; y < pm.getHeight(); y++)
-                    for (int xx = start; xx < x; xx++)
-                        if ((pm.getPixel(xx, y) & 0xff) != 0) { top = Math.min(top, y); bottom = Math.max(bottom, y); }
-                frames.add(new int[]{start, top, x - start, bottom - top + 1});
-                start = -1;
-            }
-        }
-        pm.dispose();
-        Texture tex = a.texFile(file);
-        TextureRegion[] f = new TextureRegion[frames.size()];
-        for (int i = 0; i < f.length; i++) {
-            int[] r = frames.get(i);
-            f[i] = new TextureRegion(tex, r[0], r[1], r[2], r[3]);
         }
         return f;
     }
