@@ -3,9 +3,10 @@ package com.example.salamander;
 import com.badlogic.gdx.math.MathUtils;
 
 /**
- * Asteroid storm rock (stage 2): falls toward the bottom edge of the screen, some at an angle to the sides. Not an
- * enemy: it ignores the terrain, gives no points, and only a guard (SHIELD / F.FIELD) can destroy it. Shots go
- * straight through the small ones; a big one that is shot splits into three fast small ones.
+ * Asteroid storm rock: falls toward the bottom edge of the screen (only on stage 2 some at an angle to the sides;
+ * everywhere else straight down). Not an enemy: it gives no points; walls and other solid scenery destroy it (Albert,
+ * 2026-10-29), and so does a guard (SHIELD / F.FIELD). Shots stop on the small ones; a big one that is shot splits
+ * into three fast small ones.
  *
  * Positions are SCREEN coordinates (relative to the camera's bottom-left), so the rocks fall the same way however the
  * screen is scrolling; GameScreen adds scrollX / scrollY for collisions and drawing.
@@ -40,7 +41,7 @@ public class Meteor {
     public static final float SIDE_VY_MIN = -40f, SIDE_VY_MAX = 80f;
     /** A burst of SIDE_BURST_MIN..MAX rocks, SIDE_GAP s apart, every SIDE_EVERY_MIN..MAX s while the tip is on screen. */
     public static final int SIDE_BURST_MIN = 3, SIDE_BURST_MAX = 5;
-    public static final float SIDE_GAP = 0.12f, SIDE_EVERY_MIN = 1.8f, SIDE_EVERY_MAX = 3.0f;
+    public static final float SIDE_GAP = 0.12f, SIDE_EVERY_MIN = 0.9f, SIDE_EVERY_MAX = 1.5f;   // (Albert, 2026-10-29: twice as many: was 1.8..3.0)
 
     public final boolean big;
     /**

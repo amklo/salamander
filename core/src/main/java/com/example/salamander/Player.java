@@ -25,7 +25,7 @@ public class Player {
     public float x, y, fireCd, missCd, invuln;
     public float respawnT;           // > 0 while waiting to re-enter after being shot down (co-op)
     public float ffieldHitT;         // > 0 just after the F.FIELD bubble took a hit: the bubble blinks, not the ship
-    public float ghostT;             // > 0 just after (re)entering: terrain, teeth and crushers can't hurt the ship
+    public float ghostT;             // > 0 just after (re)entering: terrain and teeth can't hurt the ship
     public float trailAcc;
     public boolean aiming;           // holding AIM with DOUBLE equipped
     public int tilt;                 // 0 level, 1 up, 2 down (sprite frame); vertical stages: 0 level, TILT_LEFT, TILT_RIGHT
@@ -45,8 +45,23 @@ public class Player {
     public String powerLabel(int power) { return power == SPEED ? "SPEED#" + nextSpeed() : POWER_NAMES[power]; }
     public boolean missile;          // MISSILE, or 2-WAY / HOMING on ships whose meter has it (see twoWay(), homing())
     public int weapon;               // W_NORMAL, W_DOUBLE, W_LASER or W_RIPPLE
+    /** LASER / RIPPLE aim (AIM held with either): 0 = straight ahead, then every 45 deg counter-clockwise, like doubleDir. */
+    public int laserDir;
     public int doubleDir = 1;        // DOUBLE extra shot direction: 0 = right, then every 45 deg counter-clockwise (1 = up-right)
     public static final int MAX_OPTIONS = 4;
+    /**
+     * Option formation (Albert, 2026-10-28; GameScreen.updateOptions): OPT_TRAIL = the normal trail behind the ship,
+     * OPT_ORBIT = circling the ship (R2), OPT_V = a V formation (L1), OPT_FREEZE = held where they were around the ship,
+     * moving with it 1 to 1 (L2). optSX / optSY = where each option is (path-relative, like the trail); optLock = it has
+     * reached its place in the formation (until then it glides there); optFX / optFY = OPT_FREEZE's offsets from the
+     * ship's middle; optKnown = how many options have a place yet (a new one starts in its place).
+     */
+    public static final int OPT_TRAIL = 0, OPT_ORBIT = 1, OPT_V = 2, OPT_FREEZE = 3;
+    public int optMode, optKnown;
+    public boolean optReady;
+    public float orbitAng;
+    public final float[] optSX = new float[MAX_OPTIONS], optSY = new float[MAX_OPTIONS], optFX = new float[MAX_OPTIONS], optFY = new float[MAX_OPTIONS];
+    public final boolean[] optLock = new boolean[MAX_OPTIONS];
     public int options;              // 0..MAX_OPTIONS
     public int ffield;               // F.FIELD (force field): the bubble around the ship, hits it can still take (0 = none)
     /** Hits a fresh F.FIELD bubble takes. */
@@ -159,7 +174,7 @@ public class Player {
     }
 
     public void resetPowerups() {
-        meter = 0; speedLvl = 0; missile = false; weapon = 0; options = 0; ffield = 0; shield = 0; shieldHitT = 0f; doubleDir = 1;
+        meter = 0; speedLvl = 0; missile = false; weapon = 0; options = 0; ffield = 0; shield = 0; shieldHitT = 0f; doubleDir = 1; laserDir = 0;
     }
 
     public void fillTrail(float sx, float sy) {

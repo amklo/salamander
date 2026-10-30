@@ -18,17 +18,19 @@ import java.util.Arrays;
  *
  * Gamepad layout (standard / Xbox naming):
  *   left stick or d-pad = move, A or X = fire, B / Y = activate power-up,
- *   R1 (hold) + direction = aim the DOUBLE shot,
+ *   R1 (hold) + direction = aim the DOUBLE shot, the LASER or the RIPPLE,
+ *   R2 = options orbit the ship / normal, L1 = options in a V formation / normal, L2 = options frozen around the ship
+ *   (they move with it 1 to 1) / normal (keyboard: C, V, F),
  *   Start = pause / start, A = confirm on menus, B = cancel / back on menus,
  *   Back/Select + d-pad up/down = music volume, Back/Select + d-pad left/right = SFX volume.
  */
 public final class Controls {
-    public enum Action { UP, DOWN, LEFT, RIGHT, FIRE, POWER, AIM, PAUSE, CONFIRM, CANCEL, DEBUG, MUSIC_DOWN, MUSIC_UP, SFX_DOWN, SFX_UP }
+    public enum Action { UP, DOWN, LEFT, RIGHT, FIRE, POWER, AIM, OPT_ORBIT, OPT_V, OPT_FREEZE, PAUSE, CONFIRM, CANCEL, DEBUG, MUSIC_DOWN, MUSIC_UP, SFX_DOWN, SFX_UP }
 
     public static final int PLAYERS = 2;
     private static final int N = Action.values().length;
     private static final boolean[][] now = new boolean[PLAYERS][N], before = new boolean[PLAYERS][N];
-    private static final float STICK_DEADZONE = 0.4f;
+    private static final float STICK_DEADZONE = 0.4f, TRIGGER_PRESSED = 0.5f;
     private static boolean padsAvailable = true;
     private static int padCount;
 
@@ -93,6 +95,9 @@ public final class Controls {
         set(pl, Action.FIRE, key(Keys.Z) || key(Keys.SPACE));
         set(pl, Action.POWER, key(Keys.X) || key(Keys.SHIFT_LEFT) || key(Keys.SHIFT_RIGHT));
         set(pl, Action.AIM, key(Keys.ENTER));
+        set(pl, Action.OPT_ORBIT, key(Keys.C));
+        set(pl, Action.OPT_V, key(Keys.V));
+        set(pl, Action.OPT_FREEZE, key(Keys.F));
         set(pl, Action.PAUSE, key(Keys.P) || key(Keys.ESCAPE));
         set(pl, Action.CONFIRM, key(Keys.ENTER) || key(Keys.SPACE));
         set(pl, Action.CANCEL, key(Keys.X) || key(Keys.BACKSPACE));   // menus: back one step
@@ -124,6 +129,10 @@ public final class Controls {
         set(pl, Action.FIRE, btn(c, m.buttonA) || btn(c, m.buttonX));
         set(pl, Action.POWER, btn(c, m.buttonB) || btn(c, m.buttonY));
         set(pl, Action.AIM, btn(c, m.buttonR1));
+        // the triggers: buttons on some pads, axes on others (SDL order: 4 = left trigger, 5 = right trigger)
+        set(pl, Action.OPT_ORBIT, btn(c, m.buttonR2) || c.getAxis(5) > TRIGGER_PRESSED);
+        set(pl, Action.OPT_V, btn(c, m.buttonL1));
+        set(pl, Action.OPT_FREEZE, btn(c, m.buttonL2) || c.getAxis(4) > TRIGGER_PRESSED);
         set(pl, Action.PAUSE, btn(c, m.buttonStart));
         set(pl, Action.CONFIRM, btn(c, m.buttonStart) || btn(c, m.buttonA));
         set(pl, Action.CANCEL, btn(c, m.buttonB));                    // menus: back one step

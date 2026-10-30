@@ -3,9 +3,9 @@ package com.example.salamander;
 import com.badlogic.gdx.math.MathUtils;
 import java.util.ArrayList;
 
-/** Environmental dangers: falling stalactites, floating bamdas, moving teeth, erupting volcanoes and piston crushers. */
+/** Environmental dangers: falling stalactites, floating bamdas, moving teeth, and erupting volcanoes. */
 public class Hazard {
-    public enum Type { ROCK, VOLCANO, CRUSHER, BAMDA, FANG, ARM, TOWER, DOME, EYE, RUBBLE }
+    public enum Type { ROCK, VOLCANO, BAMDA, FANG, ARM, TOWER, DOME, EYE, RUBBLE }
 
     /** Rocks and bamdas can be shot to pieces and hurt the ship on contact. */
     public boolean shootable() { return type == Type.ROCK || type == Type.BAMDA; }
@@ -19,8 +19,8 @@ public class Hazard {
     public int burstLeft;
     public float burstT;
     public boolean dead, falling, fromCeil;
-    public float phase, minLen, maxLen, speed;
-    // FANG (stage 1 teeth): position when fully out (CRUSHER: mount surface), start delay, cycle length, picture, exact shape
+    public float phase;
+    // FANG (stage 1 teeth): position when fully out, start delay, cycle length, picture, exact shape
     public float baseY, delay, period;
     public boolean flipV;            // TOWER: picture (and mask) drawn upside down (flipped in Tiled)
     public String image;             // FANG / BAMDA picture
@@ -279,7 +279,7 @@ public class Hazard {
 
     // TOWER (stage 1): a rock column with a green tip that grows out of the floor / ceiling once it is on screen,
     // then spits lava. Only the green tip can be shot (TOWER_HP). The picture reaches TOWER_ROOT px into the rock.
-    public static final int TOWER_HP = 12;
+    public static final int TOWER_HP = 36;   // (Albert, 2026-10-29: everything that lets enemies out is three times as tough)
     /** Seconds between two amoebas spat out by a fully grown tower. */
     public static final float TOWER_SPIT_MIN = 2.5f, TOWER_SPIT_MAX = 4f;
     /** Amoebas per spit. */
@@ -287,7 +287,8 @@ public class Hazard {
     /** MSX style: sprays come in bursts of TOWER_BURSTS, TOWER_BURST_GAP s apart (as in the stage 1 recording). */
     public static final int TOWER_BURSTS = 3;
     public static final float TOWER_BURST_GAP = 0.85f;
-    private int burst;
+    /** TOWER, DOME: the waves it lets out (null until it starts). */
+    public Wave wave;
     public static final float TOWER_GROW_SPEED = 20f, TOWER_ROOT = 8f, TOWER_TIP = 8f;
     /** How far the tower has come out of the rock (h = fully grown; it starts completely inside). */
     public float grown;
@@ -297,19 +298,18 @@ public class Hazard {
         if (grown < h) {
             if (x < sx + SalamanderGame.W) grown = Math.min(h, grown + TOWER_GROW_SPEED * dt);   // grows once on screen
         } else {
-            timer -= dt;                             // fully grown: spits out a spray of amoebas
-            if (timer <= 0f && g.inView(x + w / 2f, fromCeil ? y : y + h, 0f)) {   // only while its tip is on screen
-                boolean msx = g.level.msx();                            // MSX: bursts of sprays in quick succession
-                burst = msx ? (burst + 1) % TOWER_BURSTS : 0;
-                timer = burst != 0 ? TOWER_BURST_GAP : MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
-                int count = TOWER_SPIT_COUNT;
-                float tipY = fromCeil ? y - 16f : y + h;              // just beyond the green tip
-                int red = burst == 0 ? MathUtils.random(count - 1) : -1;   // one red per burst (it carries a capsule)
-                for (int i = 0; i < count; i++) {                       // fanned out left to right
-                    float spread = (i - (count - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
-                    g.spawnAmoeba(x + w / 2f - 8f, tipY, spread, (fromCeil ? -1f : 1f) * MathUtils.random(60f, 110f), i == red);
-                }
+            // fully grown: waves of amoeba sprays (a wave: one spray; MSX style: TOWER_BURSTS sprays in quick
+            // succession), one red one per wave, only while its tip is on screen (Wave, GameScreen.spawnWaveMember)
+            if (wave == null) {
+                int sprays = TOWER_BURSTS;                // (both styles, as on the MSX: Albert, 2026-10-30)
+                wave = new Wave(Wave.Kind.AMOEBA, TOWER_SPIT_COUNT * sprays, TOWER_SPIT_COUNT, TOWER_BURST_GAP,
+                        TOWER_SPIT_MIN, TOWER_SPIT_MAX, Wave.Capsule.RED_ONE);
+                wave.t = timer;                          // (the first one: GameScreen.buildHazards' random delay)
             }
+            boolean may = g.inView(x + w / 2f, fromCeil ? y : y + h, 0f);
+            float tipY = fromCeil ? y - 16f : y + h;              // just beyond the green tip
+            for (int k = wave.tick(dt, may); k >= 0; k = wave.tick(0f, may))
+                g.spawnWaveMember(wave, k, this, x + w / 2f - 8f, tipY, 0, fromCeil ? -1 : 1);
         }
         y = baseY + (fromCeil ? 1f : -1f) * (h - grown);
     }
@@ -323,8 +323,8 @@ public class Hazard {
 
     // DOME (stage 2): a dome on a side wall, 18x32 (sprites/dome.png: closed, open; the size comes from the picture). It starts closed, opens
     // DOME_OPEN_DELAY seconds after it comes on screen and stays open. A side-wall dome on the vertical stage (stage
-    // 2) sends out waves of Enemy.DOME_FLYER_COUNT green flyers (Enemy.Type.DOME_FLYER), one after the other out of
-    // its mouth: they fly a circle above the dome twice, then leave the screen (see Enemy). The next wave comes
+    // 2) sends out waves of Enemy.DOME_FLYER_COUNT green flyers (Enemy.Type.GREEN_FLYER: the Eioneus path, Albert
+    // 2026-10-30; they used to circle above the dome), one after the other out of its mouth. The next wave comes
     // DOME_WAVE_MIN..MAX seconds after the last flyer of the previous one is gone. Shooting the dome DOME_HP times
     // destroys it (DOME_SCORE points); the flyers already out fly on. flipV is unused; fromCeil = on the right wall
     // (facing left).
@@ -332,17 +332,11 @@ public class Hazard {
     // a quarter, so it faces up (down), spitting sprays of amoebas up (down) into the corridor like the stage 1 towers.
     public static final int DOME_LEFT = 0, DOME_RIGHT = 1, DOME_FLOOR = 2, DOME_CEIL = 3;
     public int domeSide = DOME_LEFT;
-    public static final int DOME_HP = 12, DOME_SCORE = 500;
+    public static final int DOME_HP = 36, DOME_SCORE = 500;
     public static final float DOME_OPEN_DELAY = 1f;
     /** Seconds from the end of one wave of flyers (the last one gone) to the next wave. */
     public static final float DOME_WAVE_MIN = 2.5f, DOME_WAVE_MAX = 4f;
-    /** The circle stays at least this far inside the screen edges (px). */
-    private static final float DOME_CIRCLE_MARGIN = 12f;
     public boolean open;
-    /** The current wave of flyers: members sent out so far, and the shared path of the wave (screen coordinates). */
-    private final ArrayList<Enemy> flyers = new ArrayList<>();
-    private Enemy.Group flyGroup;
-    private float flyCx, flyCy, flyLead;
 
     /**
      * Lavinia, both styles (Tiled dome_type2 property "gunhos"): a floor hatch that lets out gunHos Gun Hos instead of
@@ -352,77 +346,89 @@ public class Hazard {
     public static final float GUNHO_HATCH_FIRST = 208f, GUNHO_HATCH_STEP = 64f;
     public int gunHos;
     private int gunHosOut;
+    /** Albert: the hatch opens first (GUNHO_HATCH_OPEN s), then the Gun Ho comes out of its middle; it shuts GUNHO_HATCH_SHUT s later. */
+    public static final float GUNHO_HATCH_OPEN = 0.35f, GUNHO_HATCH_SHUT = 0.6f;
+    private boolean gunHoComing;
+    private float hatchShutT;
 
     private void updateDome(GameScreen g, float dt) {
         if (gunHos > 0) {                                     // a Gun Ho hatch
             float sx = x - g.scrollX;
-            if (gunHosOut < gunHos && sx <= GUNHO_HATCH_FIRST - gunHosOut * GUNHO_HATCH_STEP && sx > -8f) {
-                g.hatchGunHo(x + 7f, y);
+            if (gunHoComing) {                                // open: the Gun Ho comes out of the middle
+                timer -= dt;
+                if (timer <= 0f) { gunHoComing = false; g.hatchGunHo(x + w / 2f, y); hatchShutT = GUNHO_HATCH_SHUT; }
+                return;
+            }
+            if (hatchShutT > 0f && (hatchShutT -= dt) <= 0f) open = false;
+            if (gunHosOut < gunHos && sx <= GUNHO_HATCH_FIRST + 8f - gunHosOut * GUNHO_HATCH_STEP && sx > -8f) {
+                open = true;                                  // opens first
+                gunHoComing = true;
+                timer = GUNHO_HATCH_OPEN;
                 gunHosOut++;
             }
             return;
         }
+        if ((domeSide == DOME_FLOOR || domeSide == DOME_CEIL) && !g.level.vertical) { updateCreepDome(g, dt); return; }
         if (!g.inView(x + w / 2f, y + h / 2f, 0f)) return;   // waits (closed, or between sprays) while off screen
         boolean sideWall = domeSide == DOME_LEFT || domeSide == DOME_RIGHT;
         if (sideWall && g.level.vertical) { updateFlyerDome(g, dt); return; }
-        timer -= dt;
-        if (timer > 0f) return;
-        if (!open) { open = true; timer = 0.6f; return; }      // opens, and soon spits its first spray
-        timer = MathUtils.random(TOWER_SPIT_MIN, TOWER_SPIT_MAX);
+        if (!open) {                                          // opens, and soon spits its first spray
+            if ((timer -= dt) > 0f) return;
+            open = true;
+            wave = new Wave(Wave.Kind.AMOEBA, TOWER_SPIT_COUNT, TOWER_SPIT_COUNT, 0f, TOWER_SPIT_MIN, TOWER_SPIT_MAX, Wave.Capsule.RED_ONE);
+            wave.t = 0.6f;
+            return;
+        }
         boolean upDown = domeSide == DOME_FLOOR || domeSide == DOME_CEIL;
-        float dir = domeSide == DOME_RIGHT || domeSide == DOME_CEIL ? -1f : 1f;
+        int dir = domeSide == DOME_RIGHT || domeSide == DOME_CEIL ? -1 : 1;
         float mx, my;                                         // out of the open mouth (amoebas are 16x16)
         if (domeSide == DOME_FLOOR) { mx = x + w / 2f - 8f; my = y + h - 4f; }
         else if (domeSide == DOME_CEIL) { mx = x + w / 2f - 8f; my = y - 12f; }
         else { mx = domeSide == DOME_RIGHT ? x - 12f : x + w - 4f; my = y + h / 2f - 8f; }
-        int red = MathUtils.random(TOWER_SPIT_COUNT - 1);     // one of them is red (and carries a capsule)
-        for (int i = 0; i < TOWER_SPIT_COUNT; i++) {          // fanned out across the mouth
-            float spread = (i - (TOWER_SPIT_COUNT - 1) / 2f) * 45f + MathUtils.random(-10f, 10f);
-            float out = dir * MathUtils.random(60f, 110f);
-            if (upDown) g.spawnAmoeba(mx, my, spread, out, i == red);
-            else g.spawnAmoeba(mx, my, out, spread, i == red);
-        }
+        for (int k = wave.tick(dt, true); k >= 0; k = wave.tick(0f, true))   // a spray: the whole wave at once
+            g.spawnWaveMember(wave, k, this, mx, my, upDown ? 0 : dir, upDown ? dir : 0);
+    }
+
+    /**
+     * Lavinia floor / ceiling dome (Albert: the same as the Kierke nests): while its middle is between x 16 and
+     * Enemy.CREEP_START_X on the screen it is open and lets Creeping Death out of its mouth in bursts of
+     * Enemy.CREEP_BURST (Enemy.CREEP_BURST_GAP s apart, a burst every Enemy.CREEP_PAUSE s); one of each burst is a red
+     * one with a power capsule.
+     */
+    private void updateCreepDome(GameScreen g, float dt) {
+        float sx = x + w / 2f - g.scrollX;
+        if (sx > Enemy.CREEP_START_X || sx < 16f) return;
+        open = true;
+        if (wave == null) wave = Wave.of(Wave.Kind.CREEPING_DEATH, Enemy.CREEP_BURST, Enemy.CREEP_BURST_GAP, Enemy.CREEP_PAUSE, Wave.Capsule.RED_ONE);
+        boolean down = domeSide == DOME_CEIL;
+        for (int k = wave.tick(dt, true); k >= 0; k = wave.tick(0f, true))
+            g.spawnWaveMember(wave, k, this, x + w / 2f, down ? y : y + h, 0, down ? -1 : 1);
     }
 
     /** Stage 2 side-wall dome: sends out its waves of green flyers (see above). */
     private void updateFlyerDome(GameScreen g, float dt) {
         int dir = domeSide == DOME_RIGHT ? -1 : 1;
-        // its mouth, on the screen (the flyers fly in screen coordinates)
-        float sx = (dir > 0 ? x + w - 2f : x + 2f) - g.scrollX, sy = y + h / 2f - g.scrollY;
-        if (flyGroup != null && flyers.size() < Enemy.DOME_FLYER_COUNT) {   // a wave is coming out
-            timer -= dt;
-            if (timer <= 0f) {
-                timer += Enemy.DOME_FLYER_GAP;
-                flyers.add(g.spawnDomeFlyer(sx, sy, flyCx, flyCy, flyLead, dir, flyGroup));
-            }
+        // where its flyers come out: as from the Eioneus domes (the same dome.png), 11 px beyond its front (14 px from the
+        // wall) and 7 px above its middle; they fly the Eioneus path (Albert, 2026-10-30)
+        float mx = dir > 0 ? x + 14f + 11f : x + w - 14f - 11f, my = y + h / 2f + 7f;
+        if (!open) {                                          // opens, and soon sends out its first wave
+            if ((timer -= dt) > 0f) return;
+            open = true;
+            // waves of DOME_FLYER_COUNT, DOME_FLYER_GAP s apart; the next wave DOME_WAVE_MIN..MAX s after the last of
+            // this one is gone; shoot down the whole wave for a capsule
+            wave = new Wave(Wave.Kind.GREEN_FLYER, Enemy.DOME_FLYER_COUNT, 1, Enemy.DOME_FLYER_GAP, DOME_WAVE_MIN, DOME_WAVE_MAX, Wave.Capsule.WHOLE);
+            wave.restAfterGone = true;
+            wave.t = 0.6f;
             return;
         }
-        if (flyGroup != null) {                               // all out: the next wave waits until they are all gone
-            for (Enemy e : flyers) if (!e.dead) return;
-            flyGroup = null;
-            flyers.clear();
-            timer = MathUtils.random(DOME_WAVE_MIN, DOME_WAVE_MAX);
-            return;
-        }
-        timer -= dt;
-        if (timer > 0f) return;
-        if (!open) { open = true; timer = 0.6f; return; }      // opens, and soon sends out its first wave
-        // a new wave: the circle sits above the mouth, its bottom DOME_FLYER_LEAD px out from the wall (kept on screen)
-        float r = Enemy.DOME_FLYER_R, m = DOME_CIRCLE_MARGIN + 8f;
-        flyCx = MathUtils.clamp(sx + dir * Enemy.DOME_FLYER_LEAD, r + m, SalamanderGame.W - r - m);
-        flyCy = MathUtils.clamp(sy + r, r + m, SalamanderGame.H - r - m);
-        flyLead = (float) Math.hypot(flyCx - sx, flyCy - r - sy) / Enemy.DOME_FLYER_SPEED;
-        flyGroup = new Enemy.Group();                         // shoot down all of them: a power capsule
-        flyGroup.size = Enemy.DOME_FLYER_COUNT;
-        flyGroup.carrier = true;
-        flyers.add(g.spawnDomeFlyer(sx, sy, flyCx, flyCy, flyLead, dir, flyGroup));
-        timer = Enemy.DOME_FLYER_GAP;
+        for (int k = wave.tick(dt, true); k >= 0; k = wave.tick(0f, true))
+            g.spawnWaveMember(wave, k, this, mx, my, dir, 0);
     }
 
     // EYE (stage 2): a rock with a green eye, 32x32 (sprites/rock_eye.png; it is not part of the map art). The eye
     // shoots at the ships like a bamda. The rock is solid to the ships (its exact shape); shot EYE_HP times, the whole
     // rock is destroyed.
-    public static final int EYE_HP = 3, EYE_SCORE = 300;
+    public static final int EYE_HP = 12, EYE_SCORE = 300;
 
     // RUBBLE (stage 2): what a destroyed eye rock leaves behind (sprites/rubbles.png). Only drawn here: it is solid as a
     // Level.Obstacle, so it works like terrain (indestructible, ships crash into it, shots stop).
@@ -504,9 +510,6 @@ public class Hazard {
                 if (fangSwitch || fangSink) updateThroughFang(dt);
                 else y = baseY + (fromCeil ? 1f : -1f) * (fangTravel - fangExtension());
                 break;
-            default:
-                updateCrusher();
-                break;
         }
     }
 
@@ -528,12 +531,5 @@ public class Hazard {
     public boolean touches(float rx, float ry, float rw, float rh) {
         if (rx > x + w || rx + rw < x || ry > y + h || ry + rh < y) return false;
         return mask == null || mask.overlaps(x, y, rx, ry, rw, rh);
-    }
-
-    /** Crusher: baseY is the surface it is mounted on (ceiling underside or floor top). */
-    public void updateCrusher() {
-        float len = minLen + (maxLen - minLen) * (0.5f + 0.5f * MathUtils.sin(t * speed + phase));
-        h = len;
-        y = fromCeil ? baseY - len : baseY;
     }
 }

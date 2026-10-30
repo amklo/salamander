@@ -9,6 +9,7 @@
   <property name="musicLoop" type="float" value="25.599002"/>
   <property name="musicLoopEnd" type="float" value="59.881"/>
   <property name="name" value="OPERATION ONE"/>
+  <property name="subtitle" value="-TOP FLIGHT SPEED TO LATIS-"/>
   <property name="speed" type="float" value="28.4"/>
   <property name="speedMsx" type="float" value="19.2"/>
  </properties>
@@ -350,136 +351,6 @@
    </properties>
   </object>
   <object id="114" gid="42" x="2768" y="340" width="16" height="16"/>
-  <object id="119" gid="64" x="340" y="150.5" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="120" gid="1073741888" x="406" y="58.1" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="121" gid="64" x="472" y="138.7" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="122" gid="1073741888" x="538" y="71.5" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="123" gid="64" x="604" y="145.5" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="124" gid="1073741888" x="670" y="64.8" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="125" gid="64" x="736" y="132" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="126" gid="1073741888" x="802" y="29.5" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="127" gid="64" x="868" y="121.9" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="128" gid="1073741888" x="934" y="41.3" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="129" gid="64" x="1000" y="108.5" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="130" gid="1073741888" x="1066" y="54.7" width="13" height="15">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="131" gid="65" x="373" y="92.2" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="132" gid="65" x="505" y="83.8" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="133" gid="65" x="637" y="100.6" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="134" gid="65" x="769" y="88.8" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="135" gid="65" x="901" y="95.6" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="136" gid="65" x="1033" y="92.2" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="137" gid="66" x="452" y="67" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="138" gid="66" x="652" y="120" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="139" gid="66" x="652" y="102" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="140" gid="66" x="652" y="84" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="141" gid="66" x="878" y="125.8" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="142" gid="66" x="1049" y="72" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="143" gid="66" x="1048" y="90" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
-  <object id="144" gid="66" x="1050" y="54" width="16" height="16">
-   <properties>
-    <property name="style" value="remake"/>
-   </properties>
-  </object>
   <object id="189" gid="64" x="371" y="152" width="13" height="15">
    <properties>
     <property name="style" value="msx"/>

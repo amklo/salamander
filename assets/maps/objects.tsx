@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="68" columns="0">
+<tileset version="1.10" tiledversion="1.10.2" name="objects" tilewidth="64" tileheight="168" tilecount="71" columns="0">
  <grid orientation="orthogonal" width="1" height="1" />
  <tile id="2" class="walker">
   <properties>
@@ -31,16 +31,6 @@
    <property name="spits" value="up"/>
   </properties>
   <image source="icons/volcano.png" width="12" height="6" />
- </tile>
- <tile id="8" class="crusher">
-  <properties>
-   <property name="ceiling" type="bool" value="true" />
-   <property name="phase" type="float" value="0.0" />
-   <property name="minLen" type="float" value="12.0" />
-   <property name="maxLen" type="float" value="102.0" />
-   <property name="speed" type="float" value="1.6" />
-  </properties>
-  <image source="../sprites/crusher_head.png" width="32" height="16" />
  </tile>
  <tile id="9" class="tooth">
   <properties>
@@ -168,6 +158,9 @@
  <tile id="26" class="link">
   <properties>
    <property name="drop" type="bool" value="false"/>
+   <property name="swing" type="float" value="0"/>
+   <property name="up" type="bool" value="false"/>
+   <property name="burst" type="int" value="1"/>
   </properties>
   <image source="icons/missing_link.png" width="16" height="16"/>
  </tile>
@@ -262,8 +255,8 @@
  <tile id="46" class="dome_type3">
   <image source="icons/dome.png" width="18" height="32"/>
  </tile>
- <tile id="47" class="cluster">
-  <image source="../sprites/cluster.png" width="32" height="31"/>
+ <tile id="47" class="blue_asteroid">
+  <image source="../sprites/blue_asteroid.png" width="32" height="31"/>
  </tile>
  <tile id="48" class="mine">
   <image source="../sprites/mine.png" width="16" height="18"/>
@@ -380,5 +373,20 @@
  </tile>
  <tile id="69" class="block_big">
   <image source="../sprites/lavinia_block_big.png" width="32" height="32"/>
+ </tile>
+ <tile id="70" class="laser_gun_point">
+  <image source="../sprites/laser_gun_point.png" width="8" height="8"/>
+ </tile>
+ <tile id="71" class="green_mine">
+  <properties>
+   <property name="drop" type="bool" value="false"/>
+  </properties>
+  <image source="icons/green_mine.png" width="16" height="16"/>
+ </tile>
+ <tile id="72" class="back_ground_lights">
+  <image source="icons/back_ground_lights.png" width="7" height="7"/>
+ </tile>
+ <tile id="73" class="back_ground_lights">
+  <image source="icons/back_ground_lights_3.png" width="8" height="8"/>
  </tile>
 </tileset>

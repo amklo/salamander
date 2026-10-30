@@ -30,7 +30,7 @@ TILES = {
     'dome_type1': 30, 'wallturret_green': 28, 'wallturret_red': 29, 'eye': 31,
     # new for stages 3-7 (the game does not use them yet: their behaviour comes stage by stage)
     'boss': 34, 'omen': 35, 'dome_type2': 36, 'gunho': 37, 'laserguard': 38, 'laserguard_wall': 39, 'spark': 40, 'laser': 41,
-    'aberrant': 42, 'nest': 43, 'chain': 44, 'seed': 45, 'dome_type3': 46, 'cluster': 47, 'mine': 48, 'moai': 49,
+    'aberrant': 42, 'nest': 43, 'chain': 44, 'seed': 45, 'dome_type3': 46, 'blue_asteroid': 47, 'mine': 48, 'moai': 49,
     'gunpod': 50, 'orb': 51, 'vent': 52, 'coregate': 53, 'dome_type4': 64,
 }
 
@@ -161,16 +161,16 @@ def stage4():
     s.take_boss('boss3', 160, 40, dil=3)
     s.templates('gunpod', (39, 167, 42, 74), sprite='gunpod')
     s.templates('orb', (193, 248, 18, 18), sprite='orb')
-    # beams: horizontal ones from the emitters on the walls, vertical chains between two emitters
+    # beams: erased from the art (horizontal ones from the emitters on the walls, vertical chains between two emitters)
     for ex, ey, ew, eh, right in [(30, 454, 28, 20, True), (14, 974, 28, 20, True), (118, 1254, 28, 20, False),
                                   (30, 2430, 28, 20, True)]:          # right: the beam goes to the right of the emitter
         x0, x1 = (ex + ew, s.W) if right else (0, ex)
-        bx, by, bw, bh = s.thin_beam(x0, x1, ey, ey + eh, ROCK) or (x0, ey + eh // 2 - 2, x1 - x0, 4)   # (beam off)
-        s.objects.append(dict(kind='laser', x=bx, y=by, w=bw, h=bh, fh=not right, fv=False, props={}))
+        s.thin_beam(x0, x1, ey, ey + eh, ROCK)                     # (only erases the beam from the art)
     for (tx, ty, tw, th), (bx, by, bw, bh) in [((158, 2270, 36, 20), (142, 2358, 36, 20)), ((94, 2974, 36, 20), (70, 3078, 36, 20))]:
         x0, x1 = min(tx, bx), max(tx + tw, bx + bw)
         s.remove_box((x0, ty + th, x1 - x0, by - ty - th), BLUE)
-        s.objects.append(dict(kind='laser', x=x0, y=ty + th, w=x1 - x0, h=by - ty - th, fh=False, fv=False, props={'vertical': True}))
+    # (no `laser` objects here: in the game the beams belong to the `laserbattery` / `laserbattery_big` enemies,
+    # placed by hand in stage4.tmx; a `laser` object is a Lavinia wall laser and would draw a second beam)
     s.templates('seed', (88, 1046, 40, 42), sprite='seed_open', props={'open': True}, match=[c(216, 216, 32), c(216, 216, 144)], share=0.9)
     s.templates('seed', (46, 380, 44, 48), sprite='seed')
     s.templates('mine', (208, 1406, 16, 18), sprite='mine', share=0.8)
@@ -248,7 +248,7 @@ def stage6():
             bx, by, bw, bh = b or (x0, y + 2, x1 - x0, 3)
             s.objects.append(dict(kind='laser', x=bx, y=by, w=bw, h=bh, fh=False, fv=False, props={}))
     s.templates('moai', (311, 799, 50, 36), HFLIP, share=0.75, sprite='moai', clear_box=True)
-    s.templates('cluster', (312, 3960, 32, 31), ALL_FLIPS, share=0.8, sprite='cluster', clear_box=True)
+    s.templates('blue_asteroid', (312, 3960, 32, 31), ALL_FLIPS, share=0.8, sprite='blue_asteroid', clear_box=True)
     s.templates('mine', (336, 2593, 24, 24), share=0.85, sprite='mine6')
     s.templates('mine', (417, 3073, 22, 22), share=0.85, sprite='mine6_open', props={'open': True})
     s.templates('dome_type4', (272, 4096, 16, 32), HFLIP, share=0.85)   # (drawn with stage 2's dome.png)
@@ -296,7 +296,7 @@ NEW_TILES = [('boss', 'icons/boss.png'), ('omen', '../sprites/Omen.png'), ('dome
              ('laserguard_wall', 'icons/laserguard_wall.png'), ('spark', '../sprites/spark.png'),
              ('laser', 'icons/laser.png'), ('aberrant', 'icons/aberrant.png'), ('nest', '../sprites/nest.png'),
              ('chain', '../sprites/ball.png'), ('seed', 'icons/eioneus_base.png'), ('dome_type3', 'icons/dome.png'),
-             ('dome_type4', 'icons/dome.png'), ('cluster', '../sprites/cluster.png'),
+             ('dome_type4', 'icons/dome.png'), ('blue_asteroid', '../sprites/blue_asteroid.png'),
              ('mine', '../sprites/mine.png'), ('moai', '../sprites/moai.png'), ('gunpod', '../sprites/gunpod.png'),
              ('orb', '../sprites/orb.png'), ('vent', '../sprites/vent_red.png'),
              ('coregate', '../sprites/coregate.png')]

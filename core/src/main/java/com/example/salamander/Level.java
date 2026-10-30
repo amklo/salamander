@@ -50,14 +50,21 @@ public class Level {
         public String colours = "";
         /** Whiplash: comes up from the bottom edge (left edge on a horizontal stage) instead of the top (right). */
         public boolean fromBottom;
+        /** MSX Missing Link (Kierke): full swing height (0 = the old link) and shots in its one burst; "upper" = starts at the bottom. */
+        public float linkSwing;
+        public int linkBurst;
         /** Op 4 moai heads: stay at their wall (don't step out). Op 4 domes: flyers per burst. */
         public boolean still;
         public int count;
+        /** Op 4 domes: what comes out ("" = homing green flyers, "creeping death"). */
+        public String spawns = "";
         /**
          * Spawns when the camera's right edge reaches this x (spawns are sorted by it). Vertical stages: when the
          * camera's top edge reaches this y.
          */
         public float trigger;
+        /** Blue asteroids: sink speed (px/s, < 0 = random, as on Op 4) and sideways drift (px/s, + = right; stage 2). */
+        public float sink = -1f, drift;
     }
 
     /** A background picture from an image layer (the stage art), bottom-left corner in world coordinates. */
@@ -69,13 +76,16 @@ public class Level {
     /** Floating shootable rock: bottom-left corner, size, picture. */
     public static class Bamda { public float x, y, w, h; public String image; }
 
-    /** Piston crusher: left x, the surface it is mounted on (ceiling underside or floor top), motion. */
-    public static class Crusher { public float x, baseY, phase, minLen, maxLen, speed; public boolean ceiling; }
 
     private static final int W = SalamanderGame.W, H = SalamanderGame.H;
 
     public final int index;
     public String name = "", music, bossMusic = "boss.mid", background;
+    /**
+     * The intro banner (as on the MSX: "OPERATION THREE / -SET THE LEEK SYSTEM- / PLANET LAVINIA"): map properties
+     * "bannerTitle" (default: "name"), "subtitle" and "planet" (both optional).
+     */
+    public String bannerTitle = "", subtitle = "", planet = "";
     /**
      * Where no stars are drawn, plain black instead (map property "noStars"): a world range along the scrolling, x on a
      * horizontal stage, y on a vertical one (noStarsLo < noStarsHi). NaN = stars everywhere.
@@ -122,8 +132,8 @@ public class Level {
     public float baseSpeed = 46f;
     /**
      * Title screen style: true = MSX, false = REMAKE. Read when a stage is loaded: the map property "speedMsx"
-     * replaces "speed", the path property "speedsMsx" replaces "speeds", and objects whose property "style" is
-     * "msx" / "remake" only appear in that style (objects without it appear in both).
+     * replaces "speed", the path property "speedsMsx" replaces "speeds". Objects whose property "style" is "remake"
+     * only appear in the REMAKE (its extras); all others, "msx" ones included, appear in both styles.
      */
     public static boolean originalStyle;
 
@@ -175,8 +185,9 @@ public class Level {
     public final ArrayList<Bamda> bamdas = new ArrayList<>();
     public final ArrayList<Tooth> teeth = new ArrayList<>();
     public final ArrayList<float[]> rocks = new ArrayList<>();       // {left x, bottom y}
+    /** Eioneus's boss room: the gun pods (map objects "gunpod", gunpod.png): {left, bottom} in the world. */
+    public final ArrayList<float[]> pods = new ArrayList<>();
     public final ArrayList<float[]> volcanoes = new ArrayList<>();   // {centre x, floor y, 0}; side volcano: {centre x, centre y, -1 / +1}
-    public final ArrayList<Crusher> crushers = new ArrayList<>();
     /** Stage 1 claw arms: bottom-left of the resting picture (64x40), hanging from the ceiling or standing on the floor. */
     public static class Arm { public float x, y; public boolean ceiling; }
     public final ArrayList<Arm> arms = new ArrayList<>();
@@ -191,10 +202,20 @@ public class Level {
     /** gunHos: a floor hatch (both styles) that lets out this many Gun Hos instead of spitting amoebas (Lavinia). */
     public static class Dome { public float x, y, top; public boolean right, floor, ceiling; public int gunHos; }
     public final ArrayList<Dome> domes = new ArrayList<>();
+    /** Lavinia: where Led Zeps keep coming ({x0, x1, mean seconds between them}; the camera's right edge in x0..x1). */
+    public final ArrayList<float[]> ledZepZones = new ArrayList<>();
+    /**
+     * Background lights (map objects "back_ground_lights"; Op 4 and Lavinia): {left x, bottom y, first frame}. The sprite
+     * is the stage's sprites/stage_<N>_back_ground_lights.png (square frames in a row). Decoration only: drawn just over
+     * the stage art, under everything else; never hit, never in the way.
+     */
+    public final ArrayList<float[]> bgLights = new ArrayList<>();
+    /** Seconds each frame of the background lights is shown (map property "backGroundLightsFrame", default 0.1). */
+    public float bgLightsFrame = 0.1f;
     /** Stage 2 eye rocks: bottom-left of the 32x32 rock with the eye. */
     public final ArrayList<float[]> eyes = new ArrayList<>();
     /**
-     * Asteroid storms (map object "meteors"): {trigger, seconds}. The storm starts when the front edge of the screen
+     * Asteroid storms (map object "meteors"): {trigger, seconds, speed, xMin, xMax, straight}. The storm starts when the front edge of the screen
      * (the top on a vertical stage, the right edge otherwise) reaches the object, and lasts its "time" property.
      */
     public final ArrayList<float[]> storms = new ArrayList<>();
@@ -234,8 +255,12 @@ public class Level {
         l.worldW = l.gCols * l.cell;
         l.worldH = l.gRows * l.cell;
         l.name = m.props.getOrDefault("name", "STAGE " + (idx + 1));
+        l.bannerTitle = m.props.getOrDefault("bannerTitle", l.name);
+        l.subtitle = m.props.getOrDefault("subtitle", "");
+        l.planet = m.props.getOrDefault("planet", "");
         l.baseSpeed = Float.parseFloat(m.props.getOrDefault("speed", "46"));
         if (originalStyle && m.props.containsKey("speedMsx")) l.baseSpeed = Float.parseFloat(m.props.get("speedMsx"));
+        l.bgLightsFrame = Float.parseFloat(m.props.getOrDefault("backGroundLightsFrame", "0.1"));
         l.laneH = Float.parseFloat(m.props.getOrDefault("lane", String.valueOf(SalamanderGame.LANE_H)));
         l.music = m.props.get("music");
         l.bossMusic = m.props.getOrDefault("bossMusic", "boss.mid");
@@ -310,7 +335,9 @@ public class Level {
                 if (tile != null) p.props.putAll(tile.props);
                 p.props.putAll(o.props);
                 String style = p.props.getOrDefault("style", "").trim().toLowerCase();
-                if (style.equals(originalStyle ? "remake" : "msx")) continue;   // belongs to the other style
+                // "remake" objects are the REMAKE's own extras; "msx" ones are in both styles (Albert, 2026-10-27:
+                // the REMAKE always has everything the MSX style has, plus its own)
+                if (originalStyle && style.equals("remake")) continue;
                 boolean flippedV = (o.gid & TiledMap.FLIP_V) != 0;
                 boolean flippedH = (o.gid & TiledMap.FLIP_H) != 0;
 
@@ -327,7 +354,7 @@ public class Level {
                 }
                 switch (type) {
                     case "whiplash": {                           // slides in, stops, darts off diagonally
-                        Spawn s = spawn(Enemy.Type.WHIPLASH, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
+                        Spawn s = spawn(Enemy.Type.WHIPLASH, left, bottom + h / 2f, group++, 1, true);   // every Whiplash leaves a capsule
                         s.fromBottom = p.prop("fromBottom", false);
                         s.midX = left + w / 2f;
                         break;
@@ -350,7 +377,7 @@ public class Level {
                         break;
                     }
                     case "gremlin": {                            // Eioneus wall walker: comes up from the bottom edge
-                        Spawn s = spawn(Enemy.Type.GREMLIN, left, bottom, group++, 1, p.prop("drop", false));
+                        Spawn s = spawn(Enemy.Type.GREMLIN, left, bottom, group++, 1, p.prop("drop", false) || p.prop("red", false));   // (a red one leaves a capsule)
                         s.right = flippedH || p.prop("right", left + w / 2f > W / 2f);
                         s.red = p.prop("red", false);
                         s.gap = H + 40f;                         // (vertical stage: when its place reaches the bottom edge)
@@ -373,21 +400,31 @@ public class Level {
                         Spawn s = spawn(Enemy.Type.ARTILLERY, left, bottom, group++, 1, p.prop("red", false) || p.prop("drop", false));
                         s.right = flippedH || p.prop("right", false);
                         s.red = p.prop("red", false);
+                        if (!vertical) s.what = flippedV || p.prop("ceiling", false) ? "ceiling" : "floor";   // (Lavinia: on the floor / ceiling)
                         break;
                     }
-                    case "cluster":                              // Op 4 blue rock clump: sinks slowly
-                        spawn(Enemy.Type.CLUSTER, left, bottom, group++, 1, p.prop("drop", false));
+                    case "blue_asteroid": {                       // blue rock clump (Op 4, stage 2): sinks slowly
+                        Spawn s = spawn(Enemy.Type.BLUE_ASTEROID, left, bottom, group++, 1, p.prop("drop", false));
+                        s.sink = p.prop("sink", -1f);             // (stage 2: each one's speed from the recording)
+                        s.drift = p.prop("drift", 0f);            // (stage 2: two of them cut across diagonally)
                         break;
+                    }
                     case "moai": {                               // Op 4 moai on the left wall; flip it (X) for the right wall
                         Spawn s = spawn(Enemy.Type.MOAI, left, bottom, group++, 1, p.prop("drop", false));
                         s.right = flippedH || p.prop("right", false);
                         s.still = !p.prop("walk", true);
                         break;
                     }
+                    case "gunpod":                                // Eioneus boss room: a gun pod (GameScreen's pod room)
+                        pods.add(new float[]{left, bottom});
+                        break;
                     case "orb6": {                               // Op 4 bouncing ball: comes in at the top edge at its x
                         spawn(Enemy.Type.ORB, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
                         break;
                     }
+                    case "back_ground_lights":                   // background light (decoration)
+                        bgLights.add(new float[]{left, bottom, p.prop("frame", 0)});
+                        break;
                     case "base6": {                              // Op 4 base: lets one burst of mines out
                         Spawn s = spawn(Enemy.Type.SEED, left, bottom, group++, 1, p.prop("drop", false));
                         s.what = "op4";
@@ -397,7 +434,9 @@ public class Level {
                         Spawn s = spawn(Enemy.Type.BLUE_DOME, left, bottom, group++, 1, p.prop("drop", false));
                         s.right = flippedH || p.prop("right", false);
                         s.what = "op4";
-                        s.count = p.prop("burst", Enemy.BLUE_DOME_BURST);
+                        s.spawns = p.prop("spawns", "").toLowerCase().replace("_", " ").trim();
+                        boolean creep = s.spawns.startsWith("creeping");
+                        s.count = p.prop("burst", creep ? Enemy.CREEP_BURST : Enemy.BLUE_DOME_BURST);
                         if (originalStyle) s.count = p.prop("burstMsx", s.count);
                         break;
                     }
@@ -407,8 +446,10 @@ public class Level {
                         break;
                     }
                     case "gamma": {                              // Kierke blue ball: in at the right edge, bouncing
-                        Spawn s = spawn(Enemy.Type.GAMMA, left, bottom, group++, 1, p.prop("drop", false));
+                        Spawn s = spawn(Enemy.Type.GAMMA, left, bottom, group++, 1, p.prop("drop", false) || p.prop("red", false));
                         s.ceiling = p.prop("ceiling", false);
+                        s.red = p.prop("red", false);
+                        s.fromBottom = p.prop("fromLeft", false);   // (in at the left edge instead)
                         break;
                     }
                     case "aberrant": {                         // Kierke plant: stays put; the root of a chain
@@ -460,7 +501,7 @@ public class Level {
                     }
                     case "legacy": {
                         if (!p.prop("flyby", false)) {           // MSX Legacy: one that hovers where it is placed
-                            Spawn s = spawn(Enemy.Type.LEGACY, left, bottom + h / 2f, group++, 1, p.prop("drop", false));
+                            Spawn s = spawn(Enemy.Type.LEGACY, left, bottom + h / 2f, group++, 1, true);   // every Legacy drops a capsule (Albert, 2026-10-29)
                             s.hover = true;
                             s.phase = (o.id * 2.39996f) % 6.2832f;
                             s.midX = left + w / 2f;
@@ -470,8 +511,8 @@ public class Level {
                         int n = p.prop("count", 4);
                         float phase = p.prop("phase", (o.id * 2.39996f) % 6.2832f);
                         for (int i = 0; i < n; i++) {
-                            Spawn s = spawn(Enemy.Type.LEGACY, left + i * 18f,
-                                    bottom + h / 2f, group, n, p.prop("drop", true));
+                            Spawn s = spawn(Enemy.Type.LEGACY, left + i * 18f,   // each one its own capsule (Albert, 2026-10-29)
+                                    bottom + h / 2f, group++, 1, true);
                             s.phase = phase;
                             s.gap = i * 18f;
                             s.midX = left + w / 2f;
@@ -488,6 +529,21 @@ public class Level {
                         spawn(big ? Enemy.Type.BLOCK_BIG : Enemy.Type.BLOCK_SMALL, left, bottom, group++, 1, p.prop("drop", false));
                         break;
                     }
+                    case "laser_gun_point": case "lasergun": {   // Lavinia shaft: pulsed laser; "twin" = a second one that far right, facing the other way
+                        Spawn s = spawn(Enemy.Type.LASER_GUN, left, bottom, group++, 1, false);
+                        s.right = !flippedH;                     // the picture points right; flipped: left
+                        s.delay = p.prop("delay", 0f);
+                        float twin = p.prop("twin", 0f);
+                        if (twin != 0f) {
+                            Spawn s2 = spawn(Enemy.Type.LASER_GUN, left + twin, bottom, group++, 1, false);
+                            s2.right = !s.right; s2.delay = s.delay; s2.trigger = left;
+                        }
+                        break;
+                    }
+                    case "ledzep_zone": {                        // Lavinia: Led Zeps come at random while the camera's right edge is in here
+                        ledZepZones.add(new float[]{left, left + w, p.prop("interval", 2.5f)});
+                        break;
+                    }
                     case "heathen":                              // Lavinia: a pillar that rushes in at the right edge (its picture is random)
                         spawn(Enemy.Type.HEATHEN, left, bottom, group++, 1, false);
                         break;
@@ -499,9 +555,27 @@ public class Level {
                         s.ceiling = flippedV || p.prop("ceiling", false);
                         break;
                     }
-                    case "link":                                 // Missing Link: a single enemy (y = the middle of its bob)
+                    case "link": {                               // Missing Link: a single enemy (y = the middle of its bob)
+                        float swing = p.prop("swing", 0f);
+                        if (swing > 0f) {
+                            // MSX style (Kierke): the object is where it comes in, at the right edge with LINK_MSX_IN px
+                            // showing, at the top of its swing ("up": the bottom). See Enemy.updateLinkMsx.
+                            Spawn s = spawn(Enemy.Type.LINK, left, bottom, group++, 1, p.prop("drop", false));
+                            s.linkSwing = swing;
+                            s.upper = p.prop("up", false);
+                            s.linkBurst = Math.max(1, p.prop("burst", 1));
+                            s.trigger = left + Enemy.LINK_MSX_IN + 40f;   // (spawned once the camera's right edge + 40 reaches it)
+                            break;
+                        }
                         spawn(Enemy.Type.LINK, left, bottom + h / 2f, group++, 1, p.prop("drop", false)).phase = (o.id * 2.39996f) % 6.2832f;
                         break;
+                    }
+                    case "green_mine": {                         // Kierke green mine: in at the right edge, homing on the ship
+                        Spawn s = spawn(Enemy.Type.GREEN_MINE, left, bottom, group++, 1, p.prop("drop", false));
+                        s.trigger = left + Enemy.GMINE_IN + 40f;   // (vertical stages: when the top edge reaches it)
+                        s.fromBottom = p.prop("fromBottom", false);   // vertical stages: in at the bottom edge
+                        break;
+                    }
                     case "frost": {                              // Celtic Frost: a group flying a "Z" across the screen
                         int n = p.prop("count", 6);
                         boolean upper = flippedV || p.prop("upper", false);
@@ -564,7 +638,10 @@ public class Level {
                     }
                     case "eye": eyes.add(new float[]{left, bottom}); break;
                     case "meteors": case "asteroids": case "storm":   // asteroid storm: rocks rain down for "time" seconds
-                        storms.add(new float[]{vertical ? bottom : left, p.prop("time", 15f)});
+                        // optional (Op 4): "speed" (px/s; 0 = the usual mix), "straight" (no slanting rocks), and
+                        // "xMin" / "xMax": where on the screen the rocks come in (px from the left edge; 0 = anywhere)
+                        storms.add(new float[]{vertical ? bottom : left, p.prop("time", 15f), p.prop("speed", 0f),
+                                p.prop("xMin", 0f), p.prop("xMax", 0f), p.prop("straight", false) ? 1f : 0f});
                         break;
                     case "bamda": {
                         Bamda a = new Bamda();
@@ -611,18 +688,6 @@ public class Level {
                         Arm a = new Arm();
                         a.x = left; a.y = bottom; a.ceiling = flippedV || p.prop("ceiling", false);
                         arms.add(a);
-                        break;
-                    }
-                    case "crusher": {
-                        Crusher c = new Crusher();
-                        c.x = left;
-                        c.ceiling = p.prop("ceiling", true);
-                        c.baseY = c.ceiling ? top : bottom;
-                        c.phase = p.prop("phase", 0f);
-                        c.minLen = p.prop("minLen", 12f);
-                        c.maxLen = p.prop("maxLen", 102f);
-                        c.speed = p.prop("speed", 1.6f);
-                        crushers.add(c);
                         break;
                     }
                     case "boss":                                 // where the boss sits in the map
@@ -810,6 +875,12 @@ public class Level {
 
     /** True if the rectangle touches terrain (or a brick). */
     /** A dematwall: clears its collision (gone = true) or puts the collision back as loaded. */
+    /** Op 4's end: the whole terrain is gone (dissolved), nothing left to run into. */
+    public void clearGrid() { java.util.Arrays.fill(grid, (byte) 0); }
+
+    /** ...and back as loaded (a restart before it). */
+    public void restoreGrid() { System.arraycopy(gridBackup, 0, grid, 0, grid.length); }
+
     public void setWallGone(DematWall dw, boolean gone) {
         int c0 = (int) Math.ceil(dw.x / cell - 0.001f), c1 = (int) Math.floor((dw.x + dw.w) / cell + 0.001f);
         int r0 = (int) Math.ceil(dw.y / cell - 0.001f), r1 = (int) Math.floor((dw.y + dw.h) / cell + 0.001f);

@@ -41,6 +41,13 @@ public class Assets {
     }
 
     /** Texture by path inside the assets folder (e.g. "maps/stage1_t0.png"), loaded once. */
+    /** A texture made in code, kept under key (made once, then reused like the others). */
+    public Texture made(String key, java.util.function.Supplier<Texture> make) {
+        Texture t = textures.get(key);
+        if (t == null) { t = make.get(); textures.put(key, t); }
+        return t;
+    }
+
     public Texture texFile(String path) {
         Texture t = textures.get(path);
         if (t == null) {

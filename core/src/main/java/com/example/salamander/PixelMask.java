@@ -37,6 +37,9 @@ public final class PixelMask {
         return new PixelMask(w, h, s);
     }
 
+    /** Makes pixel (x, y) (y counted from the bottom) see-through, e.g. a part of a boss that was shot away. */
+    public void clear(int x, int y) { if (x >= 0 && y >= 0 && x < w && y < h) solid[y * w + x] = false; }
+
     /** Is pixel (x, y) solid (y counted from the bottom)? Outside the mask is not. */
     public boolean at(int x, int y) { return x >= 0 && y >= 0 && x < w && y < h && solid[y * w + x]; }
 

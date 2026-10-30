@@ -2,7 +2,251 @@
 
 All notable changes to this Salamander remake. Newest first.
 
+## 2026-10-30
+
+### Code (from Albert): one wave system for every spawner
+- **New `Wave` class**: a wave of enemies let out of a spawner, a "base" (stage 1's green-tipped towers, the stage 2 / Lavinia domes, the Eioneus / Op 4 blue domes, Kierke's nests, the Eioneus / Op 4 ground bases). It holds the kind (AMOEBA, GREEN_FLYER, CREEPING_DEATH, FLYING_MINE, UG), the timing (count, volley, gap, rest between waves or one wave only, rest counted from the last one gone) and the capsule rule (RED_ONE: one red member; WHOLE: shoot down the whole wave), and keeps the wave's members. Every spawner asks its Wave when the next member is due (`tick`) and only decides when it may let something out (on screen, open, grown).
+- **One maker for every member: `GameScreen.spawnWaveMember`**: the same code for each kind, whatever spawner it comes from; the only differences are the orientation (out of a side wall or a floor / ceiling) and a stage's own flight path (stage 2's circling flyers, Op 4's homing ones, Kierke's mine path). Replaces `spawnAmoeba`, `spawnDomeCreep`, `spawnDomeFlyer` and the per-spawner code in `releaseNestBugs`, `Hazard.updateTower` / `updateDome` / `updateCreepDome` / `updateFlyerDome`; the old per-spawner counters (`nestLeft`, `domeLeft`, `seedLeft`, `creepRedIdx`, `domeWave`, `flyGroup`, ...) are gone. Lavinia's Gun Ho hatches stay as they were (one Gun Ho at a time, not a wave).
+- Same behaviour as before, with one exception: an MSX-style tower's burst of three sprays now has its one red amoeba anywhere in the burst (before: always in the first spray).
+- **Stage 2's dome flyers fly the Eioneus path** (Albert): they are green flyers now (out of the mouth where the Eioneus domes let theirs out), no longer circling above the dome twice; stage 2 keeps its waves (DOME_FLYER_COUNT, DOME_FLYER_GAP apart, the next wave once the last one is gone) and its capsule (shoot down the whole wave). `Enemy.Type.DOME_FLYER` is no longer used.
+- **Stage 1's towers spray as on the MSX in both styles** (REMAKE too): bursts of three sprays, 0.85 s apart.
+
+### Changed (from Albert)
+- **Lavinia: no more Celtic Frost**: the last three waves (REMAKE extras at x 1594, 2994 and 4094) are removed from `stage3.tmx` (the map before is in `_to_delete/`).
+- **Gun Ho fires a burst of 3 shots**, 0.2 s apart, once it is lined up (it keeps frame 2 until the last one), then pauses and leaves as before (`Enemy.GUNHO_BURST`, `GUNHO_BURST_GAP`, state `GUNHO_FIRING`).
+- **Gamma: more time between the two shots of a burst**: 0.5 s (was 0.15 s).
+- **Artillery animates**: `artillery_green.png` / `artillery_red.png` are 2 frames of 16x16 side by side; it cycles through them every 0.4 s (`GameScreen.ART_FRAME`).
+- **Gun Ho: two frames** (`Gun Ho.png`, two frames side by side, as soon as the picture is wider than tall): frame 2 while it lines up with a ship to fire, frame 1 the rest of the time (coming in, hopping out of its hatch, after the shot, leaving). With the old one-frame picture nothing changes.
+- **Gamma shoots**: now and then a burst of 2 shots at the nearest ship, 0.15 s apart; the first burst 1.5–3.5 s after it came, then one every 2.5–4.5 s (`Enemy.GAMMA_BURST`, `GAMMA_*`; 80 px/s).
+- **Artillery fires fixed spreads, not aimed shots**: by turns a 3-way (straight out from its wall / floor / ceiling toward the opposite side, and 45° to either side) and a 4-way (no middle shot: 22.5° and 67.5° to either side), every 1.3 s as before, whatever the ships do (`Enemy.ART_SPREAD_3`, `ART_SPREAD_4`).
+- **Every wave of flying mines has at least one red one** (it leaves a capsule): the Eioneus bases now pick one red one per wave (others are still red about one in six times, as in the recording); Kierke's web nests' mines were never red, now one per wave is; Op 4's bases already had one per wave.
+- **Kierke's Ug nests: shoot down the whole wave of Ugs for a capsule** (a carrier group; the Ugs keep their yellow colours).
+- **Smooth movement instead of 8 px steps**: the Eioneus gun pods come down at a steady 20 px/s, and Kierke's boss wall moves up / down and rams at the same average speeds as its MSX steps.
+- **Kierke's boss shoots in bursts**: 7 bullets (counting the shots really fired by its pods), then 2 s without shooting (`Boss.K_BURST`, `K_BURST_REST`); it used to fire every 0.28 s without a pause.
+- **Eioneus and Op 4: the scrolling stops 8 px earlier**, at camera top 168 / 384, where the stage art begins: it stopped 8 px above it and showed an empty black line at the top (path polylines end at −3880 / −4120). Stage 2 ends in open space and is unchanged.
+- **Eioneus: the gun pods come down as soon as the scrolling stops** (`POD_WAIT` 0, was 6 s).
+- **A big storm rock that hits scenery splits**, as when it is shot (its pieces may meet the rock at once and burst too).
+- **Every red Creeping Death leaves a capsule**: Kierke's nests let out every other one red, but only in colour; now one of each burst (at random) is red and carries a capsule, as out of Lavinia's and Op 4's domes (already so).
+- **No enemy bullet passes scenery**: besides the rock, bricks and rubble (as before), stage 1's towers, Eioneus's gun pods and Lavinia's blocks and Heathen pillars stop them (`GameScreen.sceneryStops`). A shot fired from inside rock (a rock eye) still gets out of that rock, but once it has been in the open any rock stops it (`Bullet.leftRock`; it could cross a second wall within its 0.3 s grace). The Laser Guards' beams and Omen's laser keep their own rules.
+
+## 2026-10-29
+
+### Changed (stage 1, from Albert)
+- **Stage 1 banner subtitle**: "OPERATION ONE / -TOP FLIGHT SPEED TO LATIS-" (map property `subtitle` in `stage1.tmx`).
+
+### Changed (Legacy, from Albert)
+- **Every Legacy drops a power capsule** when shot down: the hovering MSX ones (whatever their `drop` property says) and each member of a fly-by wave (before: only a whole red wave, once all were shot). Each Legacy is now its own one-member carrier group (`Level`, case `legacy`). They keep their own colours (no red carrier tint).
+- **Animation: all 7 frames in a loop** (0 1 2 … 6 0 1 …, `Enemy.LEGACY_FPS` 10/s), whichever way they're heading. Before: the hovering ones leaned with their sideways speed and the fly-by ones went forward and back. `Enemy.legacyFrame()` is no longer used.
+- Not compiled or play-tested yet.
+
+### Added (stage 2 blue asteroids, from the recording)
+- **Blue rock clumps on stage 2** (both styles; `sprites/blue_asteroid.png`, the Op 4 one), objects 122–126. Five of them, between camera top ~1490 and ~1380 (≈119.6–129.4 s in the recording). As on Op 4 they can't be destroyed (shots stop on them).
+  - Two cut across diagonally: object 122 enters at x ≈ 15 going down-right (`drift` 50, `sink` 26 px/s); object 123 enters at x ≈ 192 going down-left (`drift` −36, `sink` 14).
+  - Three sink straight down side by side at x 39 / 119 / 191 (`sink` 1 / 5 / 14).
+  - Each one waits until it is on the screen, then moves through the world. Simulated paths fit the tracked rocks within ~8 px (the MSX moves in 8 px steps).
+- New Tiled properties for `blue_asteroid`: `sink` (px/s; leave it out for Op 4's random 5–30) and `drift` (px/s sideways, + = right). Code: `Level.Spawn.sink / drift`, `Enemy.blueAsteroidSink / blueAsteroidDrift`. The blue asteroid picture now loads on stage 2 as well as Op 4.
+- Not compiled or play-tested yet.
+
+## 2026-10-29
+
+### Changed (from Albert)
+- **Asteroid storm rocks stop at walls**: a storm rock that runs into rock, bricks or other solid scenery is destroyed (a small blast); it no longer flies through. A rock never starts over solid rock at the top edge (another place is picked, or none this time).
+- **Storm rocks fall straight down everywhere except stage 2** (Eioneus, Op 4); only stage 2's rocks slant to the sides.
+- **Every boss body is solid**: a ship that touches it crashes, and every shot and laser stops on it (only its weak spots take damage). Op 4's brain sphere and gun units were the exceptions (the ships flew over them and shots passed everywhere but the weak spots); now they are solid too (`Boss.ghost` off). The gun units are not solid while they come together pixel by pixel. The other bosses already were.
+- **Everything that lets enemies out is three times as tough**: domes (stage 2, Lavinia's Creeping Death domes and Gun Ho hatches, the amoeba domes) 36 (`Hazard.DOME_HP`), stage 1's green-tipped towers 36 (`Hazard.TOWER_HP`), the Eioneus / Op 4 blue domes 36, Kierke nests 36, the Eioneus / Op 4 bases 36 (were all 12). The Eioneus gun pods stay as they were (10 per bar).
+- **Eioneus side volcanoes spit twice as much**: a burst every 0.9–1.5 s (was 1.8–3 s); the bursts themselves are unchanged (3–5 rocks, 0.12 s apart). `Meteor.SIDE_EVERY_MIN / MAX`.
+- **Every wave out of a dome can give a capsule, on every stage**: the green-flyer waves of the Eioneus blue domes and Op 4's shaft domes are now carrier groups, as stage 2's flyer waves already were: shoot down the whole wave for a capsule (they keep their own colours). `Enemy.domeWave`. Already so: stage 2's flyer domes (whole wave), the amoeba domes and Lavinia's / Op 4's Creeping Death domes (one red one per wave).
+- **Lavinia: both Missing Links leave a power capsule** (`drop` on objects 108 and 109 in `stage3.tmx`; they are tinted as carriers).
+- **Destroyed enemies that stay are background** (Eioneus and Op 4 bases, Kierke's withered roots): they keep their destroyed frame, but a HOMING missile no longer goes after them (it dropped a target only once it was gone; now also once it is destroyed or has no health left), and they are drawn as ground (`GameScreen.drawGround`), before power capsules, hazards and every enemy still in play, so nothing hides under them.
+
+## 2026-10-28
+
+### Changed (walkers and Gremlins, from Albert)
+- **Stage 1 walkers now behave like the Kierke leapers** (both styles, all of them, the runners from behind too; `Enemy.leapGround`, `startLeapOnGround`). Each stands where it was placed (scrolling in with the rock) until it is on screen, then carries on as a leaper does after landing: approaches the ship, walks away, hops toward it (and can grab the other surface), walks off the screen edges. All of it relative to the screen. Like the leapers they don't shoot. The old walk / chase / MSX hop code stays for stages that still use it.
+- **Gremlins**:
+  - They climb at their speeds relative to the screen (48 px/s; before: through the world). Standing to aim they stay on their spot of the wall.
+  - **They aim for 1 s and fire at the end of it** (`GREMLIN_AIM` 3 → 1, `GREMLIN_FIRE` 0.4 → 1).
+  - **Every other shot they first get ahead of the ship**: climb at `GREMLIN_RUN` 80 px/s until their middle is `GREMLIN_AHEAD` 40 px above the nearest ship's, then aim. They stop early 24 px from the top edge or after 4 s. The first shot is the usual one.
+  - Not compiled or play-tested yet.
+
+### Changed (scrolling, from Albert: behave like a classic on-rails shooter)
+- **Free-flying things now move relative to the screen**, so they look equally fast whichever way they fly (before, they flew at a fixed speed through the world, and the scrolling made shots from behind look slower and shots from the front faster). `GameScreen.scrollVY` is new (the path's up / down speed, like `scrollVX` sideways; the camera's follow drift is left out, as for the ships).
+  - **All enemy shots**: aimed shots, Gun Ho beams, moai rings, lasers reflected by Lavinia blocks (`Bullet.ridesScreen`; GameScreen adds the frame's scroll to them). Not: lava, Omen lasers, Laser Guard beams. The MSX Missing Links' own fix for their shots is removed (it would count twice).
+  - **The ships' shots, lasers and ripples** (an attached laser's front rides along, its tail stays at the gun; a laser pinned at a point of impact doesn't move). Missiles still crawl through the world.
+  - **Homing flying mines** (Eioneus / Op 4 bases, Kierke web nests) once they home in. Their curl out of the base / nest stays in the world.
+  - **Fly-by Legacy waves** and the **old-style Missing Links** (stages 1 and 3). Their speeds (60 / 40 px/s) are now screen speeds, so they look slower than before by the scroll speed.
+  - Unchanged: amoebas (to check against the stage 1 recording), and enemies that use only `scrollVX` (Rugal, Heathen, Rage…) don't yet follow up / down scrolling.
+  - Checked: the three files parse; not compiled or play-tested yet.
+
+### Added (Op 4, from Albert)
+- **Background lights** (`sprites/stage_6_back_ground_lights.png`, 3 frames of 7×7, sprite name `back_ground_lights`): every place in the stage 6 art that shows one of its frames (found by exact match: 365 lights, all on empty background) now has a `back_ground_lights` object in `stage6.tmx` (own object layer "back_ground_lights"; new tile 72 in `objects.tsx`, icon `maps/icons/back_ground_lights.png`). Each cycles its frames endlessly, 0.1 s per frame, starting from the frame the art showed there (object property `frame`, 0–2; 0 if left out). Decoration only: no hits, no collision. Drawn right after the stage art, so under every other sprite. The lights painted into the art are taken out at load time (only pixels that match a frame, so a light moved in Tiled never cuts into other art); the PNGs are unchanged. `Level.bgLights`, `GameScreen.unbakeBgLights` / `drawBgLights`.
+- **Lavinia background lights** (`sprites/stage_3_back_ground_lights.png`, 3 frames of 8×8), done the same way: 103 lights found in the stage 3 art (all on empty background), placed as `back_ground_lights` objects in `stage3.tmx` (own object layer; tile 73 in `objects.tsx`, icon `maps/icons/back_ground_lights_3.png`), 0.5 s per frame. The lights code is now per stage: it uses `sprites/stage_<N>_back_ground_lights.png` (frame size = picture height) and the map property `backGroundLightsFrame` (seconds per frame, default 0.1; stage 6 = 0.1, stage 3 = 0.5).
+
+### Changed (Kierke boss, from Albert)
+- **The machine wall is rebuilt from Albert's new pictures** (replaces `boss4.png`, which is no longer used). `boss4_main.png` is the body behind the wall (drawn 89 px right of the wall, fixed); `boss4_wall_without_shield.png` is the wall (89×320, five units 64 px apart). Each part is placed where it sits in the pictures (found by exact match): in every unit 11 overlapping bars (`boss4_wall_bar.png`, at x 1, 5, … 41, 16 px tall), in the middle unit also the two core bars (`boss4_wall_bar_core.png`, x 49 and 57), the main orb (`boss4_wall_main_orb.png`, x 65) and the shield (`boss4_wall_shield.png`, x 0). The game cuts the parts out of the wall picture and draws whatever is still standing on top. Black and (6,6,6) are see-through.
+  - **The wall loops**: it moves up and down as before (8 px steps, 152 px each way, random stop, ramming), but no longer stops at an end: going off the top it comes back in at the bottom and the other way round, so it can scroll on forever.
+  - **Bars**: 10 HP each, shot from the front (left) one first. With all bars of a unit gone, its orb is open: 20 HP; destroyed, the orb is erased from the wall.
+  - **Shield** over the middle unit: can't be hurt (shots spark off it); it disappears (with an explosion) once the four outer orbs are destroyed.
+  - **Middle unit**: then the two core bars (10 HP each, front one first) and the middle orb (20 HP). Destroying it removes the main orb picture and opens a gap through the wall to the **giant core** of the main body (box x 10, y 82, 24×14 in `boss4_main.png`): 40 HP, only hurt once the gap is open; 5000 points.
+  - Points: 100 per bar / core bar, 1000 per orb.
+  - **No enemy shot gets through any part of the boss** (wall or main body); the pods' own shots start just left of the pods.
+  - The bars under the shield are ordinary bars (10 HP, reached only once the shield is gone).
+
+## 2026-10-28
+
+### Added (from Albert)
+- **Option formations** (pad R2 / L1 / L2; keyboard C / V / F; `Controls.Action.OPT_ORBIT / OPT_V / OPT_FREEZE`, `GameScreen.updateOptions`, `Player.optMode`). Each button toggles its formation; another formation's button switches straight to it; the options glide to their new places at 260 px/s.
+  - **R2, orbit**: the options circle the ship's middle, 26 px out, evenly spaced, at 3.2 rad/s (about half a turn a second), starting where the first option is.
+  - **L1, V formation**: in pairs, one on each side, each pair 14 px further back and 16 px further out: above and below the ship on a horizontal stage, beside it on a vertical one.
+  - **L2, freeze**: the options stay where they are around the ship and move with it 1 to 1 instead of trailing.
+  - The triggers (R2, L2) are read as buttons or, on the desktop (where gdx-controllers reports them as axes 4 / 5), as axes pressed more than halfway. A new option joins the formation at once; a respawned ship starts with the normal trail.
+- **AIM works with LASER and RIPPLE too** (hold R1 / Enter + a direction, as with DOUBLE; the ship holds still while aiming, the dotted line shows the direction). The whole weapon fires the aimed way, in any of the 8 directions; straight ahead is the normal beam / ring. LASER and RIPPLE share one aim (`Player.laserDir`, starts straight ahead); DOUBLE keeps its own.
+  - **Aimed LASER**: a stream of short beam pieces, one out of each gun every frame for as long as the front takes to reach the screen's edge (like the straight beam), all flying the aimed way at the laser's speed (`GameScreen.AimBeam`, `Bullet.seg`). The pieces of one beam share their hits, so it hurts each target once, as a beam does. A piece stops at whatever stops a laser (the beam flows into it). Counts toward the gun's laser limit.
+  - **Aimed RIPPLE**: straight up / down / back it flies like the normal ring turned that way (stretching across its way, stopped by rock at its core); diagonally it grows to 96 px across its way (`Bullet.diag`, `RIPPLE_DIAG_MAX`).
+
+## 2026-10-27
+
+### Added (Kierke, from the MSX recording)
+- **The web animates** (`maps/stage5_web.png`, `GameScreen.loadWeb` / `drawWeb`). Analysed frame by frame: the web's strands don't change shape freely; 2572 of its pixels flicker as the screen scrolls — strand pieces hop 1 px back and forth. One cycle per 8 px of scrolling, in 8 states (one per pixel scrolled; in the recording a new state every ~3 frames at ~20 px/s, and the period follows the scroll speed along the stage), each pixel lit for 4 states in a row and dark for the other 4, from its own starting state. Captured from the recording in map coordinates and stored as a picture the size of the map art: colour = the pixel's colour when lit, alpha = 255 − 16 × phase (−8 more if the map art doesn't show that pixel). The game draws them right after the map art, lit or black, from the camera's x (state = (x − 5) mod 8; the MSX's 8 px steps fall on x ≡ 5). The rest of the web stays as it is in the art. With the recording's frames this removes about a third of the differences between the art and the MSX web (the rest is timing within a frame and sprites).
+
+### Changed (Op 4 / Eioneus, from Albert)
+- **Eioneus' boss fires the enemies' laser too**: its four falling lasers now use `enemy laser red.png` / `blue.png` (flashing, upright), like the gun units. The dotted lasers are gone from the code (`GameScreen.drawGunLasers`).
+- **Green mines in the gun units' fight**: once the gun units have appeared, a green mine (Kierke's homing mine) flies in from a random edge of the screen (left, right, top or bottom) after 3 s, then every 2.5–4.5 s. `GameScreen.GMINE5_*`, `spawnEdgeMine`.
+
+### Changed (Op 4, from Albert)
+- **The gun units (boss5b) move down and up every now and then**, not only down once after the first orb: every 3–6 s they go down to 40–56 px lower or back up to at most 16 px below where they started (16 px/s). The first-orb trigger is gone. `Boss.GUNS_WAIT_MIN / MAX`, `GUNS_UP_MAX`.
+- **The gun units fire the enemies' laser** (`enemy laser red.png` / `blue.png`, flashing, turned upright as the Rages fire it; as wide as the picture for hits) instead of dotted lasers. Eioneus keeps its dotted lasers. `GameScreen.GunLaser.beam`.
+
+### Fixed (Kierke boss, from Albert)
+- **Barrels left a ring behind**: shooting off a barrel cleared one row too few, so its bottom ring stayed on screen. Now all 8 rows go.
+- **The light-blue cannon can be shot** like the others (barrel, then ball); it still isn't needed to open the core.
+- **Every pod fires** (all five, anywhere on the screen; `Boss.K_POD_ROWS`, `K_FIRE_BANDS`), not just the two upper ones in two bands as in the recording. About 3 times as many shots; `Boss.K_SHOT_T` (0.28 s) sets the rate.
+
+### Changed (all bosses, from Albert)
+- **No WARNING text when a boss appears** (it used to flash in red for 2.6 s). The boss sound and the boss music are unchanged.
+
+### Fixed (Celtic Frost, re-checked frame by frame against the stage 2 MSX recording)
+- **Vertical-stage Celtic Frost path** (both styles; `Enemy.frostAt`, `FROST_V_TURN` 112, `FROST_V_STEP` 16, `FROST_V_DROP` 72, `FROST_V_OUT` 136, new `Enemy.frostIdx` = place in the wave): down the column to 112 px below the top, 45° up toward the middle (16 px for the first frost, 32 for the second, … 16 more for each one behind), straight down 72 px, 45° up toward the middle again until 136 px across from the entry column, then straight up and out. The wave turns from a column into a diagonal line and leaves up a column on the far side. Replaces the "V" (48 px turn, 48 px dip). Matches the recording to ~4 px (median; the MSX moves in 8 px steps). Also used by the other vertical stages' frost.
+- **Stage 2 has only the 4 Celtic Frost waves of the recording** (both styles): x 184 at 7.8 s, x 80 at 10.9 s, x 184 at 15.4 s, x 80 at 17.4 s; 6 frosts each (objects 78, 79, 82, 83). The "columns" at x 48 and x 216 are not waves: they are these waves leaving (the x 184 waves leave up x 48, the x 80 waves up x 216). Removed: objects 80, 81, 84, 85 (x 48 / 216) and the four mid-stage waves the recording doesn't have (52, 54, 70, 71). No frost appears in the recording after 23 s. Map before: `Claude outputs/stage2.tmx.before-frost-cleanup`.
+- **Kierke (stage 5): no Celtic Frost** (Albert): objects 66, 67, 69 removed. Map before: `Claude outputs/stage5.tmx.before-frost-removal`.
+
+### Changed (from Albert, evening)
+- **Op 4 starts with stars again**: `noStars` back to `0,4214` (it had become `0,4672`, the whole stage, which made the opening black). The stars scroll away with the open space at the start, as before; the end fight at the top is still in black space.
+- **Health of the non-moving enemies** (Albert): every turret (stage 1 floor / ceiling turrets, stage 2 wall turrets) 1 (was 3 + stage index); Omen 12 (was 3); every dome 12 (Eioneus / Op 4 blue domes were 5; the stage 2 and Lavinia domes were already 12); Kierke nests 12 (was 6); bases (Eioneus and Op 4) 12 (was 8); stage 2 eye rocks 12 (was 3). `Enemy` (turret case, `OMEN`, `NEST_HP`, `BLUE_DOME_HP`, `SEED_HP`), `Hazard.EYE_HP`.
+- **Lavinia: the Laser Guard room lasts 30 s in both styles** (MSX style was 52.5 s): `timeMsx` removed from the `hold` object in `stage3.tmx`.
+- **Small storm rocks stop every shot** (before, only lasers stopped on them; other shots flew through). Big rocks still split, red volcano rocks still break.
+- **Eioneus: no points for the boss's bars and orbs, nor for a gun pod's bars** (as on the MSX). A beaten pod still gives 10,000, the boss still 5,000; Op 4's gun units keep their points.
+- **Op 4's banner**: "OPERATION FOUR / -CRUSH SALAMANDER-" (map properties `bannerTitle`, `subtitle` in `stage6.tmx`).
+
+### Added (Eioneus, from the MSX recording 216-292 s; Albert)
+- **Boss room: the three gun pods** (`gunpod.png`, the map's `gunpod` objects). When the scrolling stops at the top of the cave, the pods wait 6 s out of sight and then come down out of the ceiling, 8 px every 0.4 s, into their places (in the recording they are in place 9.8 s after the stop). Each has a column of 4 bars (`boss_bar.png`, found in `gunpod.png`) in front of its red orb: a shot into the column hurts the lowest bar left (10 HP each, 100 points); when its last bar goes the pod is beaten (10,000 points, exactly when the bars are gone, as in the recording; the orb stays). The rest of a pod stops shots and lasers and hurts the ships; the inside of a column is free once its bars are gone (the ship flies up into it in the recording). `GameScreen` pod room (`POD_*`, `podShot`, `podTouches`, `drawPods`); `Level.pods`.
+- **Bouncing bubbles** (`orb.png`; `Enemy.bubble`): while the pods hang there they let bubbles out from under their middle, the first 1.5 s after they are in place, then one every 0.8 s while there are fewer than 4. A bubble moves diagonally at 57 / 44 px/s and bounces off the rock, the screen's edges and the line under the pods. Like the Op 4 orbs it can't be shot (a guard takes one).
+- **Then the boss**: 2 s after the last pod is beaten the bubbles go and everything on the screen (rock and pods) breaks up pixel by pixel in 2 s (`Dissolver`, as on Op 4), leaving black space; 4 s later the boss comes down.
+- **Eioneus boss movement and lasers** (`Boss.initEioneus`, `EIO_*`): it comes down through the top edge in the middle (72 px/s) until its top is 41 px above the top edge; every 0.25 s it steps 8 px sideways toward the nearest ship (its middle over the ship; its left edge stays between 35 px off the left of the screen and 89 px in). 8 s after it came it steps down (8 px every 0.17 s) until its top is 7 px below the top edge, and from then on goes 8 px up and back every 4 s. Every 11 s (the first 5.6 s after it came) four dotted lasers come out of its leg tips (x 45 / 76 / 116 / 155, 121 / 137 / 137 / 121 px down in `boss3.png`), grow down at 160 px/s to 100 px, flash red / blue and fall on (the gun units' lasers, now shared: `GameScreen.bossLasers`). No other shots. Beaten, it breaks up pixel by pixel (in the recording the red orb goes last, then the boss breaks up for ~3 s). It stays solid, but the ships can fly up into a column as far as it is shot away (it was solid all the way). It no longer uses the shared boss pattern.
+- In the recording the score doesn't change for the boss's bars and orbs; the game keeps its points for them (100 / 1000).
+
+### Added (Op 4's end, from the MSX recording 220–268 s; Albert)
+- **Asteroid storm** (`meteors` object in `stage6.tmx` at y 3768): 11.5 s of small grey rocks (no big ones), straight down at 160 px/s, coming in only between screen x 73 and 177, as in the recording (41.8–53 s). New optional `meteors` properties `speed`, `straight`, `xMin`, `xMax`; `Level.storms`, `GameScreen.updateStorm`.
+- **Two more Gremlins**: yellow at x 320, y 1872 and red (capsule) at x 288, y 1744 (156.7 s and 163.6 s in the recording).
+- **The terrain dissolves**: the path now ends at camera top 376 (the end of the shaft, as on the MSX). There the whole terrain on the screen breaks up pixel by pixel in 3 s and leaves black space; the collision goes with it (`Level.clearGrid`, back on a restart). `noStars` is now `0,4672`, so the fight is in black space. `GameScreen.updateOp4End`, `dissolveTerrain`.
+- **Reusable pixel-by-pixel death**: `Dissolver` (new class: a picture losing its pixels one by one in a random order, faster and faster; `Dissolver.appear` does it in reverse) and `GameScreen.dissolveDeath(picture / sprite frame / enemy, x, y, seconds)`. Used for the terrain and both Op 4 bosses; any enemy can use it.
+- **Brain sphere (boss5a) moves as on the MSX** (replaces the bouncing): it rises in through the bottom edge (70 px/s), parks with its top at the top edge (bobbing 4 px) and slides toward the nearest ship (16 px/s). The ships fly over it; only its eye takes damage (60 HP), the rest of it lets shots through. Beaten, it breaks up pixel by pixel. `Boss.initSphere`, `Boss.ghost`, `Boss.weakX..weakH`, `Boss.dissolve`.
+- **Option eater** (`sprites/option_eater.png`, cut from the recording at 233 s: the white / red flashing lattice mine under the sphere). During the sphere fight one comes in through the bottom edge every 5 s and makes for the nearest ship's last option (or the ship) at 30 px/s; touching an option eats it (the ship loses it). 2 hits, 300 points. `Enemy.Type.OPTION_EATER`, `GameScreen.eatOption`.
+- **Gun units (boss5b)**: appear where they are, pixel by pixel (2.2 s), top 48 px above the screen; sway 4 px; once the first outer orb is gone they come down 56 px (16 px/s), then bob a little. The ships can fly over every part of them to reach any orb (no collision with the body; only bars, orbs and the core shield stop shots). Attacks as in the recording: every 6 s dotted lasers (blue / red flashing) grow down from under the columns at five places and fall down the screen (80 px/s, 80 px long), and every 6 s a green creature comes out of the middle and homes in on the nearest ship. Beaten, they break up pixel by pixel. `Boss.initGuns`, `GameScreen.gunLasers`, `gunCreature`. (The "pink crawlers" I noted on the left column turned out to be the hit sparks of the shots on its bars, so there is no such attack.)
+
+### Added (Kierke boss, from the MSX recording, 3:05–4:51)
+- **The machine wall** (`boss4.png`, behaviour `Boss.kierke`, pictures `GameScreen.loadKierkeBoss`). On the right a fixed frame with the core; on the left a column of 10 units (light-blue cannon, pod, white cannon, pod, red unit, pod, yellow cannon, pod, green cannon, pod; 32 px each, 320 px in all), built from `boss4.png` (the light-blue and green cannons are the yellow one, recoloured to the recording's colours). As measured:
+  - Once the scrolling stops, the column moves up and down in 8 px steps every 17 frames (~28 px/s) within a 152 px range: each round it goes to the far end, waits 2 s, goes to a random spot (16 px grid), waits 1.7 s, then rams 96 px left toward the ships and straight back (8 px every 8 frames, ~60 px/s) and waits 0.45 s.
+  - The two upper pods fire slow aimed shots (42 px/s) every 0.28 s, except while ramming, from the top band (y 14–62) and the band at y 94–126 of the screen, as in the recording.
+  - The cannons' barrels and balls can be shot (barrel 16, then ball 12; the red unit has only a ball; the light-blue cannon can't be hurt); no points, as in the recording.
+  - The core (the eye in the frame) only takes damage once the four balls are gone (in the recording it was shot from the gap between the column and the frame for minutes and only died 5 s after the last ball): 40 HP, 5000 points. The rest of the boss stops shots and lasers and destroys a ship that touches it.
+
+### Changed (Op 4, from Albert)
+- **The gun units (boss5b) work like the Eioneus boss**: 5 columns of 5 bars (10 HP each), each guarding an orb (30 HP): blue, grey, red (middle), yellow, green. The core shield (`boss3_core_shield.png`, painted into `boss5b.png` at 113, 152) closes the middle column until the other four orbs are destroyed; destroying the red orb beats it. Health bar: 400. The Eioneus code is now shared: `GameScreen.BAR_BOSSES` (one entry per bar-wall boss: picture, boss part, bars, orbs, middle column, shield), `barBossShot`, `barPartDestroyed`.
+- **Red moai rings drop a capsule**: in every burst of 6 rings a moai head spits, one (at random) is red (flashing red / dark red) and leaves a power capsule where it is shot down. `Enemy.moaiRedIdx`, `Bullet.ring` 3, `GameScreen.RING_RED_DARK`.
+- **Red Creeping Death drops a capsule**: of every burst of Creeping Death the two rock-opening domes let out, one (at random) is red and leaves a power capsule when shot down; the others are the cyan / green kind (before, every other one was red-coloured and none left a capsule). `Enemy.creepRedIdx`. Kierke's nests are unchanged.
+
+### Changed (all stages, from Albert)
+- **REMAKE style = everything the MSX style has, plus its own extras**: map objects with `style` = `msx` now appear in both styles; `style` = `remake` objects stay REMAKE-only (its extras). MSX style is unchanged. The REMAKE objects that covered the same stretch as the MSX ones (every stage's REMAKE opening waves, and stage 2's second asteroid storm) are removed: 79 objects (stage 1: 26, 2: 14, 3: 26, 4: 3, 5: 4, 6: 6); the maps before the cut are in `_to_delete/`. REMAKE extras that stay: stage 3 Frost at x 1594 / 2994 / 4094, stage 4 Legacy / Frost waves from y 3608 up, stage 6 Frost at y 2407 and Legacy at y 1308. Only enemy placements: speeds (`speedMsx`, `speedsMsx`), `timeMsx`, `burstMsx` and the MSX behaviours stay MSX-only. `Level` (object loading).
+- **Lasers stop on everything that can't be destroyed**: every enemy for which `Enemy.indestructible()` is true (now also Laser Guards, Op 4 laser guns and orbs, and Lavinia's Rages; before only blocks, Heathen pillars, chain balls and blue asteroids) and the asteroid storm's small rocks. The beam stops in front of them instead of passing through. `GameScreen.laserBlocked`.
+
+### Added (all stages, from Albert)
+- **Continue at game over**: the game over screen now has a menu, CONTINUE / END (up / down to choose, fire or Enter / Start to pick, after 1 s). CONTINUE puts every player who was in the game back in with a full set of ships at the last checkpoint, score kept (as with the mid-game continue), stage music again. END puts the scores in the hi-score table and goes back to the title screen (scores are no longer entered the moment the game is over). `GameScreen.GAMEOVER_MENU`, `updateGameOverMenu`.
+
+### Changed (Eioneus, from Albert)
+- **Eioneus boss: bar walls, orbs and the core shield** (Albert's `boss_bar.png` and `boss3_core_shield.png`). The boss has three columns of 5 bars (found in `boss3.png` by matching `boss_bar.png`), each guarding an orb above it: blue (left), red (middle), grey (right). A shot into a column hurts its lowest bar left (10 HP each, 100 points), then the orb (30 HP, 1000 points); the rest of the body only stops shots. The middle column is closed by the core shield until both side orbs are destroyed: then the shield is blown away (with the bottom of the middle column), and its bars and the red orb can be shot. Destroying the red orb beats the boss (5000 points). Shot-away parts leave the dark inside of the column. The health bar shows what is left of all parts (240). Lasers hit each part once. `GameScreen.BAR_BOSSES`, `barBossShot`, `barPartDestroyed`; `PixelMask.clear`. Its movement and shots are still the shared boss pattern.
+- **Side volcano rocks can be shot**: one hit destroys a red rock (small explosion, 50 points; a laser goes on through it). Before, shots passed through them. `GameScreen.VOLCANO_ROCK_SCORE`.
+
+### Fixed (Eioneus, from Albert)
+- **Red Artillery at the start of the cave (left and right wall)**: it was painted into the background art (`stage4_t3.png`, at x 31, y 3553), so it looked like scenery. It is cut out of the art (original in `_to_delete/`) and is now a real red Artillery (object 101 in `stage4.tmx`, `red` = leaves a capsule), pointing right off the wall. The second painted one, on the right wall at (225, 3489), is fixed the same way: a real red Artillery (object 102, flipped), pointing left.
+
+### Changed (all stages, from Albert)
+- **Shorter stage intro**: the operation banner now shows for 2 s (was 3 s) and the HUD on the black playfield for 1 s (was 2.5 s); the 0.6 s of black between them is unchanged. `GameScreen.INTRO_BANNER`, `INTRO_HUD`.
+
+### Changed (Lavinia, from Albert)
+- **Rage is indestructible**: shots stop on the Rages the warship spits out (as on the Laser Guards), homing shots ignore them, and an option guard can't destroy them. `Enemy.indestructible()`.
+- **Lavinia warship: the hatch has its own health (30)**. Shots on the hatch, open or closed, hurt only the hatch; when its health is gone it breaks (with an explosion) for 10 s (was 5.1 s), and only then can the boss itself be hurt, anywhere on it. After 10 s the hatch is back, whole again (30). Replaces "the hatch breaks once at half the boss's health". `Boss.HATCH_HP`, `hatchHp`, `damageHatch`, `hatchBroken`.
+- **Lavinia warship moves at 75% speed**: up and down at 36 px/s (was 48) and, while the hatch is broken, 187.5 px/s (was 250). `Boss.HATCH_MOVE`, `HATCH_RAGE_MOVE`.
+- **Laser Guard room is shorter: 30 s** (was 60 s) before the guards retreat and the walls dissolve: the `hold` object's `time` in `stage3.tmx`.
+- **Boss music starts before the Laser Guard room**: the `bossmusic` marker in `stage3.tmx` moved from x 4893 (past the room, so the music only came after the guard fight) to x 4492. The stage music now fades out when the room's entrance wall (x 4600) is on the right of the screen, and the boss music plays through the guard fight into the boss.
+- **Led Zep always jumps right across** to the other surface (floor to ceiling, ceiling to floor). It no longer makes "half" jumps up to the ship's height and back (was 60% of its jumps). `LEDZEP_CROSS` removed.
+
+### Fixed (Lavinia, from Albert)
+- **Artillery is drawn on Lavinia**: its pictures (`artillery_green.png` / `artillery_red.png`) were only loaded on Op 4, so on Lavinia it was invisible (it could still be hit and left its capsule). They now load on every stage.
+
+### Changed (all stages, from Albert)
+- **Every Whiplash leaves a power capsule** when shot down (before, only ones with the map property `drop`). The `drop` property on `whiplash` objects is now ignored. `Level` (case `"whiplash"`).
+
 ## 2026-10-26
+
+### Changed (all bosses, from Albert)
+- **Lasers never pass through a boss**: a ship's laser now stops at any part of a boss (its drawn pixels, eye, core, Lavinia's hatch, Tetran's rings, and every ball of stage 1's boss arms; before, it went through everything but the weak spot and the claw). It still hurts the boss where it stops if that is a weak spot (once per beam, as before); Tetran's rings and armour just stop it. `GameScreen.bossBlocksLaser`, `LASER_REACH`.
+
+### Changed (Lavinia, from Albert)
+- **Led Zep frames**: frame 0 while it crawls along the floor or ceiling, frame 1 only while it is in the air (it used to swap frames all the time).
+
+### Changed (Op 4, from Albert; for now)
+- **The brain sphere (`boss5a`) moves**: instead of sitting still it drifts diagonally (42 px/s across, 30 px/s up/down) and bounces off the screen edges, its ball (the solid part of the picture) staying 2 px inside the screen. It still shoots as before. `Boss.initBounce` / `BOUNCE_*`.
+
+### Changed (all stages, from Albert)
+- **Stage intro as on the MSX** (measured in the five recordings): the operation banner alone on a black screen for 3 s (no HUD, no stars, no ship), 0.6 s of black, then the HUD on a black playfield for 2.5 s, then the stage starts (was: 2.2 s of "STAGE n" over the stage). The banner is white MSX-style lettering, three lines at 76 / 92 / 116 px below the top: new map properties `bannerTitle` (default: `name`), `subtitle` and `planet`. Set from the recordings: stage 2 "OPERATION TWO / -CONDUCT TO SPACE STATION ZOT-"; stages 3, 4, 5 "OPERATION THREE / -SET THE LEEK SYSTEM- / PLANET LAVINIA / EIONEUS / KIERKE". Stages 1, 6 and 7 show their `name` only (no recording of their banners yet). The boss test shows "BOSS TEST" as the subtitle.
+
+### Changed (Lavinia, from Albert; round 6)
+- **Lavinia's domes let Creeping Death out exactly as the Kierke nests do** (replaces round 5's "organic" version): while a dome's middle is between x 16 and 200 on the screen it is open and lets them out of its mouth in bursts of 4, 0.15 s apart, a burst every 2.5 s; each rises out of the mouth (sinks out of a ceiling dome) for 1.3 s and then homes in on the ship. One of each burst is red and leaves a power capsule (`Hazard.updateCreepDome`, the `CREEP_*` constants in `Enemy`).
+
+### Changed (Eioneus, from Albert)
+- **Gremlins fire sooner**: the aimed shot now comes 0.4 s after a gremlin stops (`Enemy.GREMLIN_FIRE`) instead of at the end of its 3 s stop, when it had often already scrolled off the screen (no shot then).
+
+### Changed / fixed (Lavinia, from Albert; round 5)
+- **Creeping Death out of the domes is livelier**: they come out one after another (0.08–0.3 s apart) instead of all at once, each with its own rise speed and time, swaying from side to side as it rises and slowing at the top, then turning smoothly toward the ship (at most 140°/s) at a speed that swells and fades a little (`CREEPO_*` in `Enemy`; the Kierke nests' Creeping Death is unchanged).
+- Fixed: of the six laser gun points in the shaft only four showed. Enemies that stay where the map has them (Omens, laser guns and batteries, artillery, the blocks) were removed as soon as they came, when they were further below the camera's lane than 60 px (the bottom row of the shaft: it comes in while the camera is still in the upper lane). They are no longer culled for that (`Enemy.anchored`).
+- **The two old wall lasers by the Laser Guard room** (objects 26, 27) are now laser gun points too (objects 140, 141, pointing left, pulses 0.9 s apart).
+
+### Fixed (Eioneus)
+- **Huge lasers next to the laser batteries**: `stage4.tmx` still had the six old beam markers from the map build (`laser` objects, 4–84 px wide / tall). Since `laser` became the Lavinia wall laser they turned into real beams on top of the batteries' own. Removed them (the batteries draw their beams), and `tools/stages_build.py` no longer writes them for Eioneus (it still erases the beams from the art).
+
+### Added (Kierke, from the MSX recording)
+- **Capsules (Albert)**: every battleaxe row (objects 75–81: shoot the whole row) and every Missing Link (objects 114–130) leaves a power capsule (`drop` on).
+- **Missing Links** (`missing_link.png`): the "red crabs" in the opening and the cave were Missing Links. Opening (MSX style, objects 114–117): four at 10.4, 21.1, 25.6 and 32.7 s, coming in at the top or bottom of their swing; each fires a burst of 3 aimed shots in a line once; the first leaves a capsule (one was seen at ~16 s). Cave (both styles, objects 118–130): a stream of 13 from ~125 to ~162 s, each coming in at mid height every ~2.4 s (gaps at ~130–135 and ~152 s, as seen), swinging down to just off the bottom of the screen, one aimed shot each. As measured: 40 px/s left relative to the screen, a 72 px swing in ~2.4 s, the picture following the swing (frame 0 at the ends, 1, 2, 3 half-way; frames 4–6 are not used), slow shots (60 px/s relative to the screen). New `link` properties `swing`, `up`, `burst` (`Enemy.updateLinkMsx`, `LINK_MSX_*`); links without `swing` (stages 1 and 3) are unchanged.
+- **Green mines** (new enemy, Albert's `sprites/green_mine.png`, 2 frames swapped every 0.21 s; both styles, objects 131–134): four come in at the right edge at 36.7, 40.0, 43.2 and 46.3 s and home in on the ship at 33 px/s relative to the screen (in the recording their heading stayed within a few degrees of the ship's direction, even while it moved), through rock; 1 hit, 100 points, no shots. New Tiled class `green_mine` (tile 71, icon `maps/icons/green_mine.png`); `Enemy.Type.GREEN_MINE`, `GMINE_*`.
+
+### Changed (Albert, 2026-10-26)
+- **Op 4 clusters renamed to blue asteroids**: Tiled class `blue_asteroid` (tile 47), `sprites/blue_asteroid.png` (was `cluster.png`), `Enemy.Type.BLUE_ASTEROID`, `BLUE_ASTEROID_*`; `tools/stages_build.py` uses the new name. No map used the class name directly (they take it from the tileset).
+
+### Added / changed (Lavinia, from Albert; round 4)
+- **Gammas from the left** (both styles): the eight that come in at the left edge in the recording (~57–80 s and ~144 s; two red), objects 132–139. New gamma property `fromLeft`: it comes in at the left edge and drifts right through the world at 56 px/s (`Enemy.GAMMA_VX_LEFT`), bouncing like the others.
+- **Lavinia's domes let out Creeping Death** instead of amoebas (the floor and ceiling domes that aren't Gun Ho hatches): each wave is 4, out of the mouth, rising (sinking from a ceiling dome) and then homing in as from the Kierke nests; one of each wave is a red / dark green one and leaves a power capsule.
+- **Five Heathens** confirmed (Albert).
+
+### Added / changed (Lavinia, from Albert; round 3)
+- **Gun Ho hatches** open first (0.35 s) and the Gun Ho comes out of the middle of the dome; the dome shuts again 0.6 s later.
+- **Missing Links and Rugals** in the MSX opening, where the recording has them: two Missing Links at ~20.6 / 23.0 s and a column of three Rugals (two blue, one red) at ~40.5 s (objects 108–112, `style=msx`; the REMAKE opening keeps its own).
+- **Artillery** in Lavinia (both styles), as in the recording: four green ones on the floor (x 1304, 1320, 1528, 1576) and four red ones (floor 2840, 2968; ceiling 2952, 3032, flipped in Tiled), objects 113–120. Artillery can now stand on a floor or hang from a ceiling on a horizontal stage (points up / down, fires aimed shots from its muzzle). **Every Artillery now takes 1 hit** (all stages).
+- **Gamma** in Lavinia (both styles): seven where they come in at the right edge in the recording (~54–80 s and ~138–144 s; objects 121–127), two of them red. Gammas now use Albert's `sprites/gamma_blue.png`, and `gamma_red.png` for the red ones (new property `red`: it leaves a power capsule); `gamma.png` is still used when the blue one is missing.
+- **Led Zep** (new enemy, both styles), with Albert's `sprites/led_zep.png` (2 frames): the yellow crawlers of the lower corridor. As in the recording each crawls along the floor or the ceiling (45 px/s across the screen) and every ~1 s leaps away from it (80 px/s), to the nearest ship's height and back, or (4 times in 10) right across to the other side. They don't shoot. As Albert suggested they come at random: while the camera's right edge is inside the new rectangle object `ledzep_zone` (x 3720–4620), one every ~1.3–3.8 s (`interval` 2.5), at the right edge (or 3 times in 10 at the left), on the floor or the ceiling. Tuning: `LEDZEP_*` in `Enemy`.
+- **Laser gun points** (new enemy, both styles), with Albert's `sprites/laser_gun_point.png`: the three emitters in the middle pillar of the shaft, each firing to both sides (property `twin` 72 = the second one, across the pillar, facing the other way). Albert: unlike the MSX beams they can't be destroyed and fire in short pulses so a ship can slip through: every 1.8 s the laser grows out to the wall across at 260 px/s, stays 0.25 s and is pulled in after it; the three rows are 0.6 s apart (`delay`). They replace the six shaft `laser` objects (15–17, 21–23); the two `laser` beams lower down stay as they were. New Tiled class `laser_gun_point` (objects.tsx tile 70; flip it horizontally to point left). Tuning: `LGUN_*` in `Enemy`. Albert may want these to move like the Laser Guards at the end of the stage later.
+- **Every Battleaxe row leaves a capsule** (Lavinia, objects 82–86 too).
+- **Red Possessed** (all stages): every red one leaves its own capsule when it is shot down; the rest of its group doesn't have to be.
 
 ### Added (Lavinia, from Albert; both styles)
 - **Lavinia blocks**, with Albert's `sprites/lavinia_block_small.png` (32×16) and `lavinia_block_big.png` (32×32), measured in the MSX recording. They were bricks in the map; the 6 small and 2 big ones are now enemies (objects 100–107; new Tiled classes `block_small`, `block_big`, objects.tsx tiles 68, 69; their brick cells are cleared).
@@ -28,6 +272,15 @@ All notable changes to this Salamander remake. Newest first.
 - **Side volcanoes** (new; measured from the MSX recording): three rock tips in Eioneus throw red rocks out sideways — (121, 1900) and (178, 1071) to the left, (79, 1086) to the right (objects 98–100, `volcano` with the new `spits` property). Bursts of 3–5 rocks, 0.12 s apart, every 1.8–3 s while the tip is on screen; each flies out at 45–90 px/s, drifting up or down through the world, slows down and falls back into its wall (pulled at 85 px/s²; measured 85–105). They keep one picture each, ignore shots, hurt a ship, and a guard breaks them, like storm rocks. Picture: `sprites/rock_small_red.png`, Albert's `rock_small.png` recoloured to the stage's rock red (247, 104, 104); replace it with your own if you like. Tuning: `Meteor.SIDE_*`.
 
 ### Changed (Op 4, from Albert)
+- **Red Gremlins leave a power capsule** (all stages, Eioneus too).
+- **The two domes in the rock opening let out Creeping Death** (new `dome_type4` property `spawns` = `creeping death`), timed like a Kierke nest: bursts of 4, 0.15 s apart, a burst every 2.5 s while the dome is on screen. Each one flies out of the dome's mouth (sideways, away from the wall) for 1.3 s, then homes in on the ship; every other one is red / dark green. The dome shows its open frame during a burst. (Replaces yesterday's `burst` 0.)
+- **Gremlins in Op 4** (both styles): eight on the left wall of the shaft, where they come up from the bottom edge in the recording (56–111 s; three red, objects 86–93). They behave as in Eioneus. Gremlins now find their rock face on stages whose screen isn't at the left of the map (they looked at the wrong part of the map there).
+- **Moai rings flash** yellow / white (15 times a second) instead of a whole burst being one colour.
+- **The two domes in the rock opening** let nothing out in either style (`burst` 0; was `burstMsx` 0), so they never open.
+- **Op 4 bases** let out waves of 5 mines while they are on screen, the next 2.5 s after the last (so at least two waves), and one mine of every wave, at random, is red and leaves a power capsule.
+- **Op 4 orbs can't be destroyed**: shots stop on them; a SHIELD or F.FIELD absorbs an orb that runs into it (the guard takes the hit as usual).
+- **Green mines in Op 4** (both styles): the green spiky mines of the rock opening are Kierke's green mines. Nine placed as in the recording (41.8–54.5 s, objects 77–85): pairs come in at the top edge (screen x 0 / 160 at 41.8 and 53.0 s, x 128 at 51.2 s) and four at the bottom edge (new property `fromBottom`), and home in on the ship at 33 px/s. On a vertical stage a green mine comes in at the top (or bottom) edge at its object's x and moves relative to the screen.
+- **Op 4 lasers are laser gun points now** (as in Lavinia): the six `laser` beams between the shaft walls and the middle pillar (objects 4–6, 15, 16, 19) are replaced by three `laser_gun_point` objects with `twin` (objects 74–76), sitting on the emitters drawn in the map: rows 1 and 3 fire from both outer walls toward the pillar (`twin` 185), row 2 from the pillar out to both walls (`twin` 73). They pulse every 1.8 s, the rows 0.6 s apart (`delay` 0, 0.6, 1.2), can't be destroyed and let shots through.
 - **No stars once the terrain begins**: Op 4 has `noStars` = `0,4214` (from the lowest rock of the opening to the top), so the stars scroll away with the open space at the start, as on the MSX.
 - **Clusters stop lasers** (as they already stopped shots): a laser ends where it meets a cluster.
 - **Moai heads**: `sprites/moai.png` now has 2 frames (50×38): mouth shut, mouth open. A moai starts against its wall (the game slides it to the rock if the map has it a little away) and still steps out and back. Its mouth is open from 0.3 s before a burst of rings until 0.3 s after it, and **only the open mouth takes damage**; shots that hit the rest of it stop with a spark (a laser goes on).

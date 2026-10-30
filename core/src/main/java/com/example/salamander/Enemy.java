@@ -4,7 +4,7 @@ import com.badlogic.gdx.math.MathUtils;
 
 public class Enemy {
     public enum Type { WALKER, TURRET_FLOOR, TURRET_CEIL, FROST, LINK, AMOEBA, RUGAL, TURRET_WALL, LEGACY, GUN_HO, OMEN, LASER_GUARD, DOME_FLYER, POSSESSED, WHIPLASH, BATTLEAXE, CHAIN, ABERRANT, NEST, CREEPING_DEATH, UG, GAMMA, BLUE_DOME, GREEN_FLYER, LASER_BATTERY, GREMLIN, SEED, FLYING_MINE,
-        EXODUS, ARTILLERY, CLUSTER, MOAI, ORB, HEATHEN, BLOCK_SMALL, BLOCK_BIG, RAGE }
+        EXODUS, ARTILLERY, BLUE_ASTEROID, MOAI, ORB, HEATHEN, BLOCK_SMALL, BLOCK_BIG, RAGE, LED_ZEP, LASER_GUN, GREEN_MINE, OPTION_EATER }
 
     /** Red "carrier" waves drop a power-up capsule when every member is shot down. */
     public static class Group {
@@ -94,10 +94,39 @@ public class Enemy {
      * right to the middle line, left along the middle line, diagonally up and back again to the top bar, then right
      * along the top bar and out the right edge. "upper" ones fly the same path mirrored top to bottom. The six of a
      * group follow each other on the same path, FROST_GAP seconds apart (t starts negative for the ones still waiting).
-     * Vertical stages fly a "V" (see FROST_V_TURN).
+     * Vertical stages fly the stage 2 recording's path (see FROST_V_TURN).
      */
     /** Missing Link: drifts left on its own (one at a time), bobbing up and down, and shoots at the ships. */
     public static final float LINK_SPEED = 40f, LINK_BOB = 50f, LINK_BOB_SPEED = 2.6f, LINK_FPS = 12f;
+    /**
+     * MSX Missing Link (Kierke; Tiled "swing" > 0), from the recording: it comes in at the right edge (LINK_MSX_IN px of
+     * it showing) at the top (or, "up", the bottom) of its swing and drifts left at LINK_MSX_SPEED px/s relative to the
+     * screen, swinging linkSwing px up and down, at up to LINK_MSX_VMAX px/s (a bigger swing takes longer; the recording's
+     * 72 px take ~2.4 s; in the cave the bottom of the swing dips just off the screen). The picture follows the swing: frame 0 at
+     * the top and bottom, 1, 2, then 3 half-way. LINK_MSX_FIRE_MIN..MAX s after it appears it fires linkBurst aimed shots
+     * in a line (LINK_MSX_BURST_GAP s apart, LINK_MSX_SHOT px/s relative to the screen), once.
+     */
+    public static final float LINK_MSX_SPEED = 40f, LINK_MSX_VMAX = 94f, LINK_MSX_IN = 14f, LINK_MSX_FIRE_MIN = 1.3f,
+            LINK_MSX_FIRE_MAX = 2f, LINK_MSX_BURST_GAP = 0.17f, LINK_MSX_SHOT = 60f;
+    /** MSX Missing Link: full swing height (0 = the old link), starts at the bottom, shots in its burst. */
+    public float linkSwing;
+    public boolean linkUp;
+    public int linkBurst = 1;
+    private float linkFireAt = -1f;
+    private int linkFired;
+
+    /**
+     * Green mine (Kierke opening, Albert's sprites/green_mine.png: 2 frames of 16x16, swapped every GMINE_FRAME s). From
+     * the recording: it comes in at the right edge (GMINE_IN px showing) and homes in on the nearest ship at GMINE_SPEED
+     * px/s relative to the screen, turning toward it at up to GMINE_TURN rad/s (its heading stayed within a few degrees
+     * of the ship's direction). It passes through rock and doesn't shoot.
+     * Vertical stages (Op 4 recording, 41-55 s): the same, but it comes in at the top edge (or, gmFromBottom, the
+     * bottom edge) at its object's x, and moves relative to the screen.
+     */
+    public boolean gmFromBottom;
+    private float gmSx = Float.NaN, gmSy;
+    public static final float GMINE_SPEED = 33f, GMINE_TURN = 3f, GMINE_FRAME = 0.21f, GMINE_IN = 11f;
+    private float gmAng = Float.NaN;
 
     /**
      * Amoeba: spat out by the stage 1 towers. It is thrown out of the tip, slows down, then just floats around in
@@ -313,14 +342,15 @@ public class Enemy {
      * Nest (Kierke, sprites/nest.png): stays where it is placed and lets enemies out of its mouth
      * (GameScreen.releaseNestBugs): Ugs (see UG_*) or Creeping Death.
      */
-    public static final int NEST_HP = 6;
+    public static final int NEST_HP = 36;   // (Albert, 2026-10-29: everything that lets enemies out is three times as tough)
     public boolean nestDown;     // a nest: its mouth faces down (hangs from the ceiling); Creeping Death / Ug: came out going down
     /**
      * A nest: what comes out of it (NEST_UGS, NEST_CREEPING; NEST_MINES = the flying mines of the four web nests
      * (mineKierke); NEST_NONE = nothing), how many it has left (Ugs) or in this burst (Creeping Death). */
-    public int nestKind, nestLeft;
+    public int nestKind;
+    /** A spawner (nest, blue dome, ground base): the waves it lets out (GameScreen.releaseNestBugs, Wave). */
+    public Wave wave;
     public static final int NEST_UGS = 0, NEST_CREEPING = 1, NEST_MINES = 2, NEST_NONE = 3;
-    public float nestT;          // a nest: time to its next one
     public Enemy nest;           // the nest it came out of
 
     /**
@@ -333,15 +363,22 @@ public class Enemy {
      * colours every CREEP_FLASH s: cyan / light green, or red / dark green (every other one).
      */
     public static final int CREEP_BURST = 4;
+    /** Creeping Death out of an Op 4 wall dome: it first flies out sideways (+1 = to the right), not up / down. */
+    public int creepOut;
     public static final float CREEP_BURST_GAP = 0.15f, CREEP_PAUSE = 2.5f, CREEP_START_X = 200f, CREEP_RISE = 50f,
             CREEP_RISE_T = 1.3f, CREEP_DRIFT = 15f, CREEP_SPEED = 45f, CREEP_TURN = 0.4f, CREEP_WOBBLE = 15f,
             CREEP_FRAME = 0.2f, CREEP_FLASH = 0.1f;
     public boolean creepRed;     // the red / dark green kind
+    /** Op 4 Creeping Death dome: which one of the current burst is the red one (it leaves a capsule; Albert). */
+
     private float bugTurnT;
 
     private void updateNestBug(GameScreen g, float dt) {
         if (t < CREEP_RISE_T) {
-            if (t <= dt) { vx = MathUtils.random(-CREEP_DRIFT, CREEP_DRIFT); vy = nestDown ? -CREEP_RISE : CREEP_RISE; }
+            if (t <= dt) {
+                if (creepOut != 0) { vx = creepOut * CREEP_RISE; vy = MathUtils.random(-CREEP_DRIFT, CREEP_DRIFT); }   // out of a wall dome's mouth
+                else { vx = MathUtils.random(-CREEP_DRIFT, CREEP_DRIFT); vy = nestDown ? -CREEP_RISE : CREEP_RISE; }
+            }
         } else if ((bugTurnT -= dt) <= 0f) {
             bugTurnT = CREEP_TURN;
             Player p = g.target(x + w / 2f, y + h / 2f);
@@ -402,11 +439,15 @@ public class Enemy {
     public static final float GAMMA_VX = -16f, GAMMA_GRAVITY = 53f, GAMMA_BOUNCE = 61f, GAMMA_FRAME = 0.2f;
     public static final int[] GAMMA_ORDER = {0, 2, 3, 1};
     public boolean gammaCeil;    // bounces on the ceiling
+    public boolean gammaRed;     // sprites/gamma_red.png (it leaves a power capsule)
+    /** Lavinia: comes in at the LEFT edge and drifts right through the world at GAMMA_VX_LEFT px/s (as in the recording). */
+    public boolean gammaLeft;
+    public static final float GAMMA_VX_LEFT = 56f;
 
     private void updateGamma(GameScreen g, float dt) {
         if (t <= dt) vy = (gammaCeil ? -GAMMA_BOUNCE : GAMMA_BOUNCE) * 0.85f;   // comes in just after a bounce
         Level lv = g.level;
-        x += GAMMA_VX * dt;
+        x += (gammaLeft ? GAMMA_VX_LEFT : GAMMA_VX) * dt;
         if (lv.hits(x + 3f, y + 3f, w - 6f, h - 6f)) {   // ran into rock: over it
             if (gammaCeil) { float c = lv.ceilBottom(x + w / 2f, y + h / 2f); if (c < Level.NO_CEILING) y = c - h; }
             else { float f = lv.floorTop(x + w / 2f, y + h / 2f); if (f > Level.NO_FLOOR) y = f; }
@@ -422,7 +463,22 @@ public class Enemy {
             if (c < Level.NO_CEILING) y = c - h;
             vy = -GAMMA_BOUNCE;
         }
+        // now and then a burst of GAMMA_BURST shots at the nearest ship, GAMMA_BURST_GAP s apart (Albert, 2026-10-30)
+        if (gammaShotT < 0f) gammaShotT = MathUtils.random(GAMMA_FIRST_MIN, GAMMA_FIRST_MAX);
+        if ((gammaShotT -= dt) > 0f) return;
+        if (gammaBurstLeft <= 0) gammaBurstLeft = GAMMA_BURST;
+        gammaBurstLeft--;
+        gammaShotT = gammaBurstLeft > 0 ? GAMMA_BURST_GAP : MathUtils.random(GAMMA_EVERY_MIN, GAMMA_EVERY_MAX);
+        if (canShoot(g)) g.aimedShot(x + w / 2f, y + h / 2f, GAMMA_SHOT, 0f);
     }
+
+    /** Gamma's shots: GAMMA_BURST per burst, the first burst GAMMA_FIRST_MIN..MAX s after it came, then every GAMMA_EVERY_MIN..MAX s. */
+    public static final int GAMMA_BURST = 2;
+    public static final float GAMMA_BURST_GAP = 0.5f,   // (Albert, 2026-10-30: was 0.15)
+            GAMMA_FIRST_MIN = 1.5f, GAMMA_FIRST_MAX = 3.5f,
+            GAMMA_EVERY_MIN = 2.5f, GAMMA_EVERY_MAX = 4.5f, GAMMA_SHOT = 80f;
+    private float gammaShotT = -1f;
+    private int gammaBurstLeft;
 
     /**
      * Blue dome (Eioneus and Op 4, on the side walls; drawn with stage 2's sprites/dome.png, 18x32: closed, and open
@@ -431,14 +487,14 @@ public class Enemy {
      * green flyers, BLUE_DOME_GAP s apart, and another burst every BLUE_DOME_REPEAT s while it is on the screen.
      * Stays where it is placed; domeRight = on the right wall (mirrored), its flyers fly the mirrored path.
      */
-    public static final int BLUE_DOME_HP = 5, BLUE_DOME_BURST = 4;
+    public static final int BLUE_DOME_HP = 36, BLUE_DOME_BURST = 4;
     public static final float BLUE_DOME_START = 40f, BLUE_DOME_GAP = 0.5f, BLUE_DOME_REPEAT = 5.3f;
     public boolean domeRight;
     /** Op 4 dome (stage 6): its flyers home in (gfHoming); domeBurst flyers per burst. */
     public boolean domeOp4;
+    /** Op 4 dome that lets out Creeping Death (Albert: the two in the rock opening) instead of green flyers. */
+    public boolean domeCreep;
     public int domeBurst = BLUE_DOME_BURST;
-    public float domeT = -1f;     // time to its next flyer (-1 = not started)
-    public int domeLeft;          // flyers left in this burst
 
     /**
      * Green flyer (Eioneus; sprites/green_flyer.png, 4 frames cycled every GREEN_FRAME s): out of a blue dome it flies
@@ -460,6 +516,8 @@ public class Enemy {
      */
     public static final float GREEN6_SPEED = 60f, GREEN6_OUT = 0.3f, GREEN6_TURN = 2.5f, GREEN6_HOME = 6f;
     public boolean gfHoming;
+    /** Homing flyer: the direction it comes out in (radians; NaN = away from its dome's wall). */
+    public float gfStartAng = Float.NaN;
     private float gfAng = Float.NaN;
 
     private void updateGreenFlyer(GameScreen g, float dt) {
@@ -481,7 +539,8 @@ public class Enemy {
     }
 
     private void updateHomingFlyer(GameScreen g, float dt) {
-        if (Float.isNaN(gfAng)) gfAng = gfMirror ? MathUtils.PI : 0f;   // straight out of the mouth, away from its wall
+        if (Float.isNaN(gfAng)) gfAng = !Float.isNaN(gfStartAng) ? gfStartAng   // (Op 4's gun units: straight down out of the middle)
+                : gfMirror ? MathUtils.PI : 0f;   // straight out of the mouth, away from its wall
         if (t > GREEN6_OUT && t < GREEN6_OUT + GREEN6_HOME) {
             Player p = g.target(x + w / 2f, y + h / 2f);
             if (p != null) {
@@ -535,31 +594,43 @@ public class Enemy {
 
     /**
      * Gremlin (Eioneus, the little walkers on the side walls; sprites/gremlin_yellow.png / gremlin_red.png, 3 frames
-     * of 16x16: frame 0 = standing still to aim, frames 1-2 = walking). As in the recording it comes up from the bottom
-     * edge climbing its wall (it keeps to the rock face) at GREMLIN_SPEED px/s through the world, walks for
-     * GREMLIN_WALK s, stops for GREMLIN_AIM s and fires an aimed shot at the end, and walks on again. gremRight = on
-     * the right wall. Drawn turned a quarter so it stands on the wall.
+     * of 16x16: frame 0 = standing still to aim, frames 1-2 = walking). It comes up from the bottom edge climbing its
+     * wall (it keeps to the rock face) at GREMLIN_SPEED px/s relative to the screen (Albert, 2026-10-28), walks for
+     * GREMLIN_WALK s, stops for GREMLIN_AIM s (standing on its spot of the wall, so it scrolls with it; the aimed shot
+     * goes at the end of the stop, GREMLIN_FIRE s in), and walks on again. gremRight = on the right wall. Drawn turned a
+     * quarter so it stands on the wall.
+     * Every other shot (Albert, 2026-10-28) it first gets ahead of the ship: it climbs at GREMLIN_RUN px/s until its
+     * middle is GREMLIN_AHEAD px above the nearest ship's (at least GREMLIN_RUN_MIN s), and aims from there. It stops
+     * early near the top edge (GREMLIN_TOP px from it) or after GREMLIN_RUN_MAX s.
      */
-    public static final float GREMLIN_SPEED = 48f, GREMLIN_WALK = 2f, GREMLIN_AIM = 3f, GREMLIN_FRAME = 0.15f, GREMLIN_SHOT_SPEED = 100f;
+    public static final float GREMLIN_SPEED = 48f, GREMLIN_WALK = 2f, GREMLIN_AIM = 1f, GREMLIN_FIRE = 1f, GREMLIN_FRAME = 0.15f, GREMLIN_SHOT_SPEED = 100f;
+    public static final float GREMLIN_RUN = 80f, GREMLIN_AHEAD = 40f, GREMLIN_RUN_MIN = 0.3f, GREMLIN_RUN_MAX = 4f, GREMLIN_TOP = 24f;
     public boolean gremRight, gremRed, gremAiming;
     private float gremT;
+    /** Gremlin: this time it gets ahead of the ship before it aims (every other shot). */
+    private boolean gremAhead;
 
     private void updateGremlin(GameScreen g, float dt) {
         Level lv = g.level;
         gremT += dt;
         if (gremAiming) {
-            if (gremT >= GREMLIN_AIM) {
-                gremAiming = false; gremT = 0f;
-                if (canShoot(g)) g.aimedShot(x + w / 2f, y + h / 2f, GREMLIN_SHOT_SPEED, 0f);
-            }
+            // its shot comes soon after it stops (at the end of the stop it was often off the screen already)
+            if (gremT - dt < GREMLIN_FIRE && gremT >= GREMLIN_FIRE && canShoot(g)) g.aimedShot(x + w / 2f, y + h / 2f, GREMLIN_SHOT_SPEED, 0f);
+            if (gremT >= GREMLIN_AIM) { gremAiming = false; gremT = 0f; gremAhead = !gremAhead; }   // (next time: the other way)
+        } else if (gremAhead) {                          // climbing past the ship, to shoot at it from the front
+            y += (GREMLIN_RUN + g.scrollVY) * dt;        // (relative to the screen)
+            Player tp = g.target(x + w / 2f, y + h / 2f);
+            boolean ahead = tp == null || y + h / 2f >= tp.y + Player.H / 2f + GREMLIN_AHEAD;
+            boolean top = y + h >= g.scrollY + SalamanderGame.H - GREMLIN_TOP;
+            if (y > g.scrollY && gremT >= GREMLIN_RUN_MIN && (ahead || top || gremT >= GREMLIN_RUN_MAX)) { gremAiming = true; gremT = 0f; }
         } else {
-            y += GREMLIN_SPEED * dt;
+            y += (GREMLIN_SPEED + g.scrollVY) * dt;      // (relative to the screen)
             if (gremT >= GREMLIN_WALK && y > g.scrollY) { gremAiming = true; gremT = 0f; }
         }
-        // keep to the rock face of its wall at this height
-        float cy = y + 4f, best = -1f;
-        if (!gremRight) { for (float sx = 0f; sx < SalamanderGame.W - w; sx += 1f) if (!lv.hits(sx, cy, 1f, h - 8f)) { best = sx; break; } }
-        else { for (float sx = SalamanderGame.W - 1f; sx > w; sx -= 1f) if (!lv.hits(sx, cy, 1f, h - 8f)) { best = sx + 1f - w; break; } }
+        // keep to the rock face of its wall at this height (searched across the screen, in world x)
+        float cy = y + 4f, best = -1f, sl = g.scrollX;
+        if (!gremRight) { for (float sx = 0f; sx < SalamanderGame.W - w; sx += 1f) if (!lv.hits(sl + sx, cy, 1f, h - 8f)) { best = sx; break; } }
+        else { for (float sx = SalamanderGame.W - 1f; sx > w; sx -= 1f) if (!lv.hits(sl + sx, cy, 1f, h - 8f)) { best = sx + 1f - w; break; } }
         if (best >= 0f) x = g.scrollX + best;
     }
 
@@ -573,7 +644,7 @@ public class Enemy {
      * apart, a burst every SEED_REPEAT s while it is on the screen. Drawn under the other enemies. It is ground: ships fly over it
      * (no collision), but shots hit it. Shot down it shows the destroyed frame and stays (shots pass then).
      */
-    public static final int SEED_HP = 8, SEED_BURST = 4;
+    public static final int SEED_HP = 36, SEED_BURST = 4;
     public static final float SEED_START = 50f, SEED_OPENING = 0.4f, SEED_GAP = 0.5f, SEED_REPEAT = 4f;
     /**
      * Op 4 base (stage 6, Tiled class "base6"; Albert's sprites/stage_6_back_ground_base.png, 4 frames of 22x22: closed,
@@ -582,9 +653,12 @@ public class Enemy {
      */
     public boolean seedOp4;
     public static final int SEED6_BURST = 5;
-    public static final float SEED6_GAP = 0.55f;
+    /**
+     * Albert (2026-10-26): an Op 4 base lets out waves (at least two: the next one SEED6_REPEAT s after the last mine
+     * of a wave, while it is on screen), and one mine of every wave (at random) is red and leaves a power capsule.
+     */
+    public static final float SEED6_GAP = 0.55f, SEED6_REPEAT = 2.5f;
     public float seedT = -1f;     // time to its next mine (-1 = not started)
-    public int seedLeft;          // mines left in this burst (0 = closed, waiting)
     public boolean seedOpening;   // opening, the first burst comes next
     public boolean seedOpen;      // has opened (it stays open)
 
@@ -639,6 +713,12 @@ public class Enemy {
 
     /** Taking off (can't hit or be hit yet). */
     public boolean intangible() { return type == Type.FLYING_MINE && t < mineTakeoff(); }
+
+    /** Stays where the map has it: not removed for being above / below the camera's lane (the Lavinia shaft). */
+    public boolean anchored() {
+        return type == Type.OMEN || type == Type.LASER_GUN || type == Type.LASER_BATTERY || type == Type.ARTILLERY
+                || type == Type.BLOCK_SMALL || type == Type.BLOCK_BIG;
+    }
 
     /** Its frame: 0-2 taking off, then 3 / 4 by turns. */
     public int mineFrame() {
@@ -703,7 +783,7 @@ public class Enemy {
         }
         float sp = (float) Math.sqrt(vx * vx + vy * vy);
         if (sp > maxSpeed) { vx *= maxSpeed / sp; vy *= maxSpeed / sp; }
-        x += vx * dt; y += vy * dt;
+        x += (vx + g.scrollVX) * dt; y += (vy + g.scrollVY) * dt;   // homes in relative to the screen, like the ships move
     }
 
     /** Ug that has flown out through the right edge (it is removed). */
@@ -764,7 +844,11 @@ public class Enemy {
             GUNHO_BEAM_LEN = 28f, GUNHO_BEAM_H = 3f;   // (beam size: only when gun ho bullet.png is missing)
     /** Gun Ho: height of its gun barrel above the bottom of the sprite. */
     public static final float GUNHO_GUN_Y = 22f;
-    public static final int GUNHO_COMING = 0, GUNHO_AIMING = 1, GUNHO_FIRED = 2, GUNHO_LEAVING = 3, GUNHO_HOPPING = 4;
+    public static final int GUNHO_COMING = 0, GUNHO_AIMING = 1, GUNHO_FIRED = 2, GUNHO_LEAVING = 3, GUNHO_HOPPING = 4, GUNHO_FIRING = 5;
+    /** Gun Ho fires a burst of GUNHO_BURST shots, GUNHO_BURST_GAP s apart, once it is lined up (Albert, 2026-10-30). */
+    public static final int GUNHO_BURST = 3;
+    public static final float GUNHO_BURST_GAP = 0.2f;
+    private int gunShots;
     /**
      * Lavinia (both styles, as in the recording): a Gun Ho comes out of a floor hatch (Tiled dome_type2 with "gunhos") and, keeping
      * its place on the screen, hops out of it: up GUNHO_HOP_UP px, GUNHO_HOP_LEFT1 px to the left, down to the floor
@@ -879,8 +963,15 @@ public class Enemy {
     // right along that edge and out (the whole sprite stays on screen there).
     private static final float FROST_TURN1 = 0.64f, FROST_TURN2 = 0.28f, FROST_MID = 64f;
     private static final float[][] frostPts = new float[6][2];
-    /** Vertical stages: how far down the column it turns, and how far it dips toward the middle (px, sprite centre). */
-    private static final float FROST_V_TURN = 48f, FROST_V_DIP = 48f;
+    /**
+     * Vertical stages (measured frame by frame in the stage 2 recording; px, sprite centres): down the column to
+     * FROST_V_TURN below the top, 45 degrees up toward the middle for FROST_V_STEP px per place in the wave (the first
+     * 16, the second 32, ...), straight down FROST_V_DROP, 45 degrees up toward the middle again until FROST_V_OUT
+     * across from the entry column, then straight up and out. The wave turns from a column into a diagonal line.
+     */
+    private static final float FROST_V_TURN = 112f, FROST_V_STEP = 16f, FROST_V_DROP = 72f, FROST_V_OUT = 136f;
+    /** Place in its wave (0 = first in); vertical stages use it for the path. */
+    public int frostIdx;
     private static final float[] frostPos = new float[2];
 
     /** Screen position (centre) after flying `d` px along the Z. */
@@ -911,22 +1002,28 @@ public class Enemy {
                 d -= len;
             }
         }
-        // Vertical stages (stage 2 recording, shape "B"): down its column to FROST_V_TURN px below the top, 45 degrees
-        // down toward the middle for FROST_V_DIP px, then 45 degrees back up and out through the top edge. Screen
-        // sizes here are the real ones (W and H were swapped above for the old Z). Distance counted per axis.
+        // Vertical stages (stage 2 recording): see FROST_V_TURN. Screen sizes here are the real ones (W and H were
+        // swapped above for the old Z). Distance counted per axis.
         float sw = SalamanderGame.W, sh = SalamanderGame.H, top = -h / 2f - 2f;
-        float a0 = frostLow * sw, turn = FROST_V_TURN, dip = turn + FROST_V_DIP;
+        float a0 = frostLow * sw, turn = FROST_V_TURN, k = FROST_V_STEP * (frostIdx + 1);
+        float low = turn - k + FROST_V_DROP, outY = turn + FROST_V_DROP - FROST_V_OUT;
         float[][] p = frostPts;                        // (across from its own side, down from the top)
-        p[0][0] = a0;                        p[0][1] = top;
-        p[1][0] = a0;                        p[1][1] = turn;
-        p[2][0] = a0 + FROST_V_DIP;          p[2][1] = dip;
-        p[3][0] = p[2][0] + (dip - top);     p[3][1] = top;
-        for (int i = 0; i < 3; i++) {
+        p[0][0] = a0;                p[0][1] = top;
+        p[1][0] = a0;                p[1][1] = turn;
+        p[2][0] = a0 + k;            p[2][1] = turn - k;
+        p[3][0] = a0 + k;            p[3][1] = low;
+        p[4][0] = a0 + FROST_V_OUT;  p[4][1] = outY;
+        p[5][0] = a0 + FROST_V_OUT;  p[5][1] = top;
+        for (int i = 0; i < 5; i++) {
             float len = Math.max(Math.abs(p[i + 1][0] - p[i][0]), Math.abs(p[i + 1][1] - p[i][1]));
-            if (d <= len || i == 2) {
-                float k = len > 0f ? d / len : 0f;        // (keeps going up past the last point)
-                float across = p[i][0] + (p[i + 1][0] - p[i][0]) * k;
-                float down = p[i][1] + (p[i + 1][1] - p[i][1]) * k;
+            if (d <= len || i == 4) {
+                float across, down;
+                if (i == 4) { across = p[4][0]; down = p[4][1] - d; }   // (keeps going up past the top)
+                else {
+                    float f = len > 0f ? d / len : 0f;
+                    across = p[i][0] + (p[i + 1][0] - p[i][0]) * f;
+                    down = p[i][1] + (p[i + 1][1] - p[i][1]) * f;
+                }
                 out[0] = upper ? sw - across : across;
                 out[1] = sh - down;
                 return;
@@ -947,6 +1044,8 @@ public class Enemy {
             case CREEPING_DEATH: hp = 1; score = 100; w = 15; h = 15; break;
             case UG: hp = 1; score = 100; w = 16; h = 16; break;
             case GAMMA: hp = 1; score = 100; w = 16; h = 16; break;
+            case GREEN_MINE: hp = 1; score = 100; w = 16; h = 16; break;
+            case OPTION_EATER: hp = OEATER_HP; score = 300; w = 16; h = 16; break;
             case BLUE_DOME: hp = BLUE_DOME_HP; score = 500; w = 18; h = 32; break;   // (sprites/dome.png, as on stage 2)
             case GREEN_FLYER: hp = 1; score = 100; w = 16; h = 16; break;
             case LASER_BATTERY: hp = BATTERY_HP; score = 300; w = 24; h = 16; break;
@@ -954,8 +1053,8 @@ public class Enemy {
             case SEED: hp = SEED_HP; score = 1000; w = 20; h = 21; break;   // the middle of the base
             case FLYING_MINE: hp = 1; score = 100; w = 16; h = 16; break;
             case EXODUS: hp = 1; score = 100; w = 16; h = 15; break;
-            case ARTILLERY: hp = 3 + levelIdx; score = 300; w = 16; h = 16; break;   // (as tough as the turrets: default below)
-            case CLUSTER: hp = 1; score = 0; w = 34; h = 33; break;   // (can't be destroyed)
+            case ARTILLERY: hp = 1; score = 300; w = 16; h = 16; break;   // (Albert, 2026-10-26: 1 hit, all of them)
+            case BLUE_ASTEROID: hp = 1; score = 0; w = 34; h = 33; break;   // (can't be destroyed)
             case MOAI: hp = MOAI_HP; score = 1000; w = 50; h = 38; break;
             case ORB: hp = ORB_HP; score = 300; w = 18; h = 18; break;
             case CHAIN: hp = 1; score = 0; w = Enemy.CHAIN_BALL; h = Enemy.CHAIN_BALL; break;   // (can't be destroyed)
@@ -969,16 +1068,95 @@ public class Enemy {
             case BLOCK_SMALL: hp = 1; score = 0; w = 32; h = 16; break;
             case BLOCK_BIG: hp = BLOCK_BIG_HP; score = 500; w = 32; h = 32; break;
             case RAGE: hp = 1; score = 100; w = 16; h = 15; break;
-            case OMEN:   hp = 3; score = 200; w = 34; h = 18; break;
+            case LED_ZEP: hp = 1; score = 100; w = 16; h = 16; break;
+            case LASER_GUN: hp = 1; score = 0; w = 8; h = 8; break;
+            case OMEN:   hp = 12; score = 200; w = 34; h = 18; break;   // (Albert, 2026-10-27)
             case LASER_GUARD: hp = 1; score = 0; w = 22; h = 20; break;   // (can't be destroyed)
             case DOME_FLYER: hp = 1; score = 100; break;
+            case TURRET_FLOOR: case TURRET_CEIL: case TURRET_WALL: hp = 1; score = 300; break;   // every turret: 1 hit (Albert, 2026-10-27)
             default:     hp = 3 + levelIdx; score = 300; break;
         }
         shootT = MathUtils.random(0.6f, 1.8f);
     }
 
-    /** Laser Guards, Kierke chain balls and Op 4 clusters: shots stop on them, homing shots and guards ignore them. */
-    public boolean indestructible() { return type == Type.LASER_GUARD || type == Type.CHAIN || type == Type.CLUSTER || type == Type.HEATHEN || type == Type.BLOCK_SMALL; }
+    /** Laser Guards, Kierke chain balls and Op 4 blue asteroids: shots stop on them, homing shots and guards ignore them. */
+    public boolean indestructible() { return type == Type.LASER_GUARD || type == Type.CHAIN || type == Type.BLUE_ASTEROID || type == Type.HEATHEN || type == Type.BLOCK_SMALL
+            || type == Type.LASER_GUN || type == Type.ORB || type == Type.RAGE; }   // (Op 4 orbs: only a guard can take one, see GameScreen.guardDamage; Rage: Albert, 2026-10-27)
+
+    /**
+     * Led Zep (Lavinia lower corridor; Albert's sprites/led_zep.png, 2 frames of 16x16). As in the MSX recording it
+     * crawls along the floor or the ceiling (LEDZEP_WALK px/s across the screen, toward the side it is heading), and
+     * after LEDZEP_WALK_MIN..MAX s it leaps away from its surface (LEDZEP_LEAP px/s, still moving sideways), always
+     * right across to the other surface (Albert, 2026-10-27: no "half" jumps to the ship's height and back).
+     * It doesn't shoot. Picture: frame 0 while it crawls, frame 1 while it is in the air (Albert).
+     * They come at random (GameScreen.updateLedZeps, map object "ledzep_zone").
+     */
+    public static final float LEDZEP_WALK = 45f, LEDZEP_LEAP = 80f, LEDZEP_WALK_MIN = 0.7f, LEDZEP_WALK_MAX = 1.3f;
+    /** Led Zep: on the ceiling, heading right, state (0 walk, 1 leap away, 2 back), the two surfaces (world y of its bottom). */
+    public boolean zepCeil, zepRight;
+    public int zepState;
+    public float zepT, zepFloorY, zepCeilY, zepTurnY;
+    private boolean zepCross;
+
+    private void updateLedZep(GameScreen g, float dt) {
+        float W = SalamanderGame.W;
+        x += (g.scrollVX + (zepRight ? LEDZEP_WALK : -LEDZEP_WALK)) * dt;
+        zepT -= dt;
+        if (zepState == 0) {                                   // crawling along its surface
+            y = zepCeil ? zepCeilY : zepFloorY;
+            if (zepT > 0f) return;
+            zepState = 1;
+            zepCross = true;                                    // always all the way to the other surface
+            zepTurnY = zepCeil ? zepFloorY : zepCeilY;
+            return;
+        }
+        float home = zepCeil ? zepCeilY : zepFloorY;
+        float target = zepState == 1 ? zepTurnY : home;
+        float step = LEDZEP_LEAP * dt;
+        if (Math.abs(target - y) <= step) {
+            y = target;
+            if (zepState == 1 && !zepCross) { zepState = 2; return; }   // reached the ship's height: back again
+            if (zepState == 1) zepCeil = !zepCeil;                       // landed on the other surface
+            zepState = 0;
+            zepT = MathUtils.random(LEDZEP_WALK_MIN, LEDZEP_WALK_MAX);
+            return;
+        }
+        y += Math.signum(target - y) * step;
+    }
+
+    /**
+     * Laser gun point (Lavinia shaft; Albert's sprites/laser_gun_point.png, 8x8, pointing right; flip it in Tiled to
+     * point left). Albert: unlike the MSX (a beam that is always on) it can't be destroyed and fires its laser in
+     * short pulses, so a ship can slip through between them: every LGUN_PERIOD s (shifted by its "delay") the beam
+     * grows out of the muzzle at LGUN_SPEED px/s to the rock across, stays LGUN_HOLD s, then its tail follows it into
+     * the rock. The beam is the Laser Guards' red / blue pattern; it hurts a ship and lets shots through.
+     * (Albert may want these to move like the Laser Guards at the end of the stage later.)
+     */
+    public static final float LGUN_PERIOD = 1.8f, LGUN_SPEED = 260f, LGUN_HOLD = 0.25f, LGUN_BEAM_H = 5f;
+    public boolean lgunLeft;
+    public float lgunDelay, lgunReach = -1f;
+
+    private void updateLaserGun(GameScreen g, float dt) {
+        beamW = 0f;
+        if (!g.inView(x + w / 2f, y + h / 2f, 0f)) return;
+        if (lgunReach < 0f) {                                   // how far the rock across is
+            float by = y + h / 2f - LGUN_BEAM_H / 2f, x0 = lgunLeft ? x - 1f : x + w;
+            int n = 0;
+            while (n < 400 && !g.level.hits(lgunLeft ? x0 - n : x0 + n, by, 1f, LGUN_BEAM_H)) n++;
+            lgunReach = n;
+        }
+        float travel = lgunReach / LGUN_SPEED;
+        float u = (t + lgunDelay) % LGUN_PERIOD;
+        float front, tail;
+        if (u < travel) { front = u * LGUN_SPEED; tail = 0f; }
+        else if (u < travel + LGUN_HOLD) { front = lgunReach; tail = 0f; }
+        else if (u < 2f * travel + LGUN_HOLD) { front = lgunReach; tail = (u - travel - LGUN_HOLD) * LGUN_SPEED; }
+        else return;                                           // off: the gap to slip through
+        float len = front - tail;
+        if (len <= 0f) return;
+        beamY = y + h / 2f - LGUN_BEAM_H / 2f; beamH = LGUN_BEAM_H; beamW = len;
+        beamX = lgunLeft ? x - front : x + w + tail;
+    }
 
     /**
      * Lavinia blocks (Albert's sprites/lavinia_block_small.png 32x16, lavinia_block_big.png 32x32), as in the MSX
@@ -1117,14 +1295,14 @@ public class Enemy {
             case ARTILLERY:
                 updateArtillery(g, dt);
                 break;
-            case CLUSTER:
-                updateCluster(g, dt);
+            case BLUE_ASTEROID:
+                updateBlueAsteroid(g, dt);
                 break;
             case MOAI:
                 updateMoai(g, dt);
                 break;
             case ORB:
-                updateOrb(g, dt);
+                if (bubble) updateBubble(g, dt); else updateOrb(g, dt);
                 break;
             case LEGACY: {                               // weaves along; fires back at a ship it has flown past
                 if (hover) { updateHoverLegacy(g, dt); break; }
@@ -1135,17 +1313,26 @@ public class Enemy {
                     shootT = LEGACY_SHOT_INTERVAL + MathUtils.random(0f, 0.6f);
                     g.aimedShot(x + w / 2f, y + h / 2f, 110f, 0f);
                 }
+                // (speeds relative to the screen: the scrolling is added on top)
                 if (vertical) {                          // fly-by: down the screen, weaving left and right
-                    y += vx * dt;
+                    y += (vx + g.scrollVY) * dt;
+                    baseX += g.scrollVX * dt;
                     x = baseX + MathUtils.sin(t * 4f + phase) * 32f;
                     break;
                 }
-                x += vx * dt;
+                x += (vx + g.scrollVX) * dt;
+                baseY += g.scrollVY * dt;
                 y = baseY + MathUtils.sin(t * 4f + phase) * 32f;
                 break;
             }
             case WALKER: {   // walks along the floor (or ceiling), climbing / dropping straight at steps
                 if (leapState != 0) { updateLeaper(g, dt); break; }
+                if (leapGround) {                        // stage 1: a Kierke leaper standing on its surface
+                    // it stands where it was placed (scrolling in with the rock) until it is on the screen; a runner
+                    // from behind starts at once, just off the left edge
+                    if (x < g.scrollX + SalamanderGame.W && x + w > g.scrollX - 30f) startLeapOnGround(g);
+                    break;
+                }
                 // Once on screen it chases the nearest ship for CHASE_TIME seconds, then gives up and
                 // walks off the left edge. Before that it keeps its starting direction.
                 boolean onScreen = x + w > g.scrollX && x < g.scrollX + SalamanderGame.W;
@@ -1203,6 +1390,8 @@ public class Enemy {
             case HEATHEN: x += (g.scrollVX - HEATHEN_SPEED) * dt; break;   // rushes left across the screen
             case BLOCK_SMALL: case BLOCK_BIG: updateBlock(g, dt); break;
             case RAGE: updateRage(g, dt); break;
+            case LED_ZEP: updateLedZep(g, dt); break;
+            case LASER_GUN: updateLaserGun(g, dt); break;
             case DOME_FLYER: updateDomeFlyer(g, dt); break;
             case LASER_GUARD: updateLaserGuard(g, dt); break;
             case OMEN: {                                  // stationary: a burst every OMEN_REPEAT s while on screen
@@ -1226,8 +1415,12 @@ public class Enemy {
                 y += dy;
                 break;
             }
+            case GREEN_MINE: updateGreenMine(g, dt); break;
+            case OPTION_EATER: updateOptionEater(g, dt); break;
             case LINK:
-                x -= LINK_SPEED * dt;
+                if (linkSwing > 0f) { updateLinkMsx(g, dt); break; }
+                x += (g.scrollVX - LINK_SPEED) * dt;     // relative to the screen
+                baseY += g.scrollVY * dt;
                 y = baseY + MathUtils.sin(t * LINK_BOB_SPEED + phase) * LINK_BOB;
                 fireAimed(g, dt, 2.2f, 105f);
                 break;
@@ -1254,6 +1447,20 @@ public class Enemy {
         vx = fromSide * 0.01f;
         vy = 0f;
         leapT = ceiling ? MathUtils.random(0f, 0.1f) : MathUtils.random(LEAP_GLIDE_MIN, LEAP_GLIDE_MAX);   // glide
+    }
+
+    /**
+     * Stage 1 walker that behaves like a Kierke leaper (Albert, 2026-10-28): it starts on its surface, already landed,
+     * and then walks / approaches / hops exactly as a leaper does after landing.
+     */
+    public boolean leapGround;
+
+    private void startLeapOnGround(GameScreen g) {
+        Player target = g.target(x + w / 2f, y + h / 2f);
+        float shipDx = target == null ? 0f : (target.x + Player.W / 2f) - (x + w / 2f);
+        vy = 0f;
+        if (target != null && Math.abs(shipDx) > LEAP_APPROACH_DIST) leapState = LEAP_APPROACH;
+        else startLeapWalk(shipDx);
     }
 
     /** Kierke leaper: walked off a screen edge after it had been on screen. */
@@ -1496,10 +1703,11 @@ public class Enemy {
                 if (tp == null) break;
                 faceRight = tp.x + 16f > x + w;           // turns to a ship behind it
                 float dy = (tp.y + 8f) - (y + GUNHO_GUN_Y);
-                if (Math.abs(dy) <= GUNHO_ALIGN) {        // lined up: fire
+                if (Math.abs(dy) <= GUNHO_ALIGN) {        // lined up: fire its burst
                     y += dy;
                     g.gunHoBeam(faceRight ? x + w : x, y + GUNHO_GUN_Y, faceRight ? GUNHO_BEAM_SPEED : -GUNHO_BEAM_SPEED);
-                    gunState = GUNHO_FIRED; gunT = 0f;
+                    gunShots = 1;
+                    gunState = GUNHO_BURST > 1 ? GUNHO_FIRING : GUNHO_FIRED; gunT = 0f;
                     break;
                 }
                 float step = Math.signum(dy) * Math.min(Math.abs(dy), GUNHO_CLIMB * dt);
@@ -1508,6 +1716,14 @@ public class Enemy {
                 if (gunT >= GUNHO_GIVE_UP) { gunState = GUNHO_LEAVING; gunT = 0f; }
                 break;
             }
+            case GUNHO_FIRING:                            // the rest of its burst, from where it is
+                x += g.scrollVX * dt;
+                if (gunT >= GUNHO_BURST_GAP) {
+                    g.gunHoBeam(faceRight ? x + w : x, y + GUNHO_GUN_Y, faceRight ? GUNHO_BEAM_SPEED : -GUNHO_BEAM_SPEED);
+                    gunT = 0f;
+                    if (++gunShots >= GUNHO_BURST) gunState = GUNHO_FIRED;
+                }
+                break;
             case GUNHO_FIRED:                             // a short pause after the shot
                 x += g.scrollVX * dt;
                 if (gunT >= GUNHO_HOLD) { gunState = GUNHO_LEAVING; gunT = 0f; faceRight = false; }
@@ -1606,6 +1822,8 @@ public class Enemy {
      */
     public static final float ARTILLERY_FIRST = 1.4f, ARTILLERY_PERIOD = 1.3f, ARTILLERY_SHOT = 80f;
     public boolean artRight, artRed;
+    /** Artillery on a floor (points up) or a ceiling (points down) instead of a wall (Lavinia). */
+    public boolean artFloor, artCeil;
     private float artT = -1f;
 
     private void updateArtillery(GameScreen g, float dt) {
@@ -1613,21 +1831,38 @@ public class Enemy {
         if (artT < 0f) artT = ARTILLERY_FIRST;
         if ((artT -= dt) > 0f) return;
         artT = ARTILLERY_PERIOD;
-        g.aimedShot(artRight ? x + 2f : x + w - 2f, y + h / 2f, ARTILLERY_SHOT, 0f);   // from its muzzle
+        // not aimed (Albert, 2026-10-30): always the same spread, by turns a 3-way (straight out from its wall / floor /
+        // ceiling toward the opposite side, and 45 degrees to either side) and a 4-way (no middle shot: 22.5 and 67.5
+        // degrees to either side, so its shots are 45 degrees apart too)
+        float mx, my, out;                                // its muzzle, and straight out (radians)
+        if (artFloor || artCeil) { mx = x + w / 2f; my = artCeil ? y + 2f : y + h - 2f; out = artCeil ? -MathUtils.HALF_PI : MathUtils.HALF_PI; }
+        else { mx = artRight ? x + 2f : x + w - 2f; my = y + h / 2f; out = artRight ? MathUtils.PI : 0f; }
+        float[] spread = artFour ? ART_SPREAD_4 : ART_SPREAD_3;
+        for (float d : spread) g.enemyBullet(mx, my, out + d * MathUtils.degreesToRadians, ARTILLERY_SHOT);
+        artFour = !artFour;
     }
 
+    /** Artillery's two spreads (degrees from straight out). */
+    public static final float[] ART_SPREAD_3 = {-45f, 0f, 45f}, ART_SPREAD_4 = {-67.5f, -22.5f, 22.5f, 67.5f};
+    private boolean artFour;
+
     /**
-     * Cluster (sprites/cluster.png, the blue rock clump cut from the map): it sinks slowly down through the world (the
+     * Blue asteroid (sprites/blue_asteroid.png, the blue rock clump cut from the map): it sinks slowly down through the world (the
      * recording: 5 to 32 px/s, a different speed for each) once it is on the screen. It can't be destroyed (Albert, 2026-10-25): shots stop on it with a spark, as on the
      * Laser Guards, and homing shots ignore it.
      */
-    public static final float CLUSTER_SINK_MIN = 5f, CLUSTER_SINK_MAX = 30f;
-    private float clusterSink = -1f;
+    public static final float BLUE_ASTEROID_SINK_MIN = 5f, BLUE_ASTEROID_SINK_MAX = 30f;
+    /**
+     * Sink speed (px/s; < 0 = a random one, Op 4) and sideways drift (px/s, + = right). Stage 2 (recording, 119-130 s):
+     * Tiled properties "sink" / "drift" per rock; three sink straight down (1-14 px/s), two cut across diagonally.
+     */
+    public float blueAsteroidSink = -1f, blueAsteroidDrift;
 
-    private void updateCluster(GameScreen g, float dt) {
+    private void updateBlueAsteroid(GameScreen g, float dt) {
         if (y > g.scrollY + SalamanderGame.H) return;                  // waits until it is on the screen
-        if (clusterSink < 0f) clusterSink = MathUtils.random(CLUSTER_SINK_MIN, CLUSTER_SINK_MAX);
-        y -= clusterSink * dt;
+        if (blueAsteroidSink < 0f) blueAsteroidSink = MathUtils.random(BLUE_ASTEROID_SINK_MIN, BLUE_ASTEROID_SINK_MAX);
+        y -= blueAsteroidSink * dt;
+        x += blueAsteroidDrift * dt;
     }
 
     /**
@@ -1659,6 +1894,8 @@ public class Enemy {
     public float moaiWallX;
     private float moaiT = -1f, moaiMoveT, moaiOff;
     private int moaiLeft, moaiBursts;
+    /** Which ring of the current burst is red (it leaves a power capsule when shot down; Albert, 2026-10-27). */
+    private int moaiRedIdx;
 
     private void updateMoai(GameScreen g, float dt) {
         if (moaiWalk && y < g.scrollY + SalamanderGame.H) {             // steps out from its wall and back
@@ -1676,9 +1913,10 @@ public class Enemy {
         moaiOpen = moaiLeft > 0 || moaiT < MOAI_OPEN_LEAD || moaiT > pause - MOAI_OPEN_LEAD;
         if (moaiT > 0f) return;
         if (moaiLeft <= 0) { moaiLeft = MOAI_BURST; moaiBursts++; }
+        if (moaiLeft == MOAI_BURST) moaiRedIdx = MathUtils.random(MOAI_BURST - 1);   // one red ring per burst
         moaiLeft--;
         moaiT = moaiLeft > 0 ? MOAI_RING_GAP : MOAI_PERIOD - MOAI_RING_GAP * (MOAI_BURST - 1);
-        g.ringShot(mx, my, MOAI_RING_SPEED, (moaiBursts & 1) == 1);
+        g.ringShot(mx, my, MOAI_RING_SPEED, (moaiBursts & 1) == 1, MOAI_BURST - 1 - moaiLeft == moaiRedIdx);
     }
 
     /** Where its rings come out (x, world): just under its mouth. */
@@ -1710,6 +1948,102 @@ public class Enemy {
             if (vy < 0f && y < g.scrollY && t < ORB_LIFE) { y = g.scrollY; vy = -vy; }
         }
     }
+
+    /**
+     * Eioneus boss room bubble (the same orb.png; let out by the gun pods, GameScreen.spawnBubble). From the MSX
+     * recording (227-258 s): it moves diagonally at BUBBLE_VX / BUBBLE_VY px/s and bounces off the rock, the screen's
+     * edges and the line under the pods (bubbleTop, world y). Like the Op 4 orb it can't be shot; a guard takes it.
+     */
+    public boolean bubble;
+    public float bubbleTop;
+    public static final float BUBBLE_VX = 57f, BUBBLE_VY = 44f;
+
+    private void updateBubble(GameScreen g, float dt) {
+        Level lv = g.level;
+        float nx = x + vx * dt;
+        if (lv.hits(nx, y + 2f, w, h - 4f) || (vx < 0f && nx < g.scrollX) || (vx > 0f && nx + w > g.scrollX + SalamanderGame.W)) vx = -vx;
+        else x = nx;
+        float ny = y + vy * dt;
+        if (lv.hits(x + 2f, ny, w - 4f, h) || (vy < 0f && ny < g.scrollY) || (vy > 0f && ny + h > bubbleTop)) vy = -vy;
+        else y = ny;
+    }
+
+    /** MSX Missing Link (see LINK_MSX_*): baseY = the middle of its swing. */
+    private void updateLinkMsx(GameScreen g, float dt) {
+        x += (-LINK_MSX_SPEED + g.scrollVX) * dt;
+        float c = MathUtils.cos(t * MathUtils.PI2 / linkPeriod()) * linkSwing / 2f;
+        y = linkUp ? baseY - c : baseY + c;
+        if (linkFireAt < 0f) linkFireAt = MathUtils.random(LINK_MSX_FIRE_MIN, LINK_MSX_FIRE_MAX);
+        if (linkFired < linkBurst && t >= linkFireAt + linkFired * LINK_MSX_BURST_GAP) {
+            linkFired++;
+            if (canShoot(g)) {
+                g.aimedShot(x + w / 2f, y + h / 2f, LINK_MSX_SHOT, 0f);   // (relative to the screen, like all enemy shots)
+            }
+        }
+    }
+
+    /** MSX Missing Link: seconds per swing (top - bottom - top). */
+    private float linkPeriod() { return MathUtils.PI * linkSwing / LINK_MSX_VMAX; }
+
+    /** MSX Missing Link picture: 0 at the top / bottom of the swing, 1, 2, 3 half-way. */
+    public int linkFrame() {
+        float a = (t * MathUtils.PI2 / linkPeriod()) % MathUtils.PI;
+        float d = Math.min(a, MathUtils.PI - a) / MathUtils.HALF_PI;   // 0 at an end of the swing, 1 half-way
+        return Math.min(3, (int) (d * 4f));
+    }
+
+    private void updateGreenMine(GameScreen g, float dt) {
+        Player p = g.target(x + w / 2f, y + h / 2f);
+        if (p != null) {
+            float want = MathUtils.atan2(p.y + Player.H / 2f - (y + h / 2f), p.x + Player.W / 2f - (x + w / 2f));
+            if (Float.isNaN(gmAng)) gmAng = want;
+            float d = want - gmAng;
+            while (d > MathUtils.PI) d -= MathUtils.PI2;
+            while (d < -MathUtils.PI) d += MathUtils.PI2;
+            gmAng += MathUtils.clamp(d, -GMINE_TURN * dt, GMINE_TURN * dt);
+        } else if (Float.isNaN(gmAng)) gmAng = vertical ? (gmFromBottom ? MathUtils.HALF_PI : -MathUtils.HALF_PI) : MathUtils.PI;
+        if (vertical) {                                  // relative to the screen (it scrolls up)
+            if (Float.isNaN(gmSx)) { gmSx = x - g.scrollX; gmSy = y - g.scrollY; }
+            gmSx += MathUtils.cos(gmAng) * GMINE_SPEED * dt;
+            gmSy += MathUtils.sin(gmAng) * GMINE_SPEED * dt;
+            x = g.scrollX + gmSx; y = g.scrollY + gmSy;
+            return;
+        }
+        x += (MathUtils.cos(gmAng) * GMINE_SPEED + g.scrollVX) * dt;
+        y += MathUtils.sin(gmAng) * GMINE_SPEED * dt;
+    }
+
+    /**
+     * Option eater (sprites/option_eater.png: 2 frames of 16x16, white and red, swapped every OEATER_FLASH s; the
+     * lattice mine seen under Op 4's brain sphere in the recording, 232.5-233.5 s). It comes in through the bottom edge
+     * and makes for the nearest ship's last option (the ship itself if it has none) at OEATER_SPEED px/s, turning at
+     * most OEATER_TURN rad/s, relative to the screen. An option it touches is eaten (GameScreen.eatOption): the ship
+     * loses it, and the eater is used up. Takes OEATER_HP hits.
+     */
+    public static final int OEATER_HP = 2;
+    public static final float OEATER_SPEED = 30f, OEATER_TURN = 2.2f, OEATER_FLASH = 0.067f, OEATER_LIFE = 14f;
+    private float oeSx = Float.NaN, oeSy, oeAng = MathUtils.HALF_PI;
+
+    private void updateOptionEater(GameScreen g, float dt) {
+        if (Float.isNaN(oeSx)) { oeSx = x - g.scrollX; oeSy = y - g.scrollY; }
+        Player p = g.target(x + w / 2f, y + h / 2f);
+        if (p != null && t < OEATER_LIFE) {
+            float tx = p.x + Player.W / 2f, ty = p.y + Player.H / 2f;
+            if (p.options > 0) { tx = g.optX(p, p.options - 1) + 6f; ty = g.optY(p, p.options - 1) + 6f; }
+            float want = MathUtils.atan2(ty - (y + h / 2f), tx - (x + w / 2f));
+            float d = want - oeAng;
+            while (d > MathUtils.PI) d -= MathUtils.PI2;
+            while (d < -MathUtils.PI) d += MathUtils.PI2;
+            oeAng += MathUtils.clamp(d, -OEATER_TURN * dt, OEATER_TURN * dt);
+        }
+        oeSx += MathUtils.cos(oeAng) * OEATER_SPEED * dt;
+        oeSy += MathUtils.sin(oeAng) * OEATER_SPEED * dt;
+        x = g.scrollX + oeSx; y = g.scrollY + oeSy;
+        if (t > 0.5f) g.eatOption(this);
+    }
+
+    /** Its frame: 0 = white, 1 = red. */
+    public int oeFrame() { return (int) (Math.max(0f, t) / OEATER_FLASH) % 2; }
 
     private boolean canShoot(GameScreen g) {
         return g.inView(x + w / 2f, y + h / 2f, 6f);

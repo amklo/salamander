@@ -70,6 +70,8 @@ public class Bullet {
     public Object target;
     /** Enemy bullet fired from inside rock (a rock eye): rock doesn't stop it for this many seconds. */
     public float terrainGrace;
+    /** Enemy bullet: it has been out in the open (not in rock); from then on rock stops it even within terrainGrace. */
+    public boolean leftRock;
     /** Vertical missile: how far it has stepped away from the wall to get past rock in front of it. */
     private float sideStep;
     public ArrayList<Object> hits;   // lasers pierce: remember what they already hurt
@@ -104,6 +106,20 @@ public class Bullet {
      * It no longer follows its gun.
      */
     public boolean stuck;
+    /**
+     * Aimed laser (AIM held with LASER, any direction but straight ahead; Albert, 2026-10-27): the beam is a stream of
+     * short pieces (seg), one let out of the gun every frame, all flying the same way at LASER_SPEED. The pieces of
+     * one beam share their hits list (a beam hurts each target once) and their beam object (GameScreen.AimBeam). A
+     * piece that runs into something it can't go through (segStop) is gone the next frame, so the beam flows into it.
+     */
+    public boolean seg, segStop;
+    public Object aimBeam;
+    /**
+     * Aimed ripple, diagonal (diag): the ring flies along (vx, vy) and grows to len px across its way; x, y, w, h are
+     * then its bounding box (GameScreen.growRipple keeps it around the ring's middle).
+     */
+    public boolean diag;
+    public float len;
 
     /**
      * Ripple laser: starts as sprites/ripple.png (8x16) and stretches up and down as it travels, up to the full
@@ -112,7 +128,24 @@ public class Bullet {
      */
     public static final float RIPPLE_START_W = 8f, RIPPLE_START_H = 16f, RIPPLE_GROW = 110f, RIPPLE_SPEED = 240f;
 
+    /**
+     * Moves relative to the screen (GameScreen adds the scrolling on top of vx / vy), as free-flying shots do in a
+     * classic on-rails shooter: they look equally fast whichever way they fly. Player shots, lasers (not one pinned at
+     * a point of impact) and ripples; enemy bullets, Gun Ho beams, moai rings and reflected lasers. Not: missiles
+     * (they crawl along the rock), lava (thrown out of the ground), Omen lasers and Laser Guard beams (fixed to their
+     * gun in the rock).
+     */
+    public boolean ridesScreen() {
+        switch (kind) {
+            case SHOT: case RIPPLE: return true;
+            case LASER: return !stuck;   // (attached: only its front rides; GameScreen puts the tail at the gun)
+            case ENEMY: return !omenLaser && guard == null;
+            default: return false;
+        }
+    }
+
     public void update(float dt, Level lv) {
+        if (seg && segStop) { dead = true; return; }   // (aimed laser piece that ran into something)
         if (fresh) { fresh = false; return; }
         t += dt;
         if (kind == Kind.MISSILE) {
