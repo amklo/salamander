@@ -30,14 +30,14 @@ import java.util.HashMap;
 public class GameScreen extends ScreenAdapter {
     private static final int W = SalamanderGame.W, H = SalamanderGame.H;
     private static final int SW = SalamanderGame.SCREEN_W, SH = SalamanderGame.SCREEN_H, HUD_H = SalamanderGame.HUD_H;
-    private static final float RESPAWN_DELAY = 1.8f;
+    static final float RESPAWN_DELAY = 1.8f;
     /** Player 2's ship and options are tinted so the two ships can be told apart. */
     private static final Color P2_TINT = new Color(1f, 0.7f, 0.4f, 1f);
 
-    private enum State { INTRO, PLAY, PAUSE, DEAD, CLEAR, GAMEOVER, WIN }
+    enum State { INTRO, PLAY, PAUSE, DEAD, CLEAR, GAMEOVER, WIN }
 
     /** A power capsule; green = gives back one option lost when a ship was destroyed. */
-    private static class Capsule {
+    static class Capsule {
         float x, y, y0, t;
         boolean green;
         /** Green capsules come back once at the far edge after leaving the screen: true once that has happened. */
@@ -75,8 +75,10 @@ public class GameScreen extends ScreenAdapter {
     final ArrayList<Bullet> eBullets = new ArrayList<>();
     /** The ships' guns and options (see PlayerWeapons). */
     final PlayerWeapons weapons = new PlayerWeapons(this);
+    /** Bullets against targets, and the ships against everything (see Collisions). */
+    final Collisions collisions = new Collisions(this);
 
-    private State state = State.INTRO;
+    State state = State.INTRO;
     private float stateT, checkpointT;
     private int nextSpawn;
     Boss boss;
@@ -108,10 +110,10 @@ public class GameScreen extends ScreenAdapter {
 
     void addHazard(Hazard h) { hazards.add(h); }
     /** Hazards made while the hazards are being gone through (e.g. rubble during the collisions); added after. */
-    private final ArrayList<Hazard> pendingHazards = new ArrayList<>();
-    private final ArrayList<Capsule> caps = new ArrayList<>();
+    final ArrayList<Hazard> pendingHazards = new ArrayList<>();
+    final ArrayList<Capsule> caps = new ArrayList<>();
     /** Asteroid storm rocks (screen coordinates, see Meteor), and the pieces of big rocks split during the collisions. */
-    private final ArrayList<Meteor> meteors = new ArrayList<>();
+    final ArrayList<Meteor> meteors = new ArrayList<>();
     private final ArrayList<Meteor> pendingMeteors = new ArrayList<>();
     /** Asteroid storms (level.storms): the next one to start, seconds left of the current one, time to the next rock. */
     private int nextStorm;
@@ -125,7 +127,7 @@ public class GameScreen extends ScreenAdapter {
 
     // art
     private final Texture bgTex, starTex;
-    private final float capW, capH;                 // power capsule size, from sprites/PowerCapsule.png
+    final float capW, capH;                 // power capsule size, from sprites/PowerCapsule.png
     /** Legacy (sprites/legacy.png): 7 frames of 16x16, white with a black outline (see Enemy.legacyFrame). */
     private final TextureRegion[] legacyF;
     private static final Color LEGACY_GREEN = new Color(0x73 / 255f, 1f, 0x73 / 255f, 1f);   // the old fly-by wave
@@ -272,7 +274,7 @@ public class GameScreen extends ScreenAdapter {
     /** sprites/dome.png: two frames side by side, closed and open (facing right, for the left wall). */
     private final TextureRegion[] domeF;
     /** Exact shapes of the dome frames: [frame: closed, open][0 = as drawn (left wall), 1 = mirrored (right wall)]. */
-    private PixelMask[][] domeMasks;
+    PixelMask[][] domeMasks;
     private final TextureRegion rockEyeR, ringR;
     /** Asteroid storm rocks: sprites/rock_small.png (4 frames of 15x15) and sprites/rock_big.png (null = no storms). */
     private final TextureRegion[] rockSmallF;
@@ -280,10 +282,10 @@ public class GameScreen extends ScreenAdapter {
     /** Side volcanoes' red rocks: sprites/rock_small_red.png (the 4 rock_small pictures in the stage's rock red). */
     private final TextureRegion[] rockRedF;
     /** Exact shape of the eye rock (sprites/rock_eye.png, its dark background made see-through). */
-    private PixelMask rockEyeMask;
+    PixelMask rockEyeMask;
     /** sprites/rubbles.png: what is left of a destroyed eye rock (solid like terrain), and its exact shape. */
-    private final TextureRegion rubbleR;
-    private PixelMask rubbleMask;
+    final TextureRegion rubbleR;
+    PixelMask rubbleMask;
     /** The map's "brickArt" picture (null = bricks use brick_pattern.png). */
     private Texture brickArtTex;
     // map stages: pre-rendered terrain strips, brick maze picture, bamda sprites
@@ -941,7 +943,7 @@ public class GameScreen extends ScreenAdapter {
         for (Player p : players) if (p != null) p.fireCd = Math.max(p.fireCd, 0.15f);   // the confirm press doesn't fire
     }
 
-    private void setState(State s) {
+    void setState(State s) {
         if (s == State.PAUSE) { game.bgm.pause(); pauseSel = 0; }
         if (s == State.CLEAR || s == State.GAMEOVER || s == State.WIN) game.bgm.stop();
         if (s == State.GAMEOVER) game.bgm.play(GAME_OVER_MUSIC, false);   // once, not looped
@@ -1164,7 +1166,7 @@ public class GameScreen extends ScreenAdapter {
         regrowBricks(dt);
         updateFx(dt);
 
-        collide();
+        collisions.collide();
 
         pBullets.removeIf(b -> b.dead);
         eBullets.removeIf(b -> b.dead);
@@ -1220,7 +1222,7 @@ public class GameScreen extends ScreenAdapter {
      * shot destroys it (Albert, 2026-10-27).
      */
     /** Points for shooting down a side volcano's red rock. */
-    private static final int VOLCANO_ROCK_SCORE = 50;
+    static final int VOLCANO_ROCK_SCORE = 50;
 
     void volcanoRock(float x, float y, int dir) {
         if (rockRedF == null) return;
@@ -1236,7 +1238,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** A big rock was shot: it splits into three small ones, straight down and SPLIT_ANGLE degrees to either side. */
-    private void splitMeteor(Meteor m) {
+    void splitMeteor(Meteor m) {
         m.dead = true;
         float cx = m.sx + m.w / 2f, cy = m.sy + m.h / 2f;
         float speed = Meteor.BIG_SPEED * Meteor.SPLIT_SPEED_MUL;
@@ -1253,7 +1255,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** A guard (SHIELD / F.FIELD) broke a rock. */
-    private void shatterMeteor(Meteor m) {
+    void shatterMeteor(Meteor m) {
         m.dead = true;
         boom(scrollX + m.sx + m.w / 2f, scrollY + m.sy + m.h / 2f, m.w / 20f);
         a.play("boom", 0.2f);
@@ -1964,7 +1966,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Does the rectangle touch the boss: its sprite's solid pixels, or its eye (drawn over a see-through gap)? */
-    private boolean touchesBoss(float x, float y, float w, float h) {
+    boolean touchesBoss(float x, float y, float w, float h) {
         if (boss.appearing) return false;                // (Op 4's gun units coming together: not solid yet)
         if (kierkeBossNow()) return kierkeTouches(x, y, w, h);   // (its column slides out of the boss box)
         if (!overlap(x, y, w, h, boss.x, boss.y, boss.w, boss.h)) return false;
@@ -2139,10 +2141,10 @@ public class GameScreen extends ScreenAdapter {
         kWallMask = PixelMask.fromPixmap(kWallPm, 0, K_WALL_W);
     }
 
-    private boolean kierkeBossNow() { return boss != null && boss.kierke && kWallPm != null; }
+    boolean kierkeBossNow() { return boss != null && boss.kierke && kWallPm != null; }
 
     /** Does the rectangle touch the wall (either copy on screen) or the main body (their drawn pixels)? */
-    private boolean kierkeTouches(float x, float y, float w, float h) {
+    boolean kierkeTouches(float x, float y, float w, float h) {
         if (kMainMask.overlaps(boss.x + K_MAIN_X, boss.y, x, y, w, h)) return true;
         for (int n = 0; n < 2; n++)
             if (kWallMask.overlaps(boss.kColX(), boss.kRowY(Boss.K_STACK_H, n), x, y, w, h)) return true;
@@ -2167,7 +2169,7 @@ public class GameScreen extends ScreenAdapter {
      * the shield (middle unit, can't be hurt), the bars (leftmost first), the middle unit's core bars, then the orb.
      * Returns true if it hit something (the boss stops every shot).
      */
-    private boolean kierkeBossShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
+    boolean kierkeBossShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
         if (!kierkeBossNow() || boss.dying || !kierkeTouches(hx, hy, hw, hh)) return false;
         if (laser) { if (b.hits.contains(boss)) return true; b.hits.add(boss); } else { b.dead = true; missileBurst(b); }
         Player owner = b.owner;
@@ -2336,7 +2338,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Is the boss being fought (or coming next) this stage's bar-wall boss? */
-    private boolean barBossNow() { return bb != null && (bb.part < 0 || bossPart == bb.part); }
+    boolean barBossNow() { return bb != null && (bb.part < 0 || bossPart == bb.part); }
 
     /** A new (or restarted) fight: every part back, full health; the health bar shows what is left of the parts. */
     private void resetBarBoss() {
@@ -2371,7 +2373,7 @@ public class GameScreen extends ScreenAdapter {
      * A ship's shot (on screen: hx, hy, hw, hh) against a bar-wall boss's columns: if it is in a column that still
      * has something standing, that part takes it. Returns true if it was dealt with here.
      */
-    private boolean barBossShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
+    boolean barBossShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
         if (!barBossNow() || boss == null || boss.dying || boss.appearing) return false;
         for (int c = 0; c < barHp.length; c++) {
             if (c == bb.mid && barShield) continue;      // the middle column: behind the core shield
@@ -2736,7 +2738,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Can a shot (or laser) at this rectangle hit the boss? Op 4's bosses (ghost) only stop shots on their weak spots. */
-    private boolean bossShotTouches(float x, float y, float w, float h) {
+    boolean bossShotTouches(float x, float y, float w, float h) {
         if (!boss.ghost) return touchesBoss(x, y, w, h);
         if (boss.appearing) return false;
         return boss.weakTouches(x, y, w, h) || barShieldTouches(x, y, w, h);
@@ -2899,7 +2901,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Does the rectangle touch a gun pod: its solid pixels or a bar still standing? */
-    private boolean podTouches(float x, float y, float w, float h) {
+    boolean podTouches(float x, float y, float w, float h) {
         if (!podsShown()) return false;
         int ph = podPm.getHeight();
         for (int i = 0; i < level.pods.size(); i++) {
@@ -2917,7 +2919,7 @@ public class GameScreen extends ScreenAdapter {
      * A ship's shot (on screen: hx, hy, hw, hh) against the gun pods: in a column with bars left, its lowest bar takes
      * it; anywhere else on a pod it just stops (a laser is stopped by laserBlocked). Returns true if dealt with here.
      */
-    private boolean podShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
+    boolean podShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
         if (!podsShown()) return false;
         int ph = podPm.getHeight();
         float bw = podBarR.getRegionWidth(), bh = podBarR.getRegionHeight();
@@ -3037,7 +3039,7 @@ public class GameScreen extends ScreenAdapter {
                 if (l.top - l.bottom < 1f) continue;
                 float lw = omenLaserTex != null ? omenLaserTex[0].getHeight() : 5f;   // (as wide as the laser picture)
                 if (overlap(hx, hy, Player.HIT_W, Player.HIT_H, scrollX + l.sx - lw / 2f, scrollY + l.bottom, lw, l.top - l.bottom)) {
-                    hurt(p, false);
+                    collisions.hurt(p, false);
                     break;
                 }
             }
@@ -3073,7 +3075,7 @@ public class GameScreen extends ScreenAdapter {
     /** Op 4 moai rings flash between yellow and white this many times a second (Albert). */
     private static final float RING_FLASH = 15f;
     /** Points for shooting down an Op 4 moai ring. */
-    private static final int RING_SCORE = 10;
+    static final int RING_SCORE = 10;
 
     /** Op 4 moai rings: the yellow ones (#e0e027, as on the MSX); ring_laser.png is white. */
     private static final Color RING_YELLOW = new Color(0xe0 / 255f, 0xe0 / 255f, 0x27 / 255f, 1f);
@@ -3180,7 +3182,7 @@ public class GameScreen extends ScreenAdapter {
         if (!any) for (int i = 0; i < darkLit.length; i++) if (scrollX >= level.darkZones.get(i)[0]) darkLit[i] = true;
     }
 
-    private void collideSparks(Player p) {
+    void collideSparks(Player p) {
         for (int i = sparkItems.size() - 1; i >= 0; i--) {
             float[] s = sparkItems.get(i);
             if (overlap(p.x + 2f, p.y, 28f, 16f, s[0], s[1], SPARK_SIZE, SPARK_SIZE)) {
@@ -3234,7 +3236,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** A ship's laser hit a Lavinia big block: it bounces straight back to the left, as long as the laser was. */
-    private void reflectLaser(Bullet laser, Enemy blk) {
+    void reflectLaser(Bullet laser, Enemy blk) {
         float len = Math.min(Math.max(16f, laser.w), 64f), h = Math.max(2f, laser.h);
         Bullet r = new Bullet(Bullet.Kind.ENEMY, blk.x - len, laser.y, len, h);
         r.vx = -360f;
@@ -3243,7 +3245,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** A Heathen's bar was shot away. */
-    private void breakHeathenBar(Enemy e, int k, Player owner) {
+    void breakHeathenBar(Enemy e, int k, Player owner) {
         e.heathenBarHp[k] = 0;
         boom(e.heathenBarX(k) + Enemy.HEATHEN_BAR_W / 2f, e.heathenBarY() + Enemy.HEATHEN_BAR_H / 2f, 0.5f);
         addScore(owner, Enemy.HEATHEN_BAR_SCORE);
@@ -3275,7 +3277,7 @@ public class GameScreen extends ScreenAdapter {
      * Solid scenery besides the rock (which Level.hits covers): stage 1's towers, Eioneus's gun pods, Lavinia's blocks
      * and the Heathens' pillars. Enemy bullets stop on it.
      */
-    private boolean sceneryStops(float x, float y, float w, float h) {
+    boolean sceneryStops(float x, float y, float w, float h) {
         for (Hazard hz : hazards) if (!hz.dead && hz.type == Hazard.Type.TOWER && hz.touches(x, y, w, h)) return true;
         if (podTouches(x, y, w, h)) return true;
         for (Enemy e : enemies) {
@@ -3546,7 +3548,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Small explosion where a shot or laser hit something that survived it (missiles already burst on their own). */
-    private void hitSpark(Bullet b, float tx, float ty, float tw, float th) {
+    void hitSpark(Bullet b, float tx, float ty, float tw, float th) {
         if (b.kind == Bullet.Kind.MISSILE) return;
         if (b.vert) {   // vertical stage: the shot's tip is at its top, a beam enters from below
             float vy = b.kind == Bullet.Kind.LASER ? Math.max(b.y, ty) : MathUtils.clamp(b.y + b.h, ty, ty + th);
@@ -3638,663 +3640,19 @@ public class GameScreen extends ScreenAdapter {
     /** sprites/ripple.png */
     private Texture rippleTex;
 
-    /** A tower's tip is shot to pieces: the column crumbles. */
-    private void destroyTower(Hazard h, Player owner) {
-        h.dead = true;
-        addScore(owner, ARM_SCORE);
-        for (float yy = h.fromCeil ? h.y + 6f : h.y + h.h - 6f; h.fromCeil ? yy < h.y + h.h - Hazard.TOWER_ROOT : yy > h.y + Hazard.TOWER_ROOT; yy += h.fromCeil ? 12f : -12f) {
-            boom(h.x + h.w / 2f, yy, 0.8f);
-        }
-        a.play("boom", 0.3f);
-    }
-
-    /** A stage arm's blue ball is shot to pieces: the whole arm bursts. */
-    private void destroyArm(Hazard h, Player owner) {
-        h.dead = true;
-        addScore(owner, ARM_SCORE);
-        for (int i = 0; i < h.armX.length; i++) boom(h.armX[i], h.armY[i], 0.9f);
-        a.play("boom", 0.3f);
-    }
-
-    private static final int ARM_SCORE = 500;
-
-    /**
-     * Stage 2: a player shot against the domes and rock eyes, which sit in the rock (so they have to be checked
-     * before the rock stops the shot). Returns true if the bullet is used up.
-     */
-    private boolean hitWallTarget(Bullet b, float bx, float by, float bw, float bh, boolean laser) {
-        for (Hazard h : hazards) {
-            if (h.dead || (h.type != Hazard.Type.DOME && h.type != Hazard.Type.EYE)) continue;
-            if (!wallTargetTouches(h, bx, by, bw, bh)) continue;
-            if (laser) { if (b.hits.contains(h)) continue; b.hits.add(h); } else b.dead = true;
-            h.hp -= b.dmg;
-            if (h.hp <= 0) destroyWallTarget(h, b.owner);
-            else { a.play("hit", 0.15f); hitSpark(b, h.x, h.y, h.w, h.h); }
-            if (b.dead) return true;
-        }
-        return false;
-    }
-
-    /**
-     * Does the rectangle touch a dome's drawn pixels? Uses the shape of the frame showing (closed / open), mirrored for
-     * domes on the right wall, so the see-through part of the picture can be flown and shot through.
-     */
-    private boolean wallTargetTouches(Hazard h, float rx, float ry, float rw, float rh) {
-        if (h.type == Hazard.Type.DOME) return domeTouches(h, rx, ry, rw, rh);
-        return overlap(rx, ry, rw, rh, h.x, h.y, h.w, h.h) && rockEyeMask.overlaps(h.x, h.y, rx, ry, rw, rh);   // eye rock
-    }
-
-    private boolean domeTouches(Hazard h, float rx, float ry, float rw, float rh) {
-        if (!overlap(rx, ry, rw, rh, h.x, h.y, h.w, h.h)) return false;
-        PixelMask m = domeMasks[Math.min(h.open ? 1 : 0, domeMasks.length - 1)][h.domeSide];
-        return m.overlaps(h.x, h.y, rx, ry, rw, rh);
-    }
-
-    /** A dome or an eye rock is shot to pieces. */
-    private void destroyWallTarget(Hazard h, Player owner) {
-        h.dead = true;
-        boolean dome = h.type == Hazard.Type.DOME;
-        addScore(owner, dome ? Hazard.DOME_SCORE : Hazard.EYE_SCORE);
-        if (dome && h.w > h.h) for (float xx = h.x + 6f; xx < h.x + h.w; xx += 10f) boom(xx, h.y + h.h / 2f, 0.8f);   // (floor / ceiling)
-        else if (dome) for (float yy = h.y + 6f; yy < h.y + h.h; yy += 10f) boom(h.x + h.w / 2f, yy, 0.8f);
-        else {                                       // the whole rock bursts, leaving rubble that stays like terrain
-            boom(h.x + h.w / 2f, h.y + h.h / 2f, 1.3f);
-            for (int i = 0; i < 4; i++) boom(h.x + 8f + (i % 2) * 16f, h.y + 8f + (i / 2) * 16f, 0.8f);
-            if (rubbleR != null) {
-                Hazard r = new Hazard(Hazard.Type.RUBBLE);   // (drawn; the Level.Obstacle makes it solid)
-                r.w = rubbleR.getRegionWidth(); r.h = rubbleR.getRegionHeight();
-                r.x = h.x + (h.w - r.w) / 2f; r.y = h.y + (h.h - r.h) / 2f;   // centred where the rock was
-                pendingHazards.add(r);
-                level.obstacles.add(new Level.Obstacle(r.x, r.y, rubbleMask));
-            }
-        }
-        a.play("boom", 0.3f);
-    }
-
-    /**
-     * Would a laser covering this rectangle run into something it can't go through? The same things that stop it in
-     * collide(): terrain, a tower's rock column (not its green tip), arm balls, fangs, every part of a boss, every
-     * enemy that can't be destroyed (Enemy.indestructible()) and the asteroid storm's small rocks.
-     */
-    private boolean laserBlocked(float x, float y, float w, float h) {
-        if (w <= 0f || h <= 0f) return false;
-        if (level.hits(x, y, w, h)) return true;
-        if (bossBlocksLaser(x, y, w, h)) return true;
-        if (podTouches(x, y, w, h)) return true;      // Eioneus's gun pods
-        for (Enemy e : enemies) {
-            if (e.dead || e.withered || e.intangible()) continue;
-            if (e.type == Enemy.Type.HEATHEN) {   // Lavinia: the Heathens' pillars (not their gaps)
-                if (e.heathenBodyTouches(x, y, w, h)) return true;
-                continue;
-            }
-            // everything that can't be destroyed (Albert, 2026-10-27: Laser Guards, chain balls, blue asteroids,
-            // small blocks, laser guns, orbs, Rages, ...) and Lavinia's big blocks
-            if ((e.indestructible() || e.type == Enemy.Type.BLOCK_BIG) && overlap(x, y, w, h, e.x, e.y, e.w, e.h)) return true;
-        }
-        for (Meteor m : meteors) {                // asteroid storm: the small rocks can't be destroyed either
-            if (m.dead || m.big || m.red) continue;
-            float in = m.inset();
-            if (overlap(x, y, w, h, scrollX + m.sx + in, scrollY + m.sy + in, m.w - 2 * in, m.h - 2 * in)) return true;
-        }
-        for (Hazard hz : hazards) {
-            if (hz.dead) continue;
-            if (hz.type == Hazard.Type.TOWER) {
-                if (!hz.towerTipHit(x, y, w, h) && hz.touches(x, y, w, h)) return true;
-            } else if (hz.type == Hazard.Type.ARM) {
-                int ball = hz.armBallAt(x, y, w, h);
-                // an arm stops a laser at every ball, its blue weak spots too (they are hit there, see collide)
-                if (ball >= 0) return true;
-            } else if (hz.type == Hazard.Type.FANG) {
-                if (hz.touches(x, y, w, h)) return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Lasers never pass through a boss (Albert): its drawn pixels, eye, core, Lavinia's hatch, Tetran's rings. The beam
-     * stops in front of it; collide() looks LASER_REACH px past the beam's end to still hurt it there.
-     */
-    private boolean bossBlocksLaser(float x, float y, float w, float h) {
-        if (boss == null) return false;
-        if (boss.ghost) return !boss.dying && bossShotTouches(x, y, w, h);   // (Op 4: only its weak spots stop a laser)
-        if (touchesBoss(x, y, w, h) || boss.ringTouches(x, y, w, h)) return true;
-        return boss.hasHatch && overlap(x, y, w, h, boss.x + boss.hatchX, boss.y + boss.hatchY, boss.hatchW, boss.hatchH);
-    }
-
-    /** How far past a stopped laser's end collide() looks for the boss or arm ball that stopped it. */
-    private static final float LASER_REACH = 2f;
-
-    /**
-     * A laser ran into something: find where along the beam (from its tail, on screen: bx, by, bw, bh) it first gets
-     * blocked, cut the beam off just before that point and pin it there (Bullet.stuck), so it shrinks into it.
-     */
-    private void stickLaser(Bullet b, float bx, float by, float bw, float bh) {
-        float lo = 0f, hi = b.vert ? bh : bw;    // a beam lo long from the tail is clear, hi long is blocked
-        for (int i = 0; i < 12; i++) {
-            float mid = (lo + hi) / 2f;
-            if (b.vert ? laserBlocked(bx, by, bw, mid) : laserBlocked(bx, by, mid, bh)) hi = mid; else lo = mid;
-        }
-        b.attached = false;
-        b.stuck = true;
-        if (b.vert) b.h = by + lo - b.y; else b.w = bx + lo - b.x;
-        if (b.w <= 0.5f || b.h <= 0.5f) b.dead = true;   // blocked right at its tail: nothing left to shrink
-    }
-
     /** A missile that hit something bursts where it is (shots and lasers show a hit spark instead). */
-    private void missileBurst(Bullet b) {
+    void missileBurst(Bullet b) {
         if (b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
     }
 
-    private static void addScore(Player p, int pts) { if (p != null) p.score += pts; }
+    static void addScore(Player p, int pts) { if (p != null) p.score += pts; }
 
     // =============================================================== collisions
 
-    private static boolean overlap(float ax, float ay, float aw, float ah, float bx, float by, float bw, float bh) {
+    static boolean overlap(float ax, float ay, float aw, float ah, float bx, float by, float bw, float bh) {
         return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
     }
 
-    private void collide() {
-        // ---- player projectiles (points go to whoever fired)
-        for (Bullet b : pBullets) {
-            if (b.dead) continue;
-            boolean laser = b.kind == Bullet.Kind.LASER;
-            // only the part of a shot that is on screen can hit anything: a long laser or a ring reaching past
-            // the edge must not hurt enemies that haven't appeared yet
-            float bx = Math.max(b.x, scrollX), by = Math.max(b.y, scrollY);
-            float bw = Math.min(b.x + b.w, scrollX + W) - bx, bh = Math.min(b.y + b.h, scrollY + H) - by;
-            if (bw <= 0f || bh <= 0f) continue;
-            // stage 2 domes and rock eyes sit in the rock: they are hit before the rock stops the shot
-            if (hitWallTarget(b, bx, by, bw, bh, laser)) { missileBurst(b); continue; }
-            // brick maze: every weapon blasts the blocks it touches (lasers keep going)
-            float reach = b.kind == Bullet.Kind.MISSILE ? 3f : 0f;
-            boolean blasted = (b.vert || b.homing) && b.kind == Bullet.Kind.MISSILE   // (wall-crawling / HOMING: on either side)
-                    ? level.breakBricks(bx - reach, by - reach, bw + 2 * reach, bh + 2 * reach) > 0
-                    : level.breakBricks(bx, by - reach, bw + reach, bh + 2 * reach) > 0;
-            if (blasted) {
-                addScore(b.owner, 10);
-                boom(b.x + b.w, b.y + b.h / 2f, 0.6f);
-                a.play("hit", 0.15f);
-                if (!laser) { b.dead = true; continue; }
-            }
-            if (b.burst) { b.dead = true; missileBurst(b); continue; }   // a vertical / HOMING missile that ran into rock
-            if (b.kind == Bullet.Kind.RIPPLE) {
-                // a ripple is only stopped by terrain at its core, so a big ring can pass close to walls
-                if (b.diag ? level.hits(b.x + b.w / 2f - 3f, b.y + b.h / 2f - 3f, 6f, 6f)
-                        : b.vert ? level.hits(b.x + b.w / 2f - 2f, by, 4f, bh) : level.hits(bx, b.y + b.h / 2f - 2f, bw, 4f)) { b.dead = true; continue; }
-            } else if (laser && b.seg) {
-                // an aimed laser's piece: it still hurts what it touches this frame, and is gone the next (Bullet.segStop)
-                if (laserBlocked(bx, by, bw, bh)) b.segStop = true;
-            } else if (laser) {
-                // a laser that runs into something it can't go through lets go of its gun and shrinks into the impact
-                // point (see Bullet.stuck); what is left of it can still hurt what it touches
-                if (!b.stuck && laserBlocked(bx, by, bw, bh)) {
-                    stickLaser(b, bx, by, bw, bh);
-                    if (b.dead) continue;
-                    bx = Math.max(b.x, scrollX); by = Math.max(b.y, scrollY);
-                    bw = Math.min(b.x + b.w, scrollX + W) - bx; bh = Math.min(b.y + b.h, scrollY + H) - by;
-                    if (bw <= 0f || bh <= 0f) continue;
-                }
-            } else if (b.kind != Bullet.Kind.MISSILE && level.hits(bx, by, bw, bh)) { b.dead = true; continue; }
-
-            // towers: the green tip can be shot; the rock column just stops shots
-            boolean towerHit = false;
-            for (Hazard h : hazards) {
-                if (h.type != Hazard.Type.TOWER || h.dead) continue;
-                if (h.towerTipHit(bx, by, bw, bh)) {
-                    if (laser) { if (b.hits.contains(h)) continue; b.hits.add(h); } else b.dead = true;
-                    towerHit = true;
-                    h.hp -= b.dmg;
-                    float ty = h.fromCeil ? h.y : h.y + h.h - Hazard.TOWER_TIP;
-                    if (h.hp <= 0) destroyTower(h, b.owner);
-                    else { a.play("hit", 0.15f); hitSpark(b, h.x, ty, h.w, Hazard.TOWER_TIP); }
-                } else if (!laser && h.touches(bx, by, bw, bh)) {   // (a laser was already stopped by laserBlocked)
-                    b.dead = true;
-                }
-                if (b.dead) break;
-            }
-            if (b.dead) { if (towerHit || b.homing) missileBurst(b); continue; }
-
-            // claw arms: a stage arm's blue ball, or any blue ball of a boss arm, can be damaged; the rest just stop shots
-            boolean armHit = false;
-            for (Hazard h : hazards) {
-                if (h.type != Hazard.Type.ARM || h.dead) continue;
-                int ball = h.armBallAt(bx, by, bw, bh);
-                // a laser stops just in front of an arm's balls (laserBlocked): look a little past its end
-                if (ball < 0 && laser) {
-                    ball = b.vert ? h.armBallAt(bx, by - LASER_REACH, bw, bh + 2f * LASER_REACH) : h.armBallAt(bx - LASER_REACH, by, bw + 2f * LASER_REACH, bh);
-                    boolean weakBall = h.bossArm ? ball >= 0 && ball < h.armX.length - 1 : ball == h.armWeak;
-                    if (!weakBall) ball = -1;
-                }
-                if (ball < 0) continue;
-                boolean weak = h.bossArm ? ball < h.armX.length - 1 : ball == h.armWeak;   // (boss arm: not the claw)
-                if (!weak) { if (laser) continue; b.dead = true; break; }   // (a laser was already stopped by laserBlocked)
-                if (laser) { if (b.hits.contains(h)) continue; b.hits.add(h); } else b.dead = true;
-                armHit = true;
-                h.hp -= b.dmg;
-                if (h.hp <= 0) destroyArm(h, b.owner);
-                else { a.play("hit", 0.15f); hitSpark(b, h.armX[ball] - 8f, h.armY[ball] - 8f, 16f, 16f); }
-                if (b.dead) break;
-            }
-            if (b.dead) { if (armHit || b.homing) missileBurst(b); continue; }
-
-            for (Hazard h : hazards) {
-                if (laser) break;                         // (a laser was already stopped by laserBlocked)
-                if (h.type == Hazard.Type.FANG && h.touches(bx, by, bw, bh)) {
-                    b.dead = true;
-                    break;
-                }
-            }
-            if (b.dead) { if (b.homing) missileBurst(b); continue; }   // teeth just stop shots (HOMING bursts on them)
-
-            for (Hazard h : hazards) {
-                if (!h.shootable() || h.dead || !overlap(bx, by, bw, bh, h.x, h.y, h.w, h.h)) continue;
-                if (laser) { if (b.hits.contains(h)) continue; b.hits.add(h); } else b.dead = true;
-                h.hp -= b.dmg;
-                if (h.hp <= 0) { h.dead = true; addScore(b.owner, 50); boom(h.x + h.w / 2f, h.y + h.h / 2f, h.w / 20f); a.play("boom", 0.2f); }
-                else { a.play("hit", 0.15f); hitSpark(b, h.x, h.y, h.w, h.h); }
-                if (b.dead) break;
-            }
-            if (b.dead) { missileBurst(b); continue; }    // a missile bursts on a Bamda / falling rock it hit
-
-            // asteroid storm: a small rock stops a shot; a big one splits in three (and takes the shot).
-            // Eioneus side volcano rocks (red): one hit destroys them (Albert, 2026-10-27)
-            for (Meteor m : meteors) {
-                if (m.dead) continue;
-                float in = m.inset();
-                if (!overlap(bx, by, bw, bh, scrollX + m.sx + in, scrollY + m.sy + in, m.w - 2 * in, m.h - 2 * in)) continue;
-                if (!m.big && !m.red) {                  // a small storm rock: it stops every shot (Albert, 2026-10-27; a laser: laserBlocked)
-                    if (laser) continue;
-                    b.dead = true;
-                    a.play("hit", 0.1f);
-                    hitSpark(b, scrollX + m.sx, scrollY + m.sy, m.w, m.h);
-                    break;
-                }
-                if (laser) { if (b.hits.contains(m)) continue; b.hits.add(m); } else b.dead = true;
-                if (m.red) {
-                    m.dead = true;
-                    addScore(b.owner, VOLCANO_ROCK_SCORE);
-                    boom(scrollX + m.sx + m.w / 2f, scrollY + m.sy + m.h / 2f, 0.6f);
-                    a.play("boom", 0.2f);
-                } else splitMeteor(m);
-                if (b.dead) break;
-            }
-            if (b.dead) { missileBurst(b); continue; }
-
-            // Op 4 moai rings: a shot destroys a ring it hits (and is used up, except a laser)
-            boolean ringHit = false;
-            for (Bullet r : eBullets) {
-                if (r.dead || r.ring == 0 || !overlap(bx, by, bw, bh, r.x, r.y, r.w, r.h)) continue;
-                r.dead = true; ringHit = true;
-                boom(r.x + r.w / 2f, r.y + r.h / 2f, 0.4f);
-                addScore(b.owner, RING_SCORE);
-                if (r.ring == 3) {                       // a red ring: a power capsule where it was (Albert)
-                    Capsule c = new Capsule();
-                    c.x = r.x + r.w / 2f - capW / 2f; c.y = r.y + r.h / 2f - capH / 2f; c.y0 = c.y;
-                    caps.add(c);
-                }
-                if (!laser) { b.dead = true; break; }
-            }
-            if (b.dead) { if (ringHit && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f); continue; }
-
-            for (Enemy e : enemies) {
-                if (e.dead || e.withered || e.intangible() || !overlap(bx, by, bw, bh, e.x, e.y, e.w, e.h)) continue;   // (shots pass a withered aberrant / a mine taking off)
-                if (e.type == Enemy.Type.HEATHEN) {      // only its bars break; the pillar stops shots, the open gap lets them by
-                    int k = e.heathenBarAt(bx, by, bw, bh);
-                    if (k >= 0) {
-                        if (laser) { if (b.hits.contains(e.heathenBarKey[k])) continue; b.hits.add(e.heathenBarKey[k]); } else b.dead = true;
-                        e.heathenBarHp[k] -= Math.max(1, Math.round(b.dmg));
-                        if (e.heathenBarHp[k] <= 0) breakHeathenBar(e, k, b.owner);
-                        else { a.play("hit", 0.15f); hitSpark(b, e.heathenBarX(k), e.heathenBarY(), Enemy.HEATHEN_BAR_W, Enemy.HEATHEN_BAR_H); }
-                        if (b.dead) break;
-                        continue;
-                    }
-                    if (!e.heathenBodyTouches(bx, by, bw, bh) || laser) continue;   // (a laser is stopped by laserBlocked)
-                    b.dead = true;
-                    a.play("hit", 0.1f);
-                    hitSpark(b, e.x, e.y, e.w, e.h);
-                    break;
-                }
-                if (e.type == Enemy.Type.MOAI && !e.moaiMouthHit(bx, by, bw, bh)) {   // a moai: only its open mouth can be hurt
-                    if (laser) continue;                  // (a laser goes on; it may reach the open mouth later)
-                    b.dead = true;
-                    a.play("hit", 0.1f);
-                    hitSpark(b, e.x, e.y, e.w, e.h);
-                    break;
-                }
-                if (laser && !b.seg && e.type == Enemy.Type.BLOCK_BIG && !b.hits.contains(e)) reflectLaser(b, e);   // (and it still hurts it)
-                if (laser) { if (b.hits.contains(e)) continue; b.hits.add(e); } else b.dead = true;
-                if (e.indestructible()) {   // can't be destroyed: the shot just stops on it
-                    a.play("hit", 0.1f);
-                    hitSpark(b, e.x, e.y, e.w, e.h);
-                    if (b.dead) break;
-                    continue;
-                }
-                e.hp -= b.dmg;
-                if (e.hp <= 0) killEnemy(e, b.owner);
-                else { a.play("hit", 0.15f); hitSpark(b, e.x, e.y, e.w, e.h); }
-                if (b.dead) break;
-            }
-            if (b.dead) { if (b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f); continue; }
-
-            if (boss != null && boss.ringTouches(bx, by, bw, bh)) {   // Tetran's rings: can't be hurt, block shots
-                if (!laser) { b.dead = true; missileBurst(b); }
-                continue;
-            }
-            // a laser stops just in front of the boss (laserBlocked): look a little past its end
-            float hx = bx, hy = by, hw = bw, hh = bh;
-            if (laser) { if (b.vert) { hy -= LASER_REACH; hh += 2f * LASER_REACH; } else { hx -= LASER_REACH; hw += 2f * LASER_REACH; } }
-            if (barBossShot(b, hx, hy, hw, hh, laser)) continue;   // a bar-wall boss: a bar or orb took it
-            if (podShot(b, hx, hy, hw, hh, laser)) continue;       // Eioneus's gun pods: a bar took it, or the pod stopped it
-            if (kierkeBossShot(b, hx, hy, hw, hh, laser)) continue;   // Kierke's machine wall: a barrel, a ball, the core or armour
-            if (boss != null && !boss.dying && (bossShotTouches(hx, hy, hw, hh)   // (Tetran's rings stop a laser but aren't hurt)
-                    || boss.hasHatch && overlap(hx, hy, hw, hh, boss.x + boss.hatchX, boss.y + boss.hatchY, boss.hatchW, boss.hatchH))) {
-                // Bosses with an eye only take damage on the eye, and not while it is fully closed;
-                // other bosses take damage anywhere. A laser hurts it once per beam.
-                // After each hit the boss can't lose HP for Boss.HIT_COOLDOWN; shots that land then are absorbed.
-                float ex = boss.x + boss.eyeX, ey = boss.y + boss.eyeY;
-                boolean onEye = boss.hasEye && overlap(hx, hy, hw, hh, ex, ey, boss.eyeW, boss.eyeH);
-                boolean onCore = boss.coreTouches(hx, hy, hw, hh);
-                boolean onHatch = boss.hasHatch && overlap(hx, hy, hw, hh, boss.x + boss.hatchX, boss.y + boss.hatchY, boss.hatchW, boss.hatchH);
-                boolean weak = barBossNow() ? false   // bar-wall boss: only its bars / orbs (barBossShot), the body just stops shots
-                        : boss.hasHatch ? onHatch || boss.hatchBroken()   // Lavinia: the hatch (open or closed), or anywhere while it is broken
-                        : boss.weakW > 0f ? boss.weakTouches(hx, hy, hw, hh)   // (Op 4's sphere: its eye)
-                        : boss.hasCore ? onCore : !boss.hasEye || (onEye && !boss.eyeShut());   // core: the only weak spot
-                if (!weak || boss.hitCooldown > 0f) {
-                    if (!laser) {      // a laser keeps going and may still hurt it a moment later
-                        b.dead = true;
-                        if (onCore) hitSpark(b, boss.x + boss.coreX, boss.y + boss.coreY, boss.coreW, boss.coreH);
-                        else if (onEye) hitSpark(b, ex, ey, boss.eyeW, boss.eyeH); else hitSpark(b, boss.x, boss.y, boss.w, boss.h);
-                    }
-                    if (b.dead && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
-                    continue;
-                }
-                if (laser) { if (b.hits.contains(boss)) continue; b.hits.add(boss); } else b.dead = true;
-                if (boss.hasHatch && !boss.hatchBroken()) {   // Lavinia: the hatch takes the hit (its own health), not the boss
-                    float hx0 = boss.x + boss.hatchX, hy0 = boss.y + boss.hatchY;
-                    boss.hitCooldown = Boss.HIT_COOLDOWN;
-                    if (boss.damageHatch(b.dmg)) { boom(hx0 + boss.hatchW / 2f, hy0 + boss.hatchH / 2f, 0.8f); a.play("boom", 0.3f); }
-                    else { a.play("hit", 0.15f); hitSpark(b, hx0, hy0, boss.hatchW, boss.hatchH); }
-                    if (b.dead && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
-                    continue;
-                }
-                boss.hp = Math.max(0f, boss.hp - b.dmg);
-                boss.hitCooldown = Boss.HIT_COOLDOWN;
-                boss.flash = 0.08f;
-                a.play("hit", 0.15f);
-                if (boss.hasEye) boss.onEyeHit();
-                if (boss.hasHatch) boss.onHatchHit();
-                if (boss.hp > 0) {
-                    if (boss.hasCore) hitSpark(b, boss.x + boss.coreX, boss.y + boss.coreY, boss.coreW, boss.coreH);
-                    else if (boss.hasEye) hitSpark(b, ex, ey, boss.eyeW, boss.eyeH); else hitSpark(b, boss.x, boss.y, boss.w, boss.h);
-                }
-                if (boss.hp <= 0) {
-                    boss.dying = true;
-                    boss.explodeArms(this);
-                    boss.explodeRings(this);
-                    eBullets.clear();
-                    addScore(b.owner, 5000);
-                }
-            }
-            if (b.dead && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
-        }
-
-        // ---- enemy bullets
-        for (Bullet b : eBullets) {
-            if (b.dead) continue;
-            boolean rock = b.guard != null ? false   // (Laser Guard beams: steerGuardBeams stops them at rock)
-                    : b.omenLaser   // Omen's laser: only its middle is stopped by rock (the ends just stop growing)
-                    ? level.hits(b.anchorX - b.startW / 2f, b.y, b.startW, b.h) : level.hits(b.x, b.y, b.w, b.h);
-            if (!rock && !b.omenLaser) b.leftRock = true;   // (Omen's laser keeps its own short grace)
-            // (Albert, 2026-10-30: no enemy bullet passes scenery; one fired from inside rock only gets out of that rock)
-            if (rock && (b.t >= b.terrainGrace || b.leftRock)) { b.dead = true; continue; }
-            if (b.guard == null && !b.omenLaser && sceneryStops(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }
-            if (kierkeBossNow() && !boss.dying && kierkeTouches(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }   // (Kierke's wall: no shot gets through)
-            for (Hazard h : hazards) {
-                if (h.type == Hazard.Type.FANG && h.touches(b.x, b.y, b.w, b.h)) b.dead = true;
-            }
-            if (b.dead) continue;
-            for (Player p : players) {   // SHIELD in front of a ship: blocks the shot (and wears down)
-                if (alive(p) && p.shield > 0
-                        && overlap(b.x, b.y, b.w, b.h, p.shieldX(), p.shieldY(), Player.shieldW(), Player.shieldH())) {
-                    b.dead = true;
-                    boom(b.x + b.w / 2f, b.y + b.h / 2f, 0.4f);
-                    if (p.invuln <= 0f) shieldHit(p);   // shots that land during the invincibility don't wear it down
-                    break;
-                }
-            }
-            if (b.dead) continue;
-            for (Player p : players) {
-                if (alive(p) && overlap(b.x, b.y, b.w, b.h, p.hitX(), p.hitY(), Player.HIT_W, Player.HIT_H)) {
-                    b.dead = true;
-                    hurt(p, false);   // got past the SHIELD (from behind / above / below)
-                    break;
-                }
-            }
-        }
-
-        // ---- each ship vs everything else
-        for (Player p : players) if (alive(p)) collideShip(p);
-    }
-
-    /**
-     * What the SHIELD (its own 8x16 picture in front of the nose) touches: an Enemy, a Hazard (Bamda / rock or claw
-     * arm), the Boss, or null.
-     */
-    private Object shieldTouches(Player p) {
-        float fx = p.shieldX(), fy = p.shieldY(), fw = Player.shieldW(), fh = Player.shieldH();
-        for (Enemy e : enemies) {
-            if (e.type == Enemy.Type.HEATHEN) { if (!e.dead && e.heathenTouches(fx, fy, fw, fh)) return e; continue; }
-            if (!e.dead && !e.intangible() && !e.ground() && overlap(fx, fy, fw, fh, e.x + 2f, e.y + 2f, e.w - 4f, e.h - 4f)) return e;
-        }
-        for (Hazard h : hazards) {
-            if (h.dead) continue;
-            if (h.type == Hazard.Type.ARM && h.armTouches(fx, fy, fw, fh)) return h;
-            if ((h.type == Hazard.Type.DOME || h.type == Hazard.Type.EYE) && wallTargetTouches(h, fx, fy, fw, fh)) return h;
-            if (h.shootable() && overlap(fx, fy, fw, fh, h.x + 2f, h.y + 2f, h.w - 4f, h.h - 4f)) return h;
-        }
-        if (boss != null && boss.ghost) return null;    // (Op 4: the ships fly over the bosses)
-        if (boss != null && boss.ringTouches(fx, fy, fw, fh)) return boss;
-        return boss != null && !boss.dying && touchesBoss(fx, fy, fw, fh) ? boss : null;
-    }
-
-    /** The F.FIELD bubble or the SHIELD took a hit from this: it takes 1 damage in return (enemies and Bamdas; arms and the boss shrug it off). */
-    private void guardDamage(Object o, Player p) {
-        if (o instanceof Enemy) {
-            Enemy e = (Enemy) o;
-            if (e.type == Enemy.Type.ORB && !e.dead) {   // Op 4 orb: can't be shot, but a guard absorbs it
-                e.dead = true;
-                boom(e.x + e.w / 2f, e.y + e.h / 2f, 0.6f);
-                a.play("boom", 0.2f);
-                return;
-            }
-            if (e.dead || e.withered || e.indestructible()) return;   // (can't be destroyed)
-            e.hp -= 1;
-            if (e.hp <= 0) killEnemy(e, p);
-            else boom(e.x + e.w / 2f, e.y + e.h / 2f, 0.4f);
-        } else if (o instanceof Hazard) {
-            Hazard h = (Hazard) o;
-            if (h.dead || !h.shootable()) return;
-            h.hp -= 1;
-            if (h.hp <= 0) { h.dead = true; addScore(p, 50); boom(h.x + h.w / 2f, h.y + h.h / 2f, h.w / 20f); a.play("boom", 0.2f); }
-            else boom(h.x + h.w / 2f, h.y + h.h / 2f, 0.4f);
-        }
-    }
-
-    private void collideShip(Player p) {
-        float hx = p.hitX(), hy = p.hitY(), hw = Player.HIT_W, hh = Player.HIT_H;
-        boolean ghost = p.ghostT > 0f;   // just (re)entered: passes through terrain and teeth
-        if (!ghost && level.hits(hx, hy, hw, hh)) { hurt(p, true); return; }
-        // SHIELD: whatever runs into the field itself wears it down (and gives the ship a moment of invincibility)
-        if (p.shield > 0 && p.invuln <= 0f && !debugInvincible) {
-            Object hit = shieldTouches(p);
-            if (hit != null) { shieldHit(p); guardDamage(hit, p); }   // ...and what ran into it takes 1 damage
-        }
-        for (Enemy e : enemies) {                     // Lavinia: the laser gun points' pulses
-            if (e.type == Enemy.Type.LASER_GUN && !e.dead && e.beamW > 0f && overlap(hx, hy, hw, hh, e.beamX, e.beamY, e.beamW, e.beamH)) {
-                hurt(p, false);
-                if (p.dead) return;
-            }
-        }
-        for (Enemy e : enemies) {                     // Lavinia: the Rages' lasers
-            if (e.type == Enemy.Type.RAGE && !e.dead && e.beamH > 0f && overlap(hx, hy, hw, hh, e.beamX, e.beamY, e.beamW, e.beamH)) {
-                hurt(p, false);
-                if (p.dead) return;
-            }
-        }
-        for (Enemy e : enemies) {                     // Eioneus laser beams
-            if (e.type == Enemy.Type.LASER_BATTERY && e.beamOn() && overlap(hx, hy, hw, hh, e.beamX, e.beamY, e.beamW, e.beamH)) {
-                hurt(p, false);
-                if (p.dead) return;
-            }
-        }
-        for (Enemy e : enemies) {
-            if (e.type == Enemy.Type.HEATHEN) {          // its exact shape: the gap lets a ship through once the bars are gone
-                if (!e.dead && e.heathenTouches(hx, hy, hw, hh)) { hurt(p, false); if (p.dead) return; }
-                continue;
-            }
-            if (!e.dead && !e.intangible() && !e.ground() && overlap(hx, hy, hw, hh, e.x + 2f, e.y + 2f, e.w - 4f, e.h - 4f)) {
-                boolean ffieldTakesIt = p.ffield > 0 && p.invuln <= 0f && !debugInvincible;
-                hurt(p, false);
-                if (p.dead) return;
-                if (ffieldTakesIt) guardDamage(e, p);       // the F.FIELD hits back: 1 damage
-            }
-        }
-        for (Hazard h : hazards) {
-            if (h.dead) continue;
-            if (!ghost && h.type == Hazard.Type.FANG && h.touches(hx, hy, hw, hh)) { hurt(p, true); return; }
-            if (!ghost && h.type == Hazard.Type.TOWER && h.touches(hx, hy, hw, hh)) { hurt(p, true); return; }
-            if (!ghost && (h.type == Hazard.Type.DOME || h.type == Hazard.Type.EYE) && wallTargetTouches(h, hx, hy, hw, hh)) { hurt(p, true); return; }
-            if (h.type == Hazard.Type.ARM && h.armTouches(hx, hy, hw, hh)) { hurt(p, false); if (p.dead) return; }   // caught
-            if (h.shootable() && overlap(hx, hy, hw, hh, h.x + 2f, h.y + 2f, h.w - 4f, h.h - 4f)) {
-                h.dead = true;
-                boom(h.x + h.w / 2f, h.y + h.h / 2f, h.w / 20f);
-                hurt(p, false);
-                if (p.dead) return;
-            }
-        }
-        if (boss != null && !boss.ghost && (touchesBoss(hx, hy, hw, hh) || boss.ringTouches(hx, hy, hw, hh))) {
-            hurt(p, false);
-            if (p.dead) return;
-        }
-        if (podTouches(hx, hy, hw, hh)) {             // Eioneus's gun pods (the shot-away inside of a column is free)
-            hurt(p, false);
-            if (p.dead) return;
-        }
-        collideMeteors(p);
-        if (p.dead) return;
-        collideSparks(p);
-        for (Capsule c : caps) {
-            if (!c.dead() && overlap(p.x + 2f, p.y, 28f, 16f, c.x, c.y, capW, capH)) {
-                c.x = -99999f;   // consumed (culled next frame)
-                p.score += 300;
-                if (c.green && p.options < Player.MAX_OPTIONS) p.options++;   // green: one option back, at once
-                else p.meter = p.meter >= Player.SLOT_COUNT ? 1 : p.meter + 1;   // only the player who caught it advances
-                a.play("pickup", 0.35f);
-            }
-        }
-    }
-
-    /**
-     * Asteroid storm rocks against a ship. The SHIELD breaks any rock that runs into it (and wears down, unless the
-     * ship is still invincible from its last hit). A rock that reaches the ship hurts it; if the F.FIELD takes the hit
-     * the rock breaks, otherwise it just flies on. Rocks pass through a ship that is blinking (invincible).
-     */
-    private void collideMeteors(Player p) {
-        float hx = p.hitX(), hy = p.hitY();
-        for (Meteor m : meteors) {
-            if (m.dead) continue;
-            float in = m.inset(), mx = scrollX + m.sx + in, my = scrollY + m.sy + in, mw = m.w - 2 * in, mh = m.h - 2 * in;
-            if (p.shield > 0 && overlap(p.shieldX(), p.shieldY(), Player.shieldW(), Player.shieldH(), mx, my, mw, mh)) {
-                shatterMeteor(m);
-                if (p.invuln <= 0f && !debugInvincible) shieldHit(p);
-                continue;
-            }
-            if (!overlap(hx, hy, Player.HIT_W, Player.HIT_H, mx, my, mw, mh)) continue;
-            if (p.invuln > 0f || debugInvincible) continue;
-            boolean ffield = p.ffield > 0;
-            hurt(p, false);
-            if (ffield) shatterMeteor(m);
-            if (p.dead) return;
-        }
-    }
-
-    private void killEnemy(Enemy e, Player killer) {
-        if (e.withered) return;
-        if (e.type == Enemy.Type.ABERRANT || e.type == Enemy.Type.SEED) e.withered = true;   // withers / is destroyed and stays
-        else e.dead = true;
-        addScore(killer, e.score);
-        boom(e.x + e.w / 2f, e.y + e.h / 2f, 1f);
-        a.play("boom", 0.22f);
-        Enemy.Group g = e.group;
-        if (g != null) {
-            g.killed++;
-            if (g.carrier && !g.lost && g.killed >= g.size) {
-                Capsule c = new Capsule();
-                c.x = e.x + e.w / 2f - capW / 2f; c.y = e.y + e.h / 2f - capH / 2f; c.y0 = c.y;
-                caps.add(c);
-            }
-        }
-    }
-
-    /** Invincibility after the F.FIELD or the SHIELD takes a hit. */
-    private static final float GUARD_IFRAMES = 0.6f;
-
-    /**
-     * The SHIELD takes a hit (a blocked shot, or an enemy rammed): it wears down by one and the ship is invincible
-     * to enemies and shots for a moment, like with the F.FIELD (terrain still hurts).
-     */
-    private void shieldHit(Player p) {
-        p.shield--;
-        p.invuln = Math.max(p.invuln, GUARD_IFRAMES);
-        p.shieldHitT = GUARD_IFRAMES;   // the field flickers (the ship doesn't blink)
-        a.play("hit", 0.3f);
-    }
-
-    private void hurt(Player p, boolean ignoreGuards) {   // (the SHIELD only reacts to what touches the field itself)
-        if (debugInvincible) return;                 // debug: invincible
-        if (p.dead || state == State.CLEAR || (boss != null && boss.dying)) return;   // nobody dies after the boss
-        if (!ignoreGuards) {
-            if (p.invuln > 0f) return;
-            if (p.ffield > 0) {
-                p.ffield--;
-                p.invuln = GUARD_IFRAMES;
-                p.ffieldHitT = p.invuln;   // the F.FIELD bubble blinks (and fades out if this was its last hit)
-                a.play("hit", 0.3f);
-                return;
-            }
-        }
-        p.dead = true;
-        p.aiming = false;
-        boom(p.x + 16f, p.y + 8f, 1.8f);
-        a.play("boom", 0.5f);
-        p.lives--;
-        // its options are left behind as green capsules (one option each); on NORMAL the ship starts over without
-        // power-ups, on EASY it keeps everything else
-        for (int i = 0; i < p.options; i++) {
-            Capsule c = new Capsule();
-            c.green = true;
-            c.x = optX(p, i) + 6f - capW / 2f; c.y = optY(p, i) + 6f - capH / 2f; c.y0 = c.y;
-            caps.add(c);
-        }
-        if (game.easy) {
-            p.options = 0;                            // easy: everything else is kept
-        } else {
-            int meter = p.meter;                      // (the power meter's highlight stays where it was)
-            p.resetPowerups();
-            p.meter = meter;
-        }
-        if (debugLoadout) p.applyDebugLoadout();
-        // the game carries on (no rewind): the ship re-enters on the spot after a moment. Only when nobody has
-        // ships left is it game over.
-        boolean othersPlaying = false;
-        for (Player o : players) if (o != null && o != p && !o.out && o.lives >= 0) othersPlaying = true;
-        if (p.lives >= 0 || othersPlaying) {
-            p.respawnT = RESPAWN_DELAY;   // (out of ships: drops out, can press fire to continue)
-        } else {
-            setState(State.DEAD);         // nobody left
-        }
-    }
 
     // =============================================================== drawing
 
