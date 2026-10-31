@@ -27,3 +27,6 @@ tools/stage1_out/
 
 # Files waiting to be deleted (check, then move to the Bin)
 _to_delete/
+
+# Scratch output from Claude sessions (previews, backups, music loop work files)
+Claude outputs/

@@ -12,7 +12,7 @@ All art and sound is generated (`tools/generate_assets.py`) and is easy to swap 
    * macOS: if you run `Lwjgl3Launcher` directly, add the VM option `-XstartOnFirstThread` (Run ▸ Edit Configurations).
      The Gradle run configuration already does this for you.
 
-Command line (after IntelliJ or `gradle wrapper` has created the wrapper): `./gradlew lwjgl3:run`
+Command line: `./gradlew lwjgl3:run`
 Build a runnable jar: `./gradlew lwjgl3:dist` → `lwjgl3/build/libs/salamander-1.0.0.jar`
 
 ## Controls
@@ -101,12 +101,15 @@ Any controller SDL recognises (Xbox, PlayStation, Switch Pro, most USB pads) wor
   the fangs slide in and out as measured on the MSX (see `tooth`).
 
 ## Project layout
+A fuller map of the code (what each class holds, conventions) is in [CLAUDE.md](CLAUDE.md).
 ```
 build.gradle / settings.gradle    Gradle multi-module build (core + lwjgl3)
 core/src/main/java/com/example/salamander/
   SalamanderGame   entry Game class, MSX resolution (256x192: 256x168 playfield + 24px HUD)
   TitleScreen     title / attract screen
-  GameScreen      scrolling, spawning, collisions, power-up meter, HUD, state machine
+  GameScreen      one stage: state machine, scrolling, spawning, power-up meter (the subsystems below are its helpers)
+  PlayerWeapons, Collisions, GameRenderer   the ships' guns, collisions, drawing
+  BrainBoss, LaviniaStage, LaviniaRoom, EioneusRoom, BarBosses, KierkeBoss, Op4End, GunLasers   bosses and stage set pieces
   PixelFont       pixel fonts for all text (5x5, 5x7, MSX digits)
   Level           loads a stage from its Tiled map; terrain / collision queries
   TiledMap        reader for Tiled .tmx / .tsx files
