@@ -79,12 +79,28 @@ public class GameScreen extends ScreenAdapter {
     final Collisions collisions = new Collisions(this);
     /** Draws each frame (see GameRenderer). */
     final GameRenderer renderer = new GameRenderer(this);
+    /** Stage 1's brain boss: its eye and core blocks (see BrainBoss). */
+    final BrainBoss brain = new BrainBoss(this);
+    /** Kierke's machine wall (stage 5, see KierkeBoss). */
+    final KierkeBoss kierkeBoss = new KierkeBoss(this);
+    /** The bar-wall bosses: Eioneus and Op 4's gun units (see BarBosses). */
+    final BarBosses barBosses = new BarBosses(this);
+    /** Op 4's end: the brain sphere, then the gun units (see Op4End). */
+    final Op4End op4 = new Op4End(this);
+    /** Eioneus's boss room: the gun pods and bubbles (see EioneusRoom). */
+    final EioneusRoom eioneusRoom = new EioneusRoom(this);
+    /** The bosses' falling lasers: Op 4's gun units, Eioneus (see GunLasers). */
+    final GunLasers bossGuns = new GunLasers(this);
+    /** Lavinia's set pieces: darkness, Heathens, Led Zeps, Rages (see LaviniaStage). */
+    final LaviniaStage lavinia = new LaviniaStage(this);
+    /** Lavinia's last room: the walls, the Laser Guards, Omen lasers (see LaviniaRoom). */
+    final LaviniaRoom laviniaRoom = new LaviniaRoom(this);
 
     State state = State.INTRO;
     float stateT, checkpointT;
     private int nextSpawn;
     Boss boss;
-    private boolean bossSpawned;
+    boolean bossSpawned;
     /** F1 / H toggles the hitbox overlay (static so it survives stage changes). */
     static boolean debugHitbox;
     /** D on the title screen: every stage (and every newly joined ship) starts with the debug loadout. */
@@ -252,10 +268,10 @@ public class GameScreen extends ScreenAdapter {
     /** How long the walls take to dissolve (s). */
     static final float WALL_DEMAT_TIME = 1.5f;
     /** Per dematwall: its picture (being dissolved), the texture drawn from it, its solid pixels in random order. */
-    private Pixmap[] wallPix;
-    private Texture[] wallTex;
-    private int[][] wallOrder;
-    private int[] wallCleared;
+    Pixmap[] wallPix;
+    Texture[] wallTex;
+    int[][] wallOrder;
+    int[] wallCleared;
 
     /** The guards slide back into their walls (and stop firing) once the room's time is up. */
     boolean roomRetreating() { return roomState >= ROOM_RETREAT; }
@@ -294,7 +310,7 @@ public class GameScreen extends ScreenAdapter {
     Texture[] artTex;
     Texture brickTex;
     private final java.util.HashMap<String, PixelMask> masks = new java.util.HashMap<>();
-    private PixelMask bossMask;
+    PixelMask bossMask;
     static final Color[] STAR_TINT = {new Color(0.7f, 0.8f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f),
             new Color(0.9f, 0.9f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f), new Color(0.8f, 0.85f, 1f, 1f),
             new Color(0.9f, 0.9f, 1f, 1f), new Color(0.7f, 1f, 0.8f, 1f)};   // (stage 2 on: plain white stars, like the original)
@@ -359,14 +375,14 @@ public class GameScreen extends ScreenAdapter {
             gunHoR = new TextureRegion(all, 0, 0, fw, fh);
             gunHoFireR = new TextureRegion(all, fw, 0, fw, fh);
         }
-        loadHeathens();
-        blockSmallR = Gdx.files.internal("sprites/lavinia_block_small.png").exists() ? a.one("lavinia_block_small") : null;
-        blockBigR = Gdx.files.internal("sprites/lavinia_block_big.png").exists() ? a.one("lavinia_block_big") : null;
-        rageR = Gdx.files.internal("sprites/rage.png").exists() ? a.one("rage") : null;
-        ledZepF = Gdx.files.internal("sprites/led_zep.png").exists() ? a.strip("led_zep", 16) : null;
-        laserGunR = Gdx.files.internal("sprites/laser_gun_point.png").exists() ? a.one("laser_gun_point") : null;
-        gammaRedF = Gdx.files.internal("sprites/gamma_red.png").exists() ? a.strip("gamma_red", 16) : null;
-        hatchF = levelIdx == 2 && Gdx.files.internal("sprites/lavinia_boss_hatch.png").exists() ? a.strip("lavinia_boss_hatch", 16) : null;
+        lavinia.loadHeathens();
+        lavinia.blockSmallR = Gdx.files.internal("sprites/lavinia_block_small.png").exists() ? a.one("lavinia_block_small") : null;
+        lavinia.blockBigR = Gdx.files.internal("sprites/lavinia_block_big.png").exists() ? a.one("lavinia_block_big") : null;
+        lavinia.rageR = Gdx.files.internal("sprites/rage.png").exists() ? a.one("rage") : null;
+        lavinia.ledZepF = Gdx.files.internal("sprites/led_zep.png").exists() ? a.strip("led_zep", 16) : null;
+        lavinia.laserGunR = Gdx.files.internal("sprites/laser_gun_point.png").exists() ? a.one("laser_gun_point") : null;
+        lavinia.gammaRedF = Gdx.files.internal("sprites/gamma_red.png").exists() ? a.strip("gamma_red", 16) : null;
+        lavinia.hatchF = levelIdx == 2 && Gdx.files.internal("sprites/lavinia_boss_hatch.png").exists() ? a.strip("lavinia_boss_hatch", 16) : null;
         omenR = Gdx.files.internal("sprites/Omen.png").exists() ? a.one("Omen") : null;
         laserGuardTex = Gdx.files.internal("sprites/Laser Guard.png").exists() ? a.tex("Laser Guard") : null;
         gunHoBulletR = Gdx.files.internal("sprites/Gun Ho bullet.png").exists() ? a.one("Gun Ho bullet") : null;
@@ -437,10 +453,10 @@ public class GameScreen extends ScreenAdapter {
         ffieldR = a.one("ffield");
         pix = a.one("pixel");
         bossR = loadBossPicture();                     // (also sets bossMask)
-        loadBarBoss();
-        loadPods();
+        barBosses.loadBarBoss();
+        eioneusRoom.loadPods();
         if (levelIdx == 3 && orbR == null && Gdx.files.internal("sprites/orb.png").exists()) orbR = a.one("orb");   // (the pod room's bubbles)
-        loadKierkeBoss();
+        kierkeBoss.loadKierkeBoss();
         boolean v = level.vertical;   // pictures only the vertical stage uses
         playerVF = v ? Sprites.verticalShipFrames(Sprites.keyedBackground("sprites/player_blue_vertical.png")) : null;
         playerVRedF = v && Gdx.files.internal("sprites/player_red_vertical.png").exists()
@@ -489,8 +505,8 @@ public class GameScreen extends ScreenAdapter {
             if (!masks.containsKey(t.image)) masks.put(t.image, PixelMask.load(t.image));
             if (t.flip && !masks.containsKey(t.image + "#flipV")) masks.put(t.image + "#flipV", masks.get(t.image).flippedV());
         }
-        if (levelIdx == 0) loadBossEye("sprites/boss" + levelIdx + ".png");   // (only stage 1's brain has an eye)
-        loadBossCore();
+        if (levelIdx == 0) brain.loadBossEye("sprites/boss" + levelIdx + ".png");   // (only stage 1's brain has an eye)
+        brain.loadBossCore();
 
         if (bossTest >= 0) {
             checkpointT = level.stopT;               // boss test: start (and restart after dying) at the boss arena
@@ -650,7 +666,7 @@ public class GameScreen extends ScreenAdapter {
         scrollVX = 0f;
         scrollVY = 0f;
         float sx = scrollX, fr = front();
-        resetDarkness(sx);
+        lavinia.resetDarkness(sx);
         pBullets.clear(); eBullets.clear(); enemies.clear(); caps.clear(); groups.clear();
         weapons.reset();
         level.obstacles.clear();                      // rubble goes (the eye rocks come back)
@@ -662,18 +678,18 @@ public class GameScreen extends ScreenAdapter {
         boss = null;
         bossSpawned = false;
         bossPart = 0;
-        op4State = OP4_NONE; op4T = 0f; bossDissolving = false;   // (Op 4's end: the terrain back, if it had gone)
-        if (terrainGone) { terrainGone = false; level.restoreGrid(); }
+        op4.op4State = op4.OP4_NONE; op4.op4T = 0f; op4.bossDissolving = false;   // (Op 4's end: the terrain back, if it had gone)
+        if (op4.terrainGone) { op4.terrainGone = false; level.restoreGrid(); }
         for (Dissolving d : dissolving) d.d.dispose();
         dissolving.clear();
-        gunLasers.clear();
-        if (gunsAppear != null) { gunsAppear.dispose(); gunsAppear = null; }
-        resetPods();                                  // (Eioneus: the pod room starts over)
+        bossGuns.gunLasers.clear();
+        if (op4.gunsAppear != null) { op4.gunsAppear.dispose(); op4.gunsAppear = null; }
+        eioneusRoom.resetPods();                                  // (Eioneus: the pod room starts over)
         buildHazards();
         // the last room of stage 3: past it (a restart beyond the hold), its walls are already gone
         roomT = 0f;
         roomState = level.holdT >= 0f && t > level.holdT ? ROOM_DONE : ROOM_NONE;
-        resetWalls(roomState == ROOM_DONE);
+        laviniaRoom.resetWalls(roomState == ROOM_DONE);
         nextSpawn = 0;
         while (nextSpawn < level.spawns.size() && level.spawns.get(nextSpawn).trigger < fr + viewLen() + 40f) nextSpawn++;
         chainRuns.clear();                            // chains: the ones the screen already passed stay gone
@@ -1029,7 +1045,7 @@ public class GameScreen extends ScreenAdapter {
         if (bossHold) scrollSpeed = 0f;
         scrollT = Math.min(scrollT + scrollSpeed * dt, held ? Math.min(level.holdT, level.stopT) : level.stopT);
         if (held && scrollT >= level.holdT) scrollSpeed = 0f;   // (eases back in when it may go on)
-        if (!clearing) updateRoom(dt);
+        if (!clearing) laviniaRoom.updateRoom(dt);
         float oldX = scrollX, oldY = pathY;
         level.camAt(scrollT, camTmp);
         scrollX = camTmp[0];
@@ -1041,11 +1057,11 @@ public class GameScreen extends ScreenAdapter {
         scrollVX = dt > 0f ? dS / dt : 0f;
         scrollVY = dt > 0f ? dSy / dt : 0f;
         for (float cp : level.checkpoints) if (scrollT >= cp) checkpointT = Math.max(checkpointT, cp);
-        if (op4End()) updateOp4End(dt);              // (Op 4: the terrain dissolves, then its two bosses come)
-        else if (eioEnd()) updateEioneusEnd(dt);     // (Eioneus: the gun pods, the terrain dissolves, then the boss)
+        if (op4.op4End()) op4.updateOp4End(dt);              // (Op 4: the terrain dissolves, then its two bosses come)
+        else if (eioneusRoom.eioEnd()) eioneusRoom.updateEioneusEnd(dt);     // (Eioneus: the gun pods, the terrain dissolves, then the boss)
         else if (scrollT >= level.stopT && !bossSpawned) spawnBoss();
         // a boss that sits in the map (map object "boss" with "fixed" on) wakes up as soon as it comes on screen
-        if (op4End()) {
+        if (op4.op4End()) {
             // (updateOp4End brings Op 4's bosses on)
         } else if (!bossSpawned && level.bossFixed && bossPartR != null) {   // a multi-boss stage: the next one
             bossPartBox();
@@ -1092,15 +1108,15 @@ public class GameScreen extends ScreenAdapter {
             // a player shot is gone once it is completely off screen (so the on-screen limits really mean on screen)
             if (b.x > scrollX + W || b.x + b.w < scrollX || b.y > scrollY + H || b.y + b.h < scrollY) b.dead = true;
         }
-        steerGuardBeams(dt);
+        laviniaRoom.steerGuardBeams(dt);
         for (Bullet b : eBullets) {
             boolean fresh = b.fresh;
             b.update(dt, level);
             if (!fresh && b.ridesScreen()) { b.x += dS; b.y += dSy; }   // moves relative to the screen, as on the MSX
-            if (b.omenLaser) growOmenLaser(b, dt);
+            if (b.omenLaser) laviniaRoom.growOmenLaser(b, dt);
             if (b.x > scrollX + W + 80f || b.x < scrollX - 60f || b.y < scrollY - 30f || b.y > scrollY + H + 60f) b.dead = true;
         }
-        updateGuardVolley(dt);
+        laviniaRoom.updateGuardVolley(dt);
         for (Enemy e : enemies) {
             e.update(this, dt);
             // vertical limits follow the whole lane, not the view, so enemies the camera drifted away from survive
@@ -1161,10 +1177,10 @@ public class GameScreen extends ScreenAdapter {
             }
         }
         caps.removeIf(c -> level.vertical ? c.y < scrollY - capH - 8f : c.x < scrollX - capW - 8f);
-        if (boss != null) { boss.update(this, dt); updateCoreBlocks(); }
-        if (boss != null && boss.dying && boss.dissolve && !bossDissolving) bossDissolveStart();
-        updateGunLasers(dt, clearing);
-        updateLedZeps(dt);
+        if (boss != null) { boss.update(this, dt); brain.updateCoreBlocks(); }
+        if (boss != null && boss.dying && boss.dissolve && !op4.bossDissolving) op4.bossDissolveStart();
+        bossGuns.updateGunLasers(dt, clearing);
+        lavinia.updateLedZeps(dt);
         regrowBricks(dt);
         updateFx(dt);
 
@@ -1843,7 +1859,7 @@ public class GameScreen extends ScreenAdapter {
             case HEATHEN:                                 // Lavinia: in at the right edge, a random one of the three
                 e = new Enemy(Enemy.Type.HEATHEN, scrollX + W, s.y, levelIdx);
                 e.heathenKind = MathUtils.random(2);
-                if (heathenMasks != null) e.heathenMask = heathenMasks[e.heathenKind];
+                if (lavinia.heathenMasks != null) e.heathenMask = lavinia.heathenMasks[e.heathenKind];
                 java.util.Arrays.fill(e.heathenBarHp, Enemy.HEATHEN_BAR_HP);
                 break;
             case GUN_HO:                                  // stage 3: stands where it was placed in Tiled
@@ -1925,539 +1941,14 @@ public class GameScreen extends ScreenAdapter {
         return f;
     }
 
-    // ---- boss eye: "sprites/boss eye.png" holds the frames side by side (closed -> open), separated by
-    // empty columns. The boss sprite marks the eye's centre with a small pure green (0,255,0) square.
-    TextureRegion[] eyeF;
-    private float eyeOX, eyeOY;
-    private static final String EYE_FILE = "sprites/boss eye.png";
-
-    private void loadBossEye(String bossPath) {
-        eyeF = null;
-        if (!Gdx.files.internal(EYE_FILE).exists()) return;
-        Pixmap pm = new Pixmap(Gdx.files.internal(bossPath));
-        int gx0 = Integer.MAX_VALUE, gy0 = Integer.MAX_VALUE, gx1 = -1, gy1 = -1;
-        for (int y = 0; y < pm.getHeight(); y++)
-            for (int x = 0; x < pm.getWidth(); x++) {
-                int c = pm.getPixel(x, y);
-                int r = (c >>> 24) & 0xff, g = (c >>> 16) & 0xff, b = (c >>> 8) & 0xff, al = c & 0xff;
-                if (al > 200 && g > 200 && r < 60 && b < 60) { gx0 = Math.min(gx0, x); gy0 = Math.min(gy0, y); gx1 = Math.max(gx1, x); gy1 = Math.max(gy1, y); }
-            }
-        int bossH = pm.getHeight();
-        pm.dispose();
-        if (gx1 < 0) return;                        // no green marker: this boss has no eye
-
-        Pixmap ep = new Pixmap(Gdx.files.internal(EYE_FILE));
-        ArrayList<int[]> runs = new ArrayList<>();   // {x, width} of each frame
-        int start = -1;
-        for (int x = 0; x <= ep.getWidth(); x++) {
-            boolean empty = true;
-            if (x < ep.getWidth()) for (int y = 0; y < ep.getHeight() && empty; y++) if ((ep.getPixel(x, y) & 0xff) != 0) empty = false;
-            if (!empty && start < 0) start = x;
-            if (empty && start >= 0) { runs.add(new int[]{start, x - start}); start = -1; }
-        }
-        int eh = ep.getHeight();
-        ep.dispose();
-        if (runs.isEmpty()) return;
-        Texture et = a.texFile(EYE_FILE);
-        eyeF = new TextureRegion[runs.size()];
-        for (int i = 0; i < eyeF.length; i++) eyeF[i] = new TextureRegion(et, runs.get(i)[0], 0, runs.get(i)[1], eh);
-        // centre the eye on the marker (sprite rows run top-down, world y up)
-        float cx = (gx0 + gx1 + 1) / 2f, cy = (gy0 + gy1 + 1) / 2f;
-        eyeOX = Math.round(cx - eyeF[0].getRegionWidth() / 2f);
-        eyeOY = bossH - Math.round(cy + eh / 2f);
-    }
-
     /** Does the rectangle touch the boss: its sprite's solid pixels, or its eye (drawn over a see-through gap)? */
     boolean touchesBoss(float x, float y, float w, float h) {
         if (boss.appearing) return false;                // (Op 4's gun units coming together: not solid yet)
-        if (kierkeBossNow()) return kierkeTouches(x, y, w, h);   // (its column slides out of the boss box)
+        if (kierkeBoss.kierkeBossNow()) return kierkeBoss.kierkeTouches(x, y, w, h);   // (its column slides out of the boss box)
         if (!overlap(x, y, w, h, boss.x, boss.y, boss.w, boss.h)) return false;
         if (boss.hasEye && overlap(x, y, w, h, boss.x + boss.eyeX, boss.y + boss.eyeY, boss.eyeW, boss.eyeH)) return true;
         if (boss.coreTouches(x, y, w, h)) return true;
         return boss.mask == null || boss.mask.overlaps(boss.x, boss.y, x, y, w, h);
-    }
-
-    /** sprites/bossN_core.png (null = this boss has no separate core), and where it sits on the body. */
-    TextureRegion coreR;
-    private PixelMask coreMask;
-    private int coreOX, coreOY;
-
-    /**
-     * Loads the core picture and finds where it belongs: over the hole cut out of the body for it (the spot where the
-     * most core pixels fall on see-through body pixels and the fewest on drawn ones).
-     */
-    private void loadBossCore() {
-        String file = "sprites/boss" + levelIdx + "_core.png";
-        if (!Gdx.files.internal(file).exists()) return;
-        coreR = a.one("boss" + levelIdx + "_core");
-        coreMask = PixelMask.load(file);
-        loadCoreBlocks();
-        int best = Integer.MIN_VALUE;
-        for (int oy = 0; oy <= bossMask.h - coreMask.h; oy++)
-            for (int ox = 0; ox <= bossMask.w - coreMask.w; ox++) {
-                int score = 0;
-                for (int y = 0; y < coreMask.h; y++)
-                    for (int x = 0; x < coreMask.w; x++)
-                        if (coreMask.at(x, y)) score += bossMask.at(ox + x, oy + y) ? -1 : 1;
-                if (score > best) { best = score; coreOX = ox; coreOY = oy; }
-            }
-    }
-
-    /**
-     * Tetran's core blocks (sprites/core_block.png): CORE_BLOCKS bars below the red core, drawn over the core picture.
-     * Every time the boss loses 1/(CORE_BLOCKS+1) of its health (20%), the lowest block left disappears, showing the
-     * dark inside of the core picture.
-     */
-    private TextureRegion blockR;
-    private static final int CORE_BLOCKS = 4;
-    /** Top row of each block in the core picture (counted from its top), top block first; x = its left column. */
-    private static final int[] CORE_BLOCK_ROWS = {26, 30, 34, 38};
-    private static final int CORE_BLOCK_X = 8, CORE_BLOCK_SPAN = 8;
-    private int coreBlocksShown = CORE_BLOCKS;
-    /** Where a block's picture goes, so its drawn part sits in the middle of the bar's span. */
-    private int blockOffX;
-
-    private void loadCoreBlocks() {
-        if (!Gdx.files.internal("sprites/core_block.png").exists()) return;
-        blockR = a.one("core_block");
-        PixelMask bm = PixelMask.load("sprites/core_block.png");   // centre the drawn part of the block
-        int x0 = bm.w, x1 = -1;
-        for (int x = 0; x < bm.w; x++) for (int y = 0; y < bm.h; y++) if (bm.at(x, y)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
-        blockOffX = x1 < 0 ? 0 : Math.round((CORE_BLOCK_SPAN - (x1 - x0 + 1)) / 2f) - x0;
-    }
-
-    /** Draws the core blocks still left, at their spots in the core (each block's picture centred on its bar). */
-    void drawCoreBlocks() {
-        if (blockR == null) return;
-        int ch = coreR.getRegionHeight();
-        float bw = blockR.getRegionWidth(), bh = blockR.getRegionHeight();
-        for (int i = 0; i < coreBlocksShown; i++) {         // the lowest ones go first
-            int top = CORE_BLOCK_ROWS[i];
-            float x = boss.x + boss.coreX + CORE_BLOCK_X + blockOffX;
-            float y = boss.y + boss.coreY + ch - top - bh;
-            batch.draw(blockR, x, y, bw, bh);
-        }
-    }
-
-    /** Takes a block away for every 20% of health the boss has lost (with a small burst where it was). */
-    private void updateCoreBlocks() {
-        if (blockR == null || boss == null || !boss.hasCore) return;
-        int want = Math.max(0, Math.min(CORE_BLOCKS, (int) Math.ceil(boss.hp / boss.maxHp * (CORE_BLOCKS + 1)) - 1));
-        while (coreBlocksShown > want) {
-            coreBlocksShown--;
-            int top = CORE_BLOCK_ROWS[coreBlocksShown];
-            boom(boss.x + boss.coreX + CORE_BLOCK_X + CORE_BLOCK_SPAN / 2f, boss.y + boss.coreY + coreR.getRegionHeight() - top - 1f, 0.5f);
-            a.play("hit", 0.3f);
-        }
-    }
-
-    // ---- Kierke's machine wall (stage 5; see Boss.kierke), from Albert's pictures (2026-10-28):
-    // sprites/boss4_main.png (the main body with the giant core, drawn K_MAIN_X px right of the boss's x, behind the
-    // wall), sprites/boss4_wall_without_shield.png (the wall, 89x320, wrapping), and its parts: boss4_wall_bar.png (11
-    // per unit, at x 1 + 4 i, 7x16, overlapping), boss4_wall_bar_core.png (the middle unit's 2 core bars, x 49 and 57),
-    // boss4_wall_main_orb.png (the middle orb, x 65) and boss4_wall_shield.png (x 0, over the middle unit's bars). The
-    // wall's own pixels under the parts are taken out (kWallBase); the parts still standing are drawn back onto it
-    // (kWallPm) whenever one breaks, and its hit mask is rebuilt. An outer orb is the ball already in the wall picture
-    // (12 px round at x K_ORB_CX); destroyed, its pixels go. Black is see-through (and flown / shot through).
-    private static final int K_WALL_W = 89, K_MAIN_X = 89, K_BAR_X0 = 1, K_BAR_STEP = 4, K_BAR_W = 7, K_PART_H = 16;
-    private static final int[] K_CORE_BAR_X = {49, 57};
-    private static final int K_CORE_BAR_W = 8, K_MAIN_ORB_X = 65, K_MAIN_ORB_W = 17, K_SHIELD_W = 49;
-    private static final float K_ORB_CX = 56.5f, K_ORB_R = 6.5f;
-    /** The giant core in boss4_main.png: x, y (down), w, h. */
-    private static final int K_CORE_X = 10, K_CORE_Y = 82, K_CORE_W = 24, K_CORE_H = 14;
-    private Pixmap kWallBase, kWallPm, kBarPm, kCoreBarPm, kMainOrbPm, kShieldPm;
-    private Texture kWallTex, kMainTex;
-    private TextureRegion kWallR, kMainR;
-    private PixelMask kWallMask, kMainMask;
-    /** Scratch box (x, y, w, h). */
-    private final float[] kBx = new float[4];
-
-    /** See-through: transparent, black, or the near-black (6,6,6) of the boss pictures. */
-    private static boolean kBlack(int rgba) {
-        return (rgba & 0xff) == 0 || ((rgba >>> 24) <= 6 && ((rgba >>> 16) & 0xff) <= 6 && ((rgba >>> 8) & 0xff) <= 6);
-    }
-
-    private static Pixmap kLoad(String name) {
-        Pixmap src = new Pixmap(Gdx.files.internal("sprites/" + name + ".png"));
-        Pixmap pm = new Pixmap(src.getWidth(), src.getHeight(), Pixmap.Format.RGBA8888);
-        pm.setBlending(Pixmap.Blending.None);
-        for (int y = 0; y < src.getHeight(); y++)
-            for (int x = 0; x < src.getWidth(); x++) { int c = src.getPixel(x, y); pm.drawPixel(x, y, kBlack(c) ? 0 : c); }
-        src.dispose();
-        return pm;
-    }
-
-    /** Clears the wall base where the part picture has pixels, at (px, py). */
-    private void kCut(Pixmap part, int px, int py) {
-        for (int y = 0; y < part.getHeight(); y++)
-            for (int x = 0; x < part.getWidth(); x++) if ((part.getPixel(x, y) & 0xff) != 0) kWallBase.drawPixel(px + x, py + y, 0);
-    }
-
-    /** Draws the part picture's pixels onto the wall at (px, py). */
-    private void kPaste(Pixmap part, int px, int py) {
-        for (int y = 0; y < part.getHeight(); y++)
-            for (int x = 0; x < part.getWidth(); x++) { int c = part.getPixel(x, y); if ((c & 0xff) != 0) kWallPm.drawPixel(px + x, py + y, c); }
-    }
-
-    private void loadKierkeBoss() {
-        if (levelIdx != 4) return;
-        for (String n : new String[]{"boss4_main", "boss4_wall_without_shield", "boss4_wall_bar", "boss4_wall_bar_core",
-                "boss4_wall_main_orb", "boss4_wall_shield"})
-            if (!Gdx.files.internal("sprites/" + n + ".png").exists()) return;
-        kBarPm = kLoad("boss4_wall_bar"); kCoreBarPm = kLoad("boss4_wall_bar_core");
-        kMainOrbPm = kLoad("boss4_wall_main_orb"); kShieldPm = kLoad("boss4_wall_shield");
-        kResetWall();
-        kWallPm = new Pixmap(K_WALL_W, Boss.K_STACK_H, Pixmap.Format.RGBA8888);
-        kWallPm.setBlending(Pixmap.Blending.None);
-        kWallTex = new Texture(kWallPm);
-        kWallR = new TextureRegion(kWallTex);
-        Pixmap main = kLoad("boss4_main");
-        kMainTex = new Texture(main);
-        kMainR = new TextureRegion(kMainTex);
-        kMainMask = PixelMask.fromPixmap(main, 0, main.getWidth());
-        main.dispose();
-    }
-
-    /** A fresh wall base (every boss fight starts with a whole wall): the picture with its parts taken out. */
-    private void kResetWall() {
-        if (kWallBase != null) kWallBase.dispose();
-        kWallBase = kLoad("boss4_wall_without_shield");
-        for (int k = 0; k < Boss.K_UNITS; k++)
-            for (int i = 0; i < Boss.K_BARS; i++) kCut(kBarPm, K_BAR_X0 + K_BAR_STEP * i, Boss.kUnitRow(k));
-        int mid = Boss.kUnitRow(Boss.K_MIDDLE);
-        for (int x : K_CORE_BAR_X) kCut(kCoreBarPm, x, mid);
-        kCut(kMainOrbPm, K_MAIN_ORB_X, mid);
-    }
-
-    /** Puts the wall together from its base and the parts still standing, and rebuilds its hit mask. */
-    private void kCompose() {
-        kWallPm.drawPixmap(kWallBase, 0, 0);
-        int mid = Boss.kUnitRow(Boss.K_MIDDLE);
-        for (int k = 0; k < Boss.K_UNITS; k++)
-            for (int i = Boss.K_BARS - 1; i >= 0; i--)
-                if (boss.kBarHp[k][i] > 0f) kPaste(kBarPm, K_BAR_X0 + K_BAR_STEP * i, Boss.kUnitRow(k));
-        for (int i = Boss.K_CORE_BARS - 1; i >= 0; i--) if (boss.kCoreBarHp[i] > 0f) kPaste(kCoreBarPm, K_CORE_BAR_X[i], mid);
-        if (!boss.kWayOpen()) kPaste(kMainOrbPm, K_MAIN_ORB_X, mid);
-        if (boss.kShield) kPaste(kShieldPm, 0, mid);
-        kWallTex.draw(kWallPm, 0, 0);
-        kWallMask = PixelMask.fromPixmap(kWallPm, 0, K_WALL_W);
-    }
-
-    boolean kierkeBossNow() { return boss != null && boss.kierke && kWallPm != null; }
-
-    /** Does the rectangle touch the wall (either copy on screen) or the main body (their drawn pixels)? */
-    boolean kierkeTouches(float x, float y, float w, float h) {
-        if (kMainMask.overlaps(boss.x + K_MAIN_X, boss.y, x, y, w, h)) return true;
-        for (int n = 0; n < 2; n++)
-            if (kWallMask.overlaps(boss.kColX(), boss.kRowY(Boss.K_STACK_H, n), x, y, w, h)) return true;
-        return false;
-    }
-
-    /** World box of wall columns x0..x1 and rows r0..r1 (copy n) into kBx. */
-    private void kBox(float x0, float x1, float r0, float r1, int n) {
-        kBx[0] = boss.kColX() + x0; kBx[1] = boss.kRowY(r1, n); kBx[2] = x1 - x0; kBx[3] = r1 - r0;
-    }
-
-    /** A part was destroyed: a blast, points, and the wall without it. */
-    private void kBreak(Player owner, int pts, float scale) {
-        boom(kBx[0] + kBx[2] / 2f, kBx[1] + kBx[3] / 2f, scale);
-        a.play("boom", 0.3f + 0.1f * scale);
-        addScore(owner, pts);
-        kCompose();
-    }
-
-    /**
-     * A player shot against the machine wall or its main body. In a unit's row it hits the front part still standing:
-     * the shield (middle unit, can't be hurt), the bars (leftmost first), the middle unit's core bars, then the orb.
-     * Returns true if it hit something (the boss stops every shot).
-     */
-    boolean kierkeBossShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
-        if (!kierkeBossNow() || boss.dying || !kierkeTouches(hx, hy, hw, hh)) return false;
-        if (laser) { if (b.hits.contains(boss)) return true; b.hits.add(boss); } else { b.dead = true; missileBurst(b); }
-        Player owner = b.owner;
-        float mx = boss.x + K_MAIN_X;
-        if (kMainMask.overlaps(mx, boss.y, hx, hy, hw, hh)) {   // the main body: only its giant core, once the way is open
-            float cx = mx + K_CORE_X, cy = boss.y + boss.h - K_CORE_Y - K_CORE_H;
-            boolean onCore = overlap(hx, hy, hw, hh, cx, cy, K_CORE_W, K_CORE_H);
-            if (!onCore || !boss.kWayOpen() || boss.hitCooldown > 0f) {
-                a.play("hit", 0.15f);
-                hitSpark(b, onCore ? cx : mx, onCore ? cy : boss.y, onCore ? K_CORE_W : kMainR.getRegionWidth(), onCore ? K_CORE_H : boss.h);
-                return true;
-            }
-            boss.hp = Math.max(0f, boss.hp - b.dmg);
-            boss.hitCooldown = Boss.HIT_COOLDOWN;
-            boss.flash = 0.08f;
-            a.play("hit", 0.2f);
-            if (boss.hp > 0f) { hitSpark(b, cx, cy, K_CORE_W, K_CORE_H); return true; }
-            boss.dying = true;
-            eBullets.clear();
-            addScore(owner, 5000);
-            return true;
-        }
-        float right = hx + hw - boss.kColX();                  // how far into the wall the shot reaches
-        for (int n = 0; n < 2; n++)
-            for (int k = 0; k < Boss.K_UNITS; k++) {
-                int row = Boss.kUnitRow(k);
-                kBox(0, K_WALL_W, row, row + K_PART_H, n);
-                if (!overlap(hx, hy, hw, hh, kBx[0], kBx[1], kBx[2], kBx[3])) continue;
-                boolean mid = k == Boss.K_MIDDLE;
-                if (mid && boss.kShield) {                      // the shield: can't be hurt
-                    kBox(0, K_SHIELD_W, row, row + K_PART_H, n);
-                    a.play("hit", 0.15f); hitSpark(b, kBx[0], kBx[1], kBx[2], kBx[3]);
-                    return true;
-                }
-                int bar = boss.kFrontBar(k);
-                if (bar >= 0) {
-                    float bx = K_BAR_X0 + K_BAR_STEP * bar;
-                    kBox(bx, bx + K_BAR_W, row, row + K_PART_H, n);
-                    if (right < bx) break;                      // (short of it: the wall around it took the shot)
-                    boss.kBarHp[k][bar] -= b.dmg;
-                    if (boss.kBarHp[k][bar] > 0f) { a.play("hit", 0.15f); hitSpark(b, kBx[0], kBx[1], kBx[2], kBx[3]); }
-                    else kBreak(owner, BAR_SCORE, 0.6f);
-                    return true;
-                }
-                if (mid) {
-                    int cb = boss.kFrontCoreBar();
-                    if (cb >= 0) {
-                        float bx = K_CORE_BAR_X[cb];
-                        kBox(bx, bx + K_CORE_BAR_W, row, row + K_PART_H, n);
-                        if (right < bx) break;
-                        boss.kCoreBarHp[cb] -= b.dmg;
-                        if (boss.kCoreBarHp[cb] > 0f) { a.play("hit", 0.15f); hitSpark(b, kBx[0], kBx[1], kBx[2], kBx[3]); }
-                        else kBreak(owner, BAR_SCORE, 0.7f);
-                        return true;
-                    }
-                }
-                if (boss.kOrbHp[k] > 0f) {
-                    float ox = mid ? K_MAIN_ORB_X : K_ORB_CX - K_ORB_R, ow = mid ? K_MAIN_ORB_W : 2f * K_ORB_R;
-                    kBox(ox, ox + ow, row, row + K_PART_H, n);
-                    if (right < ox) break;
-                    boss.kOrbHp[k] -= b.dmg;
-                    if (boss.kOrbHp[k] > 0f) { a.play("hit", 0.15f); hitSpark(b, kBx[0], kBx[1], kBx[2], kBx[3]); return true; }
-                    if (!mid) {                                 // an outer orb: its pixels go from the wall picture
-                        float cy = row + K_PART_H / 2f;
-                        for (int y = (int) (cy - 7f); y < cy + 7f; y++)
-                            for (int x = (int) (K_ORB_CX - 7f); x < K_ORB_CX + 7f; x++)
-                                if ((x + 0.5f - K_ORB_CX) * (x + 0.5f - K_ORB_CX) + (y + 0.5f - cy) * (y + 0.5f - cy) <= K_ORB_R * K_ORB_R)
-                                    kWallBase.drawPixel(x, y, 0);
-                    }
-                    kBreak(owner, BAR_ORB_SCORE, 1.2f);
-                    if (!mid && boss.kShield && boss.kOuterOrbsGone()) {   // the four outer orbs gone: the shield goes
-                        boss.kShield = false;
-                        kBox(0, K_SHIELD_W, Boss.kUnitRow(Boss.K_MIDDLE), Boss.kUnitRow(Boss.K_MIDDLE) + K_PART_H, 0);
-                        kBreak(null, 0, 1.6f);
-                    }
-                    return true;
-                }
-                break;
-            }
-        a.play("hit", 0.15f);                                // the wall's body: it just stops the shot
-        hitSpark(b, boss.kColX(), boss.kRowY(Boss.K_STACK_H, 0), K_WALL_W, Boss.K_STACK_H);
-        return true;
-    }
-
-    void drawKierkeBoss() {
-        if (boss.flash > 0f) batch.setColor(1f, 0.55f, 0.55f, 1f);
-        if (boss.dying && (int) (boss.dieT * 20f) % 2 == 0) batch.setColor(1f, 1f, 1f, 0.5f);
-        batch.draw(kMainR, boss.x + K_MAIN_X, boss.y);       // (behind the wall)
-        int off = Math.round(boss.kOffMod()) % Boss.K_STACK_H;
-        int h0 = Math.min(H, Boss.K_STACK_H - off);          // the wall from row off down, then from its top again
-        kWallR.setRegion(0, off, K_WALL_W, h0);
-        batch.draw(kWallR, boss.kColX(), boss.kTop - h0, K_WALL_W, h0);
-        if (h0 < H) {
-            kWallR.setRegion(0, 0, K_WALL_W, H - h0);
-            batch.draw(kWallR, boss.kColX(), boss.kTop - H, K_WALL_W, H - h0);
-        }
-        batch.setColor(Color.WHITE);
-    }
-
-    // ---- bar-wall bosses (Albert, 2026-10-27): Eioneus (stage 4, sprites/boss3.png) and Op 4's second boss
-    // (stage 6, sprites/boss5b.png). Columns of bar walls (sprites/boss_bar.png, painted into the boss picture), each
-    // guarding a coloured orb above it (the ships shoot up at it from below). A shot into a column hurts its lowest bar
-    // left (BAR_HP each), and once the bars are gone, the orb (BAR_ORB_HP). The middle column is closed off by the core
-    // shield (sprites/boss3_core_shield.png, also painted into the picture) until every other orb is destroyed: then
-    // the shield is blown away. Destroying the middle orb beats the boss. The rest of the body only stops shots.
-    // Positions are top-left in the boss picture (x right, y down), found by matching the pictures.
-    /** One bar-wall boss: its picture, the boss part it is (-1 = the stage's only boss), bars, orbs, middle column, shield. */
-    static final class BarBoss {
-        final int level, part;
-        final String file;
-        /** Per column: its bars, lowest (first in line) first. */
-        final int[][][] bars;
-        /** Per column: its orb (top-left of a 10x10 box). */
-        final int[][] orbs;
-        final int mid, shieldX, shieldY;
-        BarBoss(int level, int part, String file, int[][][] bars, int[][] orbs, int mid, int shieldX, int shieldY) {
-            this.level = level; this.part = part; this.file = file; this.bars = bars; this.orbs = orbs;
-            this.mid = mid; this.shieldX = shieldX; this.shieldY = shieldY;
-        }
-    }
-    /** Five bars stacked 8 px apart, the lowest with its top at y. */
-    private static int[][] barStack(int x, int y) { return new int[][]{{x, y}, {x, y - 8}, {x, y - 16}, {x, y - 24}, {x, y - 32}}; }
-    private static final BarBoss[] BAR_BOSSES = {
-            // Eioneus: blue, red (middle), grey
-            new BarBoss(3, -1, "boss3", new int[][][]{barStack(55, 98), barStack(95, 82), barStack(135, 98)},
-                    new int[][]{{56, 46}, {96, 30}, {136, 46}}, 1, 89, 89),
-            // Op 4, the gun units (boss5b): blue, grey, red (middle), yellow, green
-            new BarBoss(5, 1, "boss5b", new int[][][]{barStack(23, 105), barStack(63, 81), barStack(119, 137), barStack(175, 81), barStack(215, 105)},
-                    new int[][]{{24, 53}, {64, 29}, {120, 85}, {176, 29}, {216, 53}}, 2, 113, 152),
-    };
-    private static final int BAR_W = 12, BAR_H = 6, BAR_ORB = 10, BAR_PARTS = 6;   // per column: 5 bars, then the orb (index 5)
-    private static final float BAR_HP = 10f, BAR_ORB_HP = 30f;
-    private static final int BAR_SCORE = 100, BAR_ORB_SCORE = 1000;
-    /** This stage's bar-wall boss (null: none). */
-    private BarBoss bb;
-    /** The untouched picture, the one being shot to pieces (and its texture), the bar and shield pictures. */
-    private Pixmap barOrig, barPix, barPm, barShieldPm;
-    private Texture barTex;
-    private TextureRegion barR;
-    /** Its exact shape, with the shot-away shield taken out. */
-    private PixelMask barMask;
-    private float[][] barHp;
-    /** One object per part, so a laser hurts each part once. */
-    private Object[][] barKey;
-    private boolean barShield;
-
-    /** Loads this stage's bar-wall boss picture as an editable copy, if the bar and shield pictures are there. */
-    private void loadBarBoss() {
-        for (BarBoss c : BAR_BOSSES) if (c.level == levelIdx) bb = c;
-        if (bb == null) return;
-        String f = "sprites/" + bb.file + ".png";
-        if (!Gdx.files.internal(f).exists() || !Gdx.files.internal("sprites/boss_bar.png").exists()
-                || !Gdx.files.internal("sprites/boss3_core_shield.png").exists()) { bb = null; return; }
-        barOrig = new Pixmap(Gdx.files.internal(f));
-        barPix = new Pixmap(barOrig.getWidth(), barOrig.getHeight(), Pixmap.Format.RGBA8888);
-        barPix.setBlending(Pixmap.Blending.None);
-        barPix.drawPixmap(barOrig, 0, 0);
-        barPm = new Pixmap(Gdx.files.internal("sprites/boss_bar.png"));
-        barShieldPm = new Pixmap(Gdx.files.internal("sprites/boss3_core_shield.png"));
-        barTex = new Texture(barPix);
-        barR = new TextureRegion(barTex);
-        int n = bb.bars.length;
-        barHp = new float[n][BAR_PARTS];
-        barKey = new Object[n][BAR_PARTS];
-        for (int c = 0; c < n; c++) for (int k = 0; k < BAR_PARTS; k++) barKey[c][k] = new Object();
-    }
-
-    /** Is the boss being fought (or coming next) this stage's bar-wall boss? */
-    boolean barBossNow() { return bb != null && (bb.part < 0 || bossPart == bb.part); }
-
-    /** A new (or restarted) fight: every part back, full health; the health bar shows what is left of the parts. */
-    private void resetBarBoss() {
-        if (!barBossNow() || boss == null) return;
-        barPix.drawPixmap(barOrig, 0, 0);
-        barTex.draw(barPix, 0, 0);
-        barMask = PixelMask.load("sprites/" + bb.file + ".png");
-        boss.mask = barMask;
-        barShield = true;
-        float total = 0f;
-        for (int c = 0; c < barHp.length; c++)
-            for (int k = 0; k < BAR_PARTS; k++) total += barHp[c][k] = k < BAR_PARTS - 1 ? BAR_HP : BAR_ORB_HP;
-        boss.hp = boss.maxHp = total;
-    }
-
-    /** Column c's part still standing that is first in line (lowest bar, then the orb); -1 = nothing left. */
-    private int barTarget(int c) {
-        for (int k = 0; k < BAR_PARTS; k++) if (barHp[c][k] > 0f) return k;
-        return -1;
-    }
-
-    /** Part k of column c in the picture: x, y (top-left, y down), w, h into barBox. */
-    private final int[] barBox = new int[4];
-    private void barPartBox(int c, int k) {
-        boolean orb = k == BAR_PARTS - 1;
-        int[] p = orb ? bb.orbs[c] : bb.bars[c][k];
-        barBox[0] = p[0]; barBox[1] = p[1];
-        barBox[2] = orb ? BAR_ORB : BAR_W; barBox[3] = orb ? BAR_ORB : BAR_H;
-    }
-
-    /**
-     * A ship's shot (on screen: hx, hy, hw, hh) against a bar-wall boss's columns: if it is in a column that still
-     * has something standing, that part takes it. Returns true if it was dealt with here.
-     */
-    boolean barBossShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
-        if (!barBossNow() || boss == null || boss.dying || boss.appearing) return false;
-        for (int c = 0; c < barHp.length; c++) {
-            if (c == bb.mid && barShield) continue;      // the middle column: behind the core shield
-            int k = barTarget(c);
-            if (k < 0) continue;
-            // the column: from the top of its orb down to just below its lowest bar
-            int[] low = bb.bars[c][0];
-            float top = bb.orbs[c][1], bottom = low[1] + BAR_H + 3f;
-            float cx = boss.x + low[0], cy = boss.y + boss.h - bottom;
-            if (!overlap(hx, hy, hw, hh, cx, cy, BAR_W, bottom - top)) continue;
-            Object key = barKey[c][k];
-            if (laser) { if (b.hits.contains(key)) return true; b.hits.add(key); } else b.dead = true;
-            barHp[c][k] -= b.dmg;
-            boss.flash = 0.08f;
-            barPartBox(c, k);
-            float px = boss.x + barBox[0], py = boss.y + boss.h - barBox[1] - barBox[3];
-            if (barHp[c][k] <= 0f) barPartDestroyed(c, k, b.owner, px, py);
-            else { a.play("hit", 0.15f); hitSpark(b, px, py, barBox[2], barBox[3]); }
-            float left = 0f;
-            for (float[] col : barHp) for (float v : col) left += Math.max(0f, v);
-            if (!boss.dying) boss.hp = left;
-            if (b.dead && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
-            return true;
-        }
-        return false;
-    }
-
-    /** Part k of column c is shot away (bottom-left on screen px, py): gone from the picture, points, and what follows. */
-    private void barPartDestroyed(int c, int k, Player owner, float px, float py) {
-        barHp[c][k] = 0f;
-        boolean orb = k == BAR_PARTS - 1;
-        barPartBox(c, k);
-        int black = 0x000000ff;                          // what is behind: the dark inside of the column
-        for (int y = 0; y < barBox[3]; y++)
-            for (int x = 0; x < barBox[2]; x++) {
-                boolean part = orb ? (barOrig.getPixel(barBox[0] + x, barBox[1] + y) & 0xff) > 0
-                        : (barPm.getPixel(x, y) & 0xff) > 0;
-                if (part) barPix.drawPixel(barBox[0] + x, barBox[1] + y, black);
-            }
-        {   // the ships can fly up into a column as far as it is shot away (as on the MSX)
-            int[] low = bb.bars[c][0];
-            int ph2 = barPix.getHeight();
-            for (int y = barBox[1]; y < ph2; y++)
-                for (int x = low[0]; x < low[0] + BAR_W; x++) barMask.clear(x, ph2 - 1 - y);
-        }
-        boom(px + barBox[2] / 2f, py + barBox[3] / 2f, orb ? 1.2f : 0.5f);
-        a.play("boom", orb ? 0.4f : 0.2f);
-        if (bb.level != 3) addScore(owner, orb ? BAR_ORB_SCORE : BAR_SCORE);   // (Eioneus: no points for bars and orbs, as on the MSX)
-        if (orb && c == bb.mid) {                        // the middle orb: the boss is beaten
-            barTex.draw(barPix, 0, 0);
-            boss.hp = 0f;
-            boss.dying = true;
-            boss.explodeArms(this);
-            boss.explodeRings(this);
-            eBullets.clear();
-            addScore(owner, 5000);
-            return;
-        }
-        boolean othersGone = true;
-        for (int i = 0; i < barHp.length; i++) if (i != bb.mid && barHp[i][BAR_PARTS - 1] > 0f) othersGone = false;
-        if (orb && barShield && othersGone) {           // every other orb gone
-            barShield = false;                           // the core shield is blown away: the middle column is open
-            int sh = barShieldPm.getHeight(), ph = barPix.getHeight();
-            for (int y = 0; y < sh; y++)
-                for (int x = 0; x < barShieldPm.getWidth(); x++) {
-                    if ((barShieldPm.getPixel(x, y) & 0xff) == 0) continue;
-                    barPix.drawPixel(bb.shieldX + x, bb.shieldY + y, 0);
-                    barMask.clear(bb.shieldX + x, ph - 1 - (bb.shieldY + y));
-                }
-            // ...and the way up the middle column is clear: nothing left below its lowest bar
-            int[] low = bb.bars[bb.mid][0];
-            for (int y = low[1] + BAR_H; y < ph; y++)
-                for (int x = low[0]; x < low[0] + BAR_W; x++) {
-                    barPix.drawPixel(x, y, 0);
-                    barMask.clear(x, ph - 1 - y);
-                }
-            float sx = boss.x + bb.shieldX + barShieldPm.getWidth() / 2f, sy = boss.y + boss.h - bb.shieldY - sh / 2f;
-            boom(sx, sy + 8f, 1.6f);
-            boom(sx, sy - 8f, 1.6f);
-            a.play("boom", 0.5f);
-        }
-        barTex.draw(barPix, 0, 0);
     }
 
     /**
@@ -2469,9 +1960,9 @@ public class GameScreen extends ScreenAdapter {
     private static final int[][][] BOSS_PARTS = {null, null, null, null, null, {{5, 229}, {0, 0}}, null};
     private static final float BOSS_PART_TOP = 8f;
     /** The bosses of a multi-boss stage (null: one boss, bossR) and which one is (or comes) next. */
-    private TextureRegion[] bossPartR;
+    TextureRegion[] bossPartR;
     private PixelMask[] bossPartMask;
-    private int bossPart;
+    int bossPart;
     private final float[] partBox = new float[4];
 
     /** sprites/boss<N>.png (or the first of BOSS_PARTS); also sets bossMask, and bossPartR / bossPartMask. */
@@ -2495,7 +1986,7 @@ public class GameScreen extends ScreenAdapter {
 
     /** The picture of the boss being fought (or coming next). */
     TextureRegion curBossR() {
-        if (barBossNow()) return barR;                   // (a bar-wall boss: the picture with the parts shot away)
+        if (barBosses.barBossNow()) return barBosses.barR;                   // (a bar-wall boss: the picture with the parts shot away)
         return bossPartR != null ? bossPartR[Math.min(bossPart, bossPartR.length - 1)] : bossR;
     }
 
@@ -2509,32 +2000,32 @@ public class GameScreen extends ScreenAdapter {
         partBox[2] = w; partBox[3] = h;
     }
 
-    private void spawnBoss() {
+    void spawnBoss() {
         bossSpawned = true;
-        bossDissolving = false;
+        op4.bossDissolving = false;
         int[] hp = {70, 100, 120, 140, 160, 180, 220};
         TextureRegion br = curBossR();
         boss = new Boss(levelIdx, scrollX + W + 20f, hp[levelIdx], br.getRegionWidth(), br.getRegionHeight());
         boss.mask = bossPartMask != null ? bossPartMask[Math.min(bossPart, bossPartMask.length - 1)] : bossMask;
-        coreBlocksShown = CORE_BLOCKS;
-        resetBarBoss();                               // (bar-wall bosses: all bars, orbs and the core shield back)
+        brain.coreBlocksShown = brain.CORE_BLOCKS;
+        barBosses.resetBarBoss();                               // (bar-wall bosses: all bars, orbs and the core shield back)
         if (level.bossFixed) {                        // sits where the map has it (stages 5-7 for now)
             if (bossPartR != null) { bossPartBox(); boss.x = partBox[0]; boss.y = partBox[1]; }
             else { boss.x = level.bossX; boss.y = level.bossY; }
             boss.fixed = true;
-            if (levelIdx == 4 && kWallBase != null) {     // Kierke's machine wall: top-aligned in the map's boss box
+            if (levelIdx == 4 && kierkeBoss.kWallBase != null) {     // Kierke's machine wall: top-aligned in the map's boss box
                 boss.y = level.bossY + level.bossH - boss.h;
                 boss.initKierke(level.bossY + level.bossH);
-                kResetWall();                             // (a whole wall, e.g. after a retry)
-                kCompose();
+                kierkeBoss.kResetWall();                             // (a whole wall, e.g. after a retry)
+                kierkeBoss.kCompose();
             }
             boss.entering = false;
-            if (op4End()) op4Boss();                  // Op 4: the brain sphere rises in, the gun units appear
+            if (op4.op4End()) op4.op4Boss();                  // Op 4: the brain sphere rises in, the gun units appear
         } else if (level.vertical) {                  // comes down from the top, in the middle
             boss.x = scrollX + W / 2f - boss.w / 2f;
             boss.y = scrollY + H + (levelIdx == 1 ? 70f : 10f);   // (Tetran's tentacles reach 60+ px around it)
             if (levelIdx == 1) boss.initTetran();
-            if (eioEnd()) boss.initEioneus(this);     // (Eioneus: its own movement and lasers, from the recording)
+            if (eioneusRoom.eioEnd()) boss.initEioneus(this);     // (Eioneus: its own movement and lasers, from the recording)
         }
         if (levelIdx == 0) {
             // the brain's two arms, as attached in the original map (sprite 100x100, y up from its bottom):
@@ -2544,24 +2035,24 @@ public class GameScreen extends ScreenAdapter {
                     {37f, 32f, -16f, -8f, 17.9f},    // from under the eye, down and to the left
             };
         }
-        if (coreR != null) {                          // only the core takes damage
+        if (brain.coreR != null) {                          // only the core takes damage
             boss.hasCore = true;
-            boss.coreMask = coreMask;
-            boss.coreX = coreOX; boss.coreY = coreOY;
-            boss.coreW = coreR.getRegionWidth(); boss.coreH = coreR.getRegionHeight();
+            boss.coreMask = brain.coreMask;
+            boss.coreX = brain.coreOX; boss.coreY = brain.coreOY;
+            boss.coreW = brain.coreR.getRegionWidth(); boss.coreH = brain.coreR.getRegionHeight();
         }
-        if (hatchF != null && !level.bossFixed && !level.vertical) {   // Lavinia warship: in from the left, the hatch on its nose
+        if (lavinia.hatchF != null && !level.bossFixed && !level.vertical) {   // Lavinia warship: in from the left, the hatch on its nose
             boss.hasHatch = true;
-            boss.hatchW = hatchF[0].getRegionWidth(); boss.hatchH = hatchF[0].getRegionHeight();
+            boss.hatchW = lavinia.hatchF[0].getRegionWidth(); boss.hatchH = lavinia.hatchF[0].getRegionHeight();
             boss.hatchX = 1f; boss.hatchY = boss.h - 16f - boss.hatchH;   // (16 px below the top of boss2.png)
             boss.x = scrollX - boss.w;
             boss.y = scrollY + H / 2f - boss.h / 2f;
         }
-        if (eyeF != null) {
+        if (brain.eyeF != null) {
             boss.hasEye = true;
-            boss.eyeFrames = eyeF.length;
-            boss.eyeX = eyeOX; boss.eyeY = eyeOY;
-            boss.eyeW = eyeF[0].getRegionWidth(); boss.eyeH = eyeF[0].getRegionHeight();
+            boss.eyeFrames = brain.eyeF.length;
+            boss.eyeX = brain.eyeOX; boss.eyeY = brain.eyeOY;
+            boss.eyeW = brain.eyeF[0].getRegionWidth(); boss.eyeH = brain.eyeF[0].getRegionHeight();
         }
         a.play("power", 0.3f);
         if (bossPart == 0 && level.bossMusic != null && !level.bossMusic.isEmpty()) game.bgm.fadeOutThen(level.bossMusic, true, level.bossMusicLoop, level.bossMusicLoopEnd, BOSS_MUSIC_FADE, BOSS_MUSIC_GAP);
@@ -2576,493 +2067,20 @@ public class GameScreen extends ScreenAdapter {
                 a.play("boom", 0.5f);
             }
             boss = null;
-            op4T = 0f;
+            op4.op4T = 0f;
             bossPart++;
             bossSpawned = false;                      // (the scrolling goes on; the next one wakes on screen)
             return;
         }
         for (Player p : players) if (p != null && !p.out) p.score += stageBonus();
         eBullets.clear();
-        gunLasers.clear();
+        bossGuns.gunLasers.clear();
         if (!boss.dissolve) {
             boom(boss.x + boss.w / 2f, boss.y + boss.h / 2f, 2.5f);   // a last big blast, then the boss is gone
             a.play("boom", 0.5f);
         }
         boss = null;
         setState(State.CLEAR);
-    }
-
-    // =============================================================== Op 4's end (stage 6)
-    // From the MSX recording (220-268 s; Albert, 2026-10-27): the scrolling stops at the end of the shaft (the path's
-    // end, camera top 376 in the map) and the whole terrain on the screen breaks up pixel by pixel (OP4_TERRAIN_TIME s),
-    // leaving black space. The brain sphere (boss5a) then rises in through the bottom edge; option eaters come in
-    // while it is there. Beaten, it breaks up the same way, and the gun units (boss5b) appear pixel by pixel where they
-    // are. The ships fly over both bosses (Boss.ghost): only the sphere's eye and the gun units' bars and orbs (and
-    // their core shield) stop shots.
-    private static final int OP4_NONE = 0, OP4_TERRAIN = 1, OP4_FIGHT = 2;
-    private static final float OP4_TERRAIN_TIME = 3f, OP4_SPHERE_WAIT = 1.2f, OP4_GUNS_WAIT = 1.5f;
-    /** Option eaters during the sphere fight: the first after OEATER_FIRST s, then one every OEATER_EVERY s. */
-    private static final float OEATER_FIRST = 4f, OEATER_EVERY = 5f;
-    /** Green mines during the gun units' fight (Albert): the first GMINE5_FIRST s after they have appeared, then one
-     *  every GMINE5_EVERY_MIN..MAX s, in from a random edge of the screen (left, right, top or bottom). */
-    private static final float GMINE5_FIRST = 3f, GMINE5_EVERY_MIN = 2.5f, GMINE5_EVERY_MAX = 4.5f;
-    /** The sphere's eye in boss5a.png (bottom-left, y up from the picture's bottom, w, h): its only weak spot. */
-    private static final float[] SPHERE_EYE = {100f, 27f, 13f, 15f};
-    private static final int SPHERE_HP = 60;
-    private int op4State;
-    private float op4T, oeaterT, gmine5T;
-    /** The terrain has dissolved (its art isn't drawn, nothing to run into); a beaten boss is breaking up. */
-    boolean terrainGone, bossDissolving;
-    /** The gun units coming together pixel by pixel (null when they are whole). */
-    Dissolver gunsAppear;
-
-    /** Is this Op 4, with its two bosses (boss5a, boss5b)? */
-    private boolean op4End() { return levelIdx == 5 && bossPartR != null; }
-
-    private void updateOp4End(float dt) {
-        if (scrollT < level.stopT) return;
-        op4T += dt;
-        switch (op4State) {
-            case OP4_NONE:
-                dissolveTerrain();
-                op4State = OP4_TERRAIN;
-                op4T = 0f;
-                break;
-            case OP4_TERRAIN:
-                if (op4T >= OP4_TERRAIN_TIME + OP4_SPHERE_WAIT) { op4State = OP4_FIGHT; op4T = 0f; spawnBoss(); }
-                break;
-            default:
-                if (boss == null && !bossSpawned && bossPart > 0 && op4T >= OP4_GUNS_WAIT) spawnBoss();   // the gun units
-                if (boss != null && boss.sphere && !boss.dying && !boss.entering && state == State.PLAY
-                        && (oeaterT -= dt) <= 0f) { oeaterT = OEATER_EVERY; spawnOptionEater(); }
-                if (boss != null && boss.guns && !boss.dying && !boss.appearing && state == State.PLAY
-                        && (gmine5T -= dt) <= 0f) { gmine5T = MathUtils.random(GMINE5_EVERY_MIN, GMINE5_EVERY_MAX); spawnEdgeMine(); }
-                if (gunsAppear != null && boss != null && boss.guns) {
-                    gunsAppear.set(boss.appearT / Boss.GUNS_APPEAR);
-                    if (!boss.appearing) { gunsAppear.dispose(); gunsAppear = null; }
-                }
-                break;
-        }
-    }
-
-    /** spawnBoss for Op 4: where the boss starts and how it moves (see Boss.initSphere / initGuns). */
-    private void op4Boss() {
-        boss.fixed = false;
-        if (bossPart == 0) {
-            boss.initSphere(boss.mask);
-            boss.x = scrollX + W / 2f - boss.bounceX0 - boss.bounceW / 2f;
-            boss.y = scrollY - boss.bounceY0 - boss.bounceH;   // (just below the bottom edge)
-            boss.weakX = SPHERE_EYE[0]; boss.weakY = SPHERE_EYE[1]; boss.weakW = SPHERE_EYE[2]; boss.weakH = SPHERE_EYE[3];
-            boss.hp = boss.maxHp = SPHERE_HP;         // (only its eye can be hit: about 7 s of shooting on the MSX)
-            oeaterT = OEATER_FIRST;
-        } else {
-            boss.initGuns(this);
-            gmine5T = GMINE5_FIRST;
-            if (gunsAppear != null) gunsAppear.dispose();
-            gunsAppear = barPix != null ? Dissolver.appear(barPix) : null;
-            if (gunsAppear == null) boss.appearing = false;
-        }
-    }
-
-    /**
-     * The end of the shaft: everything drawn on the screen (the stage art) is copied and breaks up pixel by pixel
-     * (dissolveDeath); from now on the art isn't drawn and there is no terrain to run into.
-     */
-    private void dissolveTerrain() { dissolveTerrain(OP4_TERRAIN_TIME); }
-
-    private void dissolveTerrain(float time) {
-        int camL = Math.round(scrollX), camB = Math.round(scrollY), sw = (int) W, sh = (int) H;
-        Pixmap shot = new Pixmap(sw, sh, Pixmap.Format.RGBA8888);
-        shot.setBlending(Pixmap.Blending.SourceOver);
-        for (Level.Art t : level.art) {
-            if (t.x > camL + W || t.x + t.w < camL || t.y > camB + H || t.y + t.h < camB) continue;
-            if (!Gdx.files.internal(t.image).exists()) continue;
-            Pixmap ap = new Pixmap(Gdx.files.internal(t.image));
-            shot.drawPixmap(ap, Math.round(t.x) - camL, (camB + sh) - Math.round(t.y + t.h));   // (rows run down)
-            ap.dispose();
-        }
-        if (podsShown()) for (int i = 0; i < level.pods.size(); i++)   // (Eioneus: the gun pods go with it)
-            shot.drawPixmap(podPm, Math.round(podX(i)) - camL, (camB + sh) - Math.round(podY(i) + podPm.getHeight()));
-        dissolveDeath(shot, camL, camB, time);
-        shot.dispose();
-        terrainGone = true;
-        level.clearGrid();
-        a.play("power", 0.4f);
-    }
-
-    /** A beaten Op 4 boss: its picture (the gun units: as shot to pieces) breaks up where it is. */
-    private void bossDissolveStart() {
-        bossDissolving = true;
-        eBullets.clear();
-        gunLasers.clear();
-        if (barBossNow() && barPix != null) dissolveDeath(barPix, boss.x, boss.y, Boss.DISSOLVE_TIME);
-        else dissolveDeath(curBossR(), boss.x, boss.y, Boss.DISSOLVE_TIME);
-        a.play("boom", 0.4f);
-    }
-
-    /** The gun units' fight: a green mine (Kierke's, homing) comes in at a random edge of the screen, 11 px showing. */
-    private void spawnEdgeMine() {
-        if (greenMineF == null) return;
-        float in = Enemy.GMINE_IN, x, y;
-        switch (MathUtils.random(3)) {
-            case 0: x = scrollX - 16f + in; y = scrollY + MathUtils.random(24f, H - 40f); break;   // left
-            case 1: x = scrollX + W - in; y = scrollY + MathUtils.random(24f, H - 40f); break;     // right
-            case 2: x = scrollX + MathUtils.random(8f, W - 24f); y = scrollY + H - in; break;      // top
-            default: x = scrollX + MathUtils.random(8f, W - 24f); y = scrollY - 16f + in; break;   // bottom
-        }
-        Enemy e = new Enemy(Enemy.Type.GREEN_MINE, x, y, levelIdx);
-        e.vertical = true;
-        e.gmFromBottom = y < scrollY;
-        enemies.add(e);
-    }
-
-    /** The sphere fight: an option eater comes in through the bottom edge (Enemy.updateOptionEater). */
-    private void spawnOptionEater() {
-        if (optionEaterF == null) return;
-        Enemy e = new Enemy(Enemy.Type.OPTION_EATER, scrollX + MathUtils.random(24f, W - 40f), scrollY - 16f, levelIdx);
-        e.vertical = true;
-        enemies.add(e);
-    }
-
-    /** An option eater touching an option eats it: the ship loses an option (its last one) and the eater is used up. */
-    void eatOption(Enemy e) {
-        for (Player p : players) {
-            if (!alive(p) || p.options <= 0) continue;
-            for (int i = 0; i < p.options; i++) {
-                if (!overlap(e.x + 2f, e.y + 2f, e.w - 4f, e.h - 4f, optX(p, i), optY(p, i), 12f, 12f)) continue;
-                p.options--;
-                e.dead = true;
-                boom(optX(p, i) + 6f, optY(p, i) + 6f, 1f);
-                a.play("boom", 0.3f);
-                return;
-            }
-        }
-    }
-
-    /** Can a shot (or laser) at this rectangle hit the boss? Op 4's bosses (ghost) only stop shots on their weak spots. */
-    boolean bossShotTouches(float x, float y, float w, float h) {
-        if (!boss.ghost) return touchesBoss(x, y, w, h);
-        if (boss.appearing) return false;
-        return boss.weakTouches(x, y, w, h) || barShieldTouches(x, y, w, h);
-    }
-
-    /** A bar-wall boss's core shield, while it is there (it stops shots even on a boss the ships fly over). */
-    private boolean barShieldTouches(float x, float y, float w, float h) {
-        if (!barBossNow() || !barShield || barShieldPm == null || boss == null) return false;
-        float sw = barShieldPm.getWidth(), sh = barShieldPm.getHeight();
-        return overlap(x, y, w, h, boss.x + bb.shieldX, boss.y + boss.h - bb.shieldY - sh, sw, sh);
-    }
-
-    // =============================================================== Eioneus's boss room (stage 4)
-    // From the MSX recording 216-266 s (Albert, 2026-10-27). The scrolling stops at the top of the cave; POD_WAIT s
-    // later the three gun pods (map objects "gunpod", gunpod.png) come down out of the ceiling, POD_STEP_PX px every
-    // POD_STEP s, until they hang in their places. Each has a column of POD_BARS bars (boss_bar.png, painted into
-    // gunpod.png) in front of its red orb: a shot into the column hurts its lowest bar left (POD_BAR_HP each), and once
-    // its bars are gone the pod is beaten (POD_SCORE points, the moment the bars are gone, as on the MSX; the orb
-    // stays). The rest of a pod stops shots and lasers and hurts the ships; the inside of a column is free once its
-    // bars are gone (the ship flies up into it in the recording). While the pods hang there, they let out bouncing
-    // bubbles (Enemy.bubble): the first BUBBLE_FIRST s after they are in place, then one every BUBBLE_EVERY s while
-    // there are fewer than BUBBLE_MAX. PODS_DONE_WAIT s after the last pod is beaten the bubbles go and everything on
-    // the screen breaks up pixel by pixel (EIO_TERRAIN_TIME s, leaving black space), and EIO_BOSS_WAIT s later the
-    // boss comes down (Boss.initEioneus).
-    private static final float POD_WAIT = 0f,   // (Albert, 2026-10-30: they come as soon as the scrolling stops; was 6 s)
-            POD_STEP = 0.4f, POD_STEP_PX = 8f, POD_BAR_HP = 10f,
-            BUBBLE_FIRST = 1.5f, BUBBLE_EVERY = 0.8f, PODS_DONE_WAIT = 2f, EIO_TERRAIN_TIME = 2f, EIO_BOSS_WAIT = 4f;
-    private static final int POD_BARS = 4, POD_SCORE = 10000, BUBBLE_MAX = 4;
-    /** The bars in gunpod.png (top-left, y down), lowest (first in line) first; the top of its orb. */
-    private static final int[][] POD_BAR_POS = {{16, 58}, {16, 50}, {16, 42}, {16, 34}};
-    private static final int POD_ORB_TOP = 12;
-    private static final int EIO_NONE = 0, EIO_WAIT = 1, EIO_DESCEND = 2, EIO_FIGHT = 3, EIO_AFTER = 4, EIO_TERRAIN = 5, EIO_BOSS = 6;
-    private int eioState;
-    private float eioT, eioStepT, bubbleT;
-    /** How far above their places the pods still are (px). */
-    private float podOff;
-    private float[][] podHp;
-    private boolean[] podBeaten;
-    private Object[][] podKey;
-    /** gunpod.png with its bars taken out (they are drawn on their own while they stand), its solid (not dark) pixels. */
-    private Pixmap podPm;
-    private TextureRegion podBaseR, podBarR;
-    private PixelMask podMask;
-
-    /** Is this Eioneus, with its gun pods before the boss? */
-    private boolean eioEnd() { return levelIdx == 3 && podBaseR != null; }
-
-    /** Are the gun pods on the screen (coming down, or hanging there until the terrain breaks up)? */
-    private boolean podsShown() { return eioEnd() && eioState >= EIO_DESCEND && eioState < EIO_TERRAIN; }
-
-    private float podX(int i) { return level.pods.get(i)[0]; }
-    private float podY(int i) { return level.pods.get(i)[1] + podOff; }
-
-    private void loadPods() {
-        if (levelIdx != 3 || level.pods.isEmpty() || !Gdx.files.internal("sprites/gunpod.png").exists()
-                || !Gdx.files.internal("sprites/boss_bar.png").exists()) return;
-        Pixmap src = new Pixmap(Gdx.files.internal("sprites/gunpod.png"));
-        podPm = new Pixmap(src.getWidth(), src.getHeight(), Pixmap.Format.RGBA8888);
-        podPm.setBlending(Pixmap.Blending.None);
-        podPm.drawPixmap(src, 0, 0);
-        src.dispose();
-        Pixmap bar = new Pixmap(Gdx.files.internal("sprites/boss_bar.png"));
-        for (int[] b : POD_BAR_POS)                      // (behind a bar: the dark inside of the column)
-            for (int y = 0; y < bar.getHeight(); y++)
-                for (int x = 0; x < bar.getWidth(); x++)
-                    if ((bar.getPixel(x, y) & 0xff) != 0) podPm.drawPixel(b[0] + x, b[1] + y, 0x000000ff);
-        bar.dispose();
-        int w = podPm.getWidth(), h = podPm.getHeight();
-        boolean[] solid = new boolean[w * h];
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++) {
-                int c = podPm.getPixel(x, y);
-                int r = c >>> 24, gg = (c >>> 16) & 0xff, bb2 = (c >>> 8) & 0xff;
-                solid[(h - 1 - y) * w + x] = (c & 0xff) != 0 && Math.max(r, Math.max(gg, bb2)) >= 30;
-            }
-        podMask = new PixelMask(w, h, solid);
-        podBaseR = new TextureRegion(new Texture(podPm));
-        podBarR = new TextureRegion(new Texture(Gdx.files.internal("sprites/boss_bar.png")));
-        int n = level.pods.size();
-        podHp = new float[n][POD_BARS];
-        podBeaten = new boolean[n];
-        podKey = new Object[n][POD_BARS];
-        for (int i = 0; i < n; i++) for (int k = 0; k < POD_BARS; k++) podKey[i][k] = new Object();
-        resetPods();
-    }
-
-    /** The pod room starts over (a new try): pods whole and out of sight, no bubbles. */
-    private void resetPods() {
-        if (podHp == null) return;
-        eioState = EIO_NONE; eioT = 0f; podOff = 0f;
-        for (int i = 0; i < podHp.length; i++) { podBeaten[i] = false; for (int k = 0; k < POD_BARS; k++) podHp[i][k] = POD_BAR_HP; }
-    }
-
-    private void updateEioneusEnd(float dt) {
-        if (scrollT < level.stopT) return;
-        eioT += dt;
-        switch (eioState) {
-            case EIO_NONE: {                              // the scrolling has stopped: the pods wait out of sight
-                float lowest = Float.MAX_VALUE;
-                for (float[] pd : level.pods) lowest = Math.min(lowest, pd[1]);
-                podOff = Math.max(0f, (float) Math.ceil((scrollY + H - lowest) / POD_STEP_PX) * POD_STEP_PX);
-                eioState = EIO_WAIT; eioT = 0f;
-                break;
-            }
-            case EIO_WAIT:
-                if (eioT >= POD_WAIT) { eioState = EIO_DESCEND; eioT = 0f; eioStepT = POD_STEP; }
-                break;
-            case EIO_DESCEND:
-                podOff = Math.max(0f, podOff - POD_STEP_PX / POD_STEP * dt);   // smoothly (Albert, 2026-10-30), 20 px/s
-                if (podOff <= 0f) { eioState = EIO_FIGHT; eioT = 0f; bubbleT = BUBBLE_FIRST; }
-                break;
-            case EIO_FIGHT: {
-                if ((bubbleT -= dt) <= 0f) { bubbleT = BUBBLE_EVERY; if (bubbles() < BUBBLE_MAX) spawnBubble(); }
-                boolean all = true;
-                for (boolean b : podBeaten) all &= b;
-                if (all) { eioState = EIO_AFTER; eioT = 0f; }
-                break;
-            }
-            case EIO_AFTER:
-                if (eioT >= PODS_DONE_WAIT) {
-                    for (Enemy e : enemies) if (e.bubble) e.dead = true;
-                    dissolveTerrain(EIO_TERRAIN_TIME);    // (the pods break up with it)
-                    eioState = EIO_TERRAIN; eioT = 0f;
-                }
-                break;
-            case EIO_TERRAIN:
-                if (eioT >= EIO_TERRAIN_TIME + EIO_BOSS_WAIT && !bossSpawned) { eioState = EIO_BOSS; spawnBoss(); }
-                break;
-            default:
-                break;
-        }
-    }
-
-    private int bubbles() {
-        int n = 0;
-        for (Enemy e : enemies) if (e.bubble && !e.dead) n++;
-        return n;
-    }
-
-    /** A pod (at random) lets a bubble out from under its middle, heading down to the left or right. */
-    private void spawnBubble() {
-        if (orbR == null) return;
-        int i = MathUtils.random(level.pods.size() - 1);
-        float line = Float.MAX_VALUE;
-        for (int j = 0; j < level.pods.size(); j++) line = Math.min(line, podY(j));
-        Enemy e = new Enemy(Enemy.Type.ORB, 0f, 0f, levelIdx);
-        e.bubble = true;
-        e.bubbleTop = line;
-        e.x = podX(i) + podPm.getWidth() / 2f - e.w / 2f;
-        e.y = line - e.h - 1f;
-        e.vx = MathUtils.randomBoolean() ? -Enemy.BUBBLE_VX : Enemy.BUBBLE_VX;
-        e.vy = -Enemy.BUBBLE_VY;
-        enemies.add(e);
-    }
-
-    /** Lowest bar of pod i still standing (0 = the lowest), -1 = none left. */
-    private int podTarget(int i) {
-        for (int k = 0; k < POD_BARS; k++) if (podHp[i][k] > 0f) return k;
-        return -1;
-    }
-
-    /** Does the rectangle touch a gun pod: its solid pixels or a bar still standing? */
-    boolean podTouches(float x, float y, float w, float h) {
-        if (!podsShown()) return false;
-        int ph = podPm.getHeight();
-        for (int i = 0; i < level.pods.size(); i++) {
-            float px = podX(i), py = podY(i);
-            if (!overlap(x, y, w, h, px, py, podPm.getWidth(), ph)) continue;
-            if (podMask.overlaps(px, py, x, y, w, h)) return true;
-            for (int k = 0; k < POD_BARS; k++)
-                if (podHp[i][k] > 0f && overlap(x, y, w, h, px + POD_BAR_POS[k][0], py + ph - POD_BAR_POS[k][1] - podBarR.getRegionHeight(),
-                        podBarR.getRegionWidth(), podBarR.getRegionHeight())) return true;
-        }
-        return false;
-    }
-
-    /**
-     * A ship's shot (on screen: hx, hy, hw, hh) against the gun pods: in a column with bars left, its lowest bar takes
-     * it; anywhere else on a pod it just stops (a laser is stopped by laserBlocked). Returns true if dealt with here.
-     */
-    boolean podShot(Bullet b, float hx, float hy, float hw, float hh, boolean laser) {
-        if (!podsShown()) return false;
-        int ph = podPm.getHeight();
-        float bw = podBarR.getRegionWidth(), bh = podBarR.getRegionHeight();
-        for (int i = 0; i < level.pods.size(); i++) {
-            float px = podX(i), py = podY(i);
-            int k = podBeaten[i] ? -1 : podTarget(i);
-            if (k >= 0) {
-                int[] low = POD_BAR_POS[0];
-                float top = py + ph - POD_ORB_TOP, bottom = py + ph - (low[1] + bh + 3f);
-                if (overlap(hx, hy, hw, hh, px + low[0], bottom, bw, top - bottom)) {
-                    Object key = podKey[i][k];
-                    if (laser) { if (b.hits.contains(key)) return true; b.hits.add(key); } else b.dead = true;
-                    podHp[i][k] -= b.dmg;
-                    float bx = px + POD_BAR_POS[k][0], by = py + ph - POD_BAR_POS[k][1] - bh;
-                    if (podHp[i][k] <= 0f) {
-                        podHp[i][k] = 0f;
-                        boom(bx + bw / 2f, by + bh / 2f, 0.5f);
-                        a.play("boom", 0.2f);
-                        // (no points for a pod's bar, as on the MSX; the pod gives POD_SCORE)
-                        if (podTarget(i) < 0) {               // its last bar: the pod is beaten
-                            podBeaten[i] = true;
-                            addScore(b.owner, POD_SCORE);
-                            boom(px + podPm.getWidth() / 2f, py + ph - POD_ORB_TOP - 6f, 1.4f);
-                            a.play("boom", 0.5f);
-                        }
-                    } else { a.play("hit", 0.15f); hitSpark(b, bx, by, bw, bh); }
-                    if (b.dead && b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
-                    return true;
-                }
-            }
-            if (!laser && podMask.overlaps(px, py, hx, hy, hw, hh)) {
-                b.dead = true;
-                hitSpark(b, px, py, podPm.getWidth(), ph);
-                if (b.kind == Bullet.Kind.MISSILE) boom(b.x, b.y, 0.6f);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    void drawPods() {
-        if (!podsShown()) return;
-        int ph = podPm.getHeight();
-        float bh = podBarR.getRegionHeight();
-        for (int i = 0; i < level.pods.size(); i++) {
-            float px = podX(i), py = podY(i);
-            batch.draw(podBaseR, px, py);
-            for (int k = 0; k < POD_BARS; k++)
-                if (podHp[i][k] > 0f) batch.draw(podBarR, px + POD_BAR_POS[k][0], py + ph - POD_BAR_POS[k][1] - bh);
-        }
-    }
-
-    // ---- the gun units' attacks (from the recording, 250.6 s and 256.6 s): out from under the columns, at five
-    // places (GUN_EMITTERS: x, y top-down in boss5b.png), lasers grow down at GUN_LASER_SPEED px/s until they are
-    // GUN_LASER_LEN px long, then fall on down the screen: the enemies' red / blue laser (Albert; dotted on the MSX).
-    // A green creature comes out of the middle (GUN_MOUTH) and goes for the nearest ship (the Op 4 green flyer).
-    static final class GunLaser { float sx, top, bottom, t, ex, ey, speed, len; }
-    private final ArrayList<GunLaser> gunLasers = new ArrayList<>();
-    private static final float[][] GUN_EMITTERS = {{18f, 136f}, {42f, 120f}, {90f, 152f}, {170f, 152f}, {218f, 120f}};
-    private static final float[] GUN_MOUTH = {125f, 180f};
-    private static final float GUN_LASER_SPEED = 80f, GUN_LASER_LEN = 80f;
-
-    void gunLasers(Boss b) { bossLasers(b, GUN_EMITTERS, GUN_LASER_SPEED, GUN_LASER_LEN); }
-
-    /**
-     * Eioneus (from the recording, 271.8 s and 282.8 s): four lasers out of the boss's leg tips (EIO_EMITTERS: x, y
-     * top-down in boss3.png), growing down at EIO_LASER_SPEED px/s until EIO_LASER_LEN px long, then falling on. Dotted
-     * on the MSX; here the enemies' laser, like the gun units' (Albert).
-     */
-    private static final float[][] EIO_EMITTERS = {{45f, 121f}, {76f, 137f}, {116f, 137f}, {155f, 121f}};
-    private static final float EIO_LASER_SPEED = 160f, EIO_LASER_LEN = 100f;
-
-    void eioneusLasers(Boss b) { bossLasers(b, EIO_EMITTERS, EIO_LASER_SPEED, EIO_LASER_LEN); }
-
-    private void bossLasers(Boss b, float[][] emitters, float speed, float len) {
-        for (float[] em : emitters) {
-            GunLaser l = new GunLaser();
-            l.ex = em[0]; l.ey = em[1]; l.speed = speed; l.len = len;
-            l.sx = b.x - scrollX + l.ex;
-            l.top = l.bottom = b.y - scrollY + b.h - l.ey;
-            gunLasers.add(l);
-        }
-        a.play("shoot", 0.25f);
-    }
-
-    void gunCreature(Boss b) {
-        if (greenF == null) return;
-        Enemy f = new Enemy(Enemy.Type.GREEN_FLYER, 0f, 0f, levelIdx);
-        f.vertical = true;
-        f.gfHoming = true;
-        f.gfStartAng = -MathUtils.HALF_PI;
-        f.gfX = b.x - scrollX + GUN_MOUTH[0];
-        f.gfY = b.y - scrollY + b.h - GUN_MOUTH[1];
-        f.x = f.gfX + scrollX - 8f; f.y = f.gfY + scrollY - 8f;
-        enemies.add(f);
-    }
-
-    private void updateGunLasers(float dt, boolean clearing) {
-        if (gunLasers.isEmpty()) return;
-        for (GunLaser l : gunLasers) {
-            l.t += dt;
-            if (l.t < l.len / l.speed && boss != null && !boss.dying) {   // still coming out: its top at the emitter
-                l.sx = boss.x - scrollX + l.ex;
-                l.top = boss.y - scrollY + boss.h - l.ey;
-                l.bottom = l.top - l.speed * l.t;
-            } else {
-                l.top -= l.speed * dt;
-                l.bottom -= l.speed * dt;
-            }
-        }
-        gunLasers.removeIf(l -> l.top < 0f);
-        if (clearing) return;
-        for (Player p : players) {
-            if (!alive(p)) continue;
-            float hx = p.hitX(), hy = p.hitY();
-            for (GunLaser l : gunLasers) {
-                if (l.top - l.bottom < 1f) continue;
-                float lw = omenLaserTex != null ? omenLaserTex[0].getHeight() : 5f;   // (as wide as the laser picture)
-                if (overlap(hx, hy, Player.HIT_W, Player.HIT_H, scrollX + l.sx - lw / 2f, scrollY + l.bottom, lw, l.top - l.bottom)) {
-                    collisions.hurt(p, false);
-                    break;
-                }
-            }
-        }
-    }
-
-    /**
-     * The bosses' falling lasers (the gun units, Eioneus): the enemies' laser (sprites/enemy laser red / blue.png,
-     * flashing), turned upright as the Rages fire it.
-     */
-    void drawGunLasers() {
-        if (gunLasers.isEmpty() || omenLaserTex == null) return;
-        for (GunLaser l : gunLasers) {
-            float b1 = Math.min(H, l.top), b0 = Math.max(0f, l.bottom), len = b1 - b0;
-            if (len < 1f) continue;
-            Texture lt = omenLaserTex[(int) (l.t * Enemy.OMEN_LASER_FLASH) % omenLaserTex.length];
-            int th = lt.getHeight();
-            float left = Math.round(scrollX + l.sx - th / 2f);
-            batch.draw(lt, left + th, Math.round(scrollY) + b0, 0f, 0f, len, th, 1f, 1f, 90f,
-                    Math.round(l.top - b1), 0, Math.round(len), th, false, false);
-        }
     }
 
     int stageBonus() { return 2000 + 1000 * (levelIdx + 1); }
@@ -3098,162 +2116,6 @@ public class GameScreen extends ScreenAdapter {
     static final Color CARRIER_TINT = new Color(1f, 0.45f, 0.45f, 1f);
 
     /** A tower spits out an amoeba at (x, y) (bottom-left), thrown with (vx, vy). A red one leaves a power capsule. */
-    /** Lavinia (both styles): a Gun Ho hops out of a floor hatch (bottom-left x, y). */
-    void hatchGunHo(float cx, float y) {
-        Enemy e = new Enemy(Enemy.Type.GUN_HO, cx, y, levelIdx);
-        if (gunHoR != null) { e.w = gunHoR.getRegionWidth(); e.h = gunHoR.getRegionHeight(); }
-        e.x = cx - e.w / 2f;                          // (x given is the middle of the hatch)
-        e.gunState = Enemy.GUNHO_HOPPING;
-        enemies.add(e);
-    }
-
-    /** Heathens (Lavinia): the three pictures (gap at the top / centre / bottom), and the pillars' shapes without the bars. */
-    TextureRegion[] heathenR;
-    private PixelMask[] heathenMasks;
-    private static final String[] HEATHEN_PICS = {"heathen_top", "heathen_center", "heathen_bottom"};
-
-    private void loadHeathens() {
-        for (String n : HEATHEN_PICS) if (!Gdx.files.internal("sprites/" + n + ".png").exists()) return;
-        heathenR = new TextureRegion[3];
-        heathenMasks = new PixelMask[3];
-        for (int k = 0; k < 3; k++) {
-            heathenR[k] = a.one(HEATHEN_PICS[k]);
-            // the picture is opaque (black inside): the pillar is its non-black pixels, without the bars
-            com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(Gdx.files.internal("sprites/" + HEATHEN_PICS[k] + ".png"));
-            int pw = pm.getWidth(), ph = pm.getHeight();
-            boolean[] solid = new boolean[pw * ph];
-            int bt = Enemy.HEATHEN_BAR_TOP[k];
-            for (int yy = 0; yy < ph; yy++)
-                for (int xx = 0; xx < pw; xx++) {
-                    int c = pm.getPixel(xx, yy);
-                    boolean lit = (c & 0xff) > 0 && ((c >>> 24) & 0xff) + ((c >>> 16) & 0xff) + ((c >>> 8) & 0xff) > 30;
-                    boolean inBar = false;
-                    for (int b = 0; b < Enemy.HEATHEN_BARS; b++) {
-                        int bx = Enemy.HEATHEN_BAR_X + b * Enemy.HEATHEN_BAR_STEP;
-                        if (xx >= bx && xx < bx + Enemy.HEATHEN_BAR_W && yy >= bt && yy < bt + Enemy.HEATHEN_BAR_H) inBar = true;
-                    }
-                    solid[(ph - 1 - yy) * pw + xx] = lit && !inBar;
-                }
-            pm.dispose();
-            heathenMasks[k] = new PixelMask(pw, ph, solid);
-        }
-    }
-
-    TextureRegion blockSmallR, blockBigR, rageR, laserGunR;
-
-    /**
-     * Lavinia's darkness (as in the MSX recording): from a "dark_zone" on, the stage's lights are off - no background,
-     * stars or terrain are drawn (it is all still there and still solid); only the ships, enemies, domes, shots and
-     * the item_spark show. A ship touching the spark turns the lights straight back on.
-     */
-    private boolean[] darkLit = new boolean[0];
-    /** The item_sparks still to be picked up ({x, y} bottom-left). */
-    private final ArrayList<float[]> sparkItems = new ArrayList<>();
-    private TextureRegion sparkR;
-    private float sparkT;
-    public static final float SPARK_SIZE = 16f;
-
-    /** The lights are off: the camera is inside a dark zone whose spark hasn't been picked up. */
-    boolean lightsOut() {
-        float camL = scrollX;
-        for (int i = 0; i < level.darkZones.size(); i++) {
-            float[] z = level.darkZones.get(i);
-            if (camL >= z[0] && camL < z[1] && !(i < darkLit.length && darkLit[i])) return true;
-        }
-        return false;
-    }
-
-    /** Darkness after a (re)start at camera x sx: sparks behind the camera count as picked up. */
-    private void resetDarkness(float sx) {
-        if (darkLit.length != level.darkZones.size()) darkLit = new boolean[level.darkZones.size()];
-        sparkItems.clear();
-        for (int i = 0; i < darkLit.length; i++) darkLit[i] = false;
-        for (float[] s : level.sparks) {
-            if (s[0] + SPARK_SIZE < sx) lightUp(s[0]);
-            else sparkItems.add(new float[]{s[0], s[1]});
-        }
-    }
-
-    /** A spark at x picked up: the lights come on in the dark zone it is in (in every zone that has started, if none). */
-    private void lightUp(float x) {
-        boolean any = false;
-        for (int i = 0; i < darkLit.length; i++) {
-            float[] z = level.darkZones.get(i);
-            if (x >= z[0] && x < z[1]) { darkLit[i] = true; any = true; }
-        }
-        if (!any) for (int i = 0; i < darkLit.length; i++) if (scrollX >= level.darkZones.get(i)[0]) darkLit[i] = true;
-    }
-
-    void collideSparks(Player p) {
-        for (int i = sparkItems.size() - 1; i >= 0; i--) {
-            float[] s = sparkItems.get(i);
-            if (overlap(p.x + 2f, p.y, 28f, 16f, s[0], s[1], SPARK_SIZE, SPARK_SIZE)) {
-                sparkItems.remove(i);
-                lightUp(s[0]);
-                p.score += 300;
-                a.play("pickup", 0.35f);
-            }
-        }
-    }
-
-    void drawSparks() {
-        if (sparkItems.isEmpty()) return;
-        if (sparkR == null) {
-            String f = Gdx.files.internal("sprites/item_spark.png").exists() ? "item_spark" : "spark";
-            sparkR = new TextureRegion(a.tex(f));
-        }
-        sparkT += Gdx.graphics.getDeltaTime();
-        if (((int) (sparkT * 8f)) % 4 == 3) return;   // a little twinkle
-        for (float[] s : sparkItems) batch.draw(sparkR, s[0], s[1], SPARK_SIZE, SPARK_SIZE);
-    }
-    TextureRegion[] ledZepF, gammaRedF;
-    /** Lavinia Led Zeps: seconds to the next one. */
-    private float ledZepT = 1f;
-
-    /** Lavinia: while the camera's right edge is in a "ledzep_zone", Led Zeps come at random at either edge, on the floor or the ceiling. */
-    private void updateLedZeps(float dt) {
-        if (level.ledZepZones.isEmpty()) return;
-        float right = scrollX + W;
-        float[] zone = null;
-        for (float[] z : level.ledZepZones) if (right >= z[0] && right <= z[1]) zone = z;
-        if (zone == null) return;
-        if ((ledZepT -= dt) > 0f) return;
-        ledZepT = MathUtils.random(0.5f, 1.5f) * zone[2];
-        boolean fromLeft = MathUtils.random() < 0.3f, ceil = MathUtils.randomBoolean();
-        float ex = fromLeft ? scrollX - 16f : scrollX + W, mid = scrollY + H / 2f;
-        float fl = level.floorTop(ex + 8f, mid), cb = level.ceilBottom(ex + 8f, mid);
-        if (fl <= Level.NO_FLOOR || cb >= Level.NO_CEILING || cb - fl < 48f) return;   // (no corridor there)
-        Enemy e = new Enemy(Enemy.Type.LED_ZEP, ex, ceil ? cb - 16f : fl, levelIdx);
-        e.zepFloorY = fl; e.zepCeilY = cb - 16f; e.zepCeil = ceil; e.zepRight = fromLeft;
-        e.zepT = MathUtils.random(Enemy.LEDZEP_WALK_MIN, Enemy.LEDZEP_WALK_MAX);
-        enemies.add(e);
-    }
-    /** The Lavinia warship's hatch: closed, open, destroyed. */
-    TextureRegion[] hatchF;
-
-    /** The Lavinia warship launches a Rage out of its hatch (bottom-left of the Rage). */
-    void launchRage(float x, float y) {
-        Enemy e = new Enemy(Enemy.Type.RAGE, x, y, levelIdx);
-        enemies.add(e);
-    }
-
-    /** A ship's laser hit a Lavinia big block: it bounces straight back to the left, as long as the laser was. */
-    void reflectLaser(Bullet laser, Enemy blk) {
-        float len = Math.min(Math.max(16f, laser.w), 64f), h = Math.max(2f, laser.h);
-        Bullet r = new Bullet(Bullet.Kind.ENEMY, blk.x - len, laser.y, len, h);
-        r.vx = -360f;
-        r.reflected = true;
-        eBullets.add(r);
-    }
-
-    /** A Heathen's bar was shot away. */
-    void breakHeathenBar(Enemy e, int k, Player owner) {
-        e.heathenBarHp[k] = 0;
-        boom(e.heathenBarX(k) + Enemy.HEATHEN_BAR_W / 2f, e.heathenBarY() + Enemy.HEATHEN_BAR_H / 2f, 0.5f);
-        addScore(owner, Enemy.HEATHEN_BAR_SCORE);
-        a.play("boom", 0.15f);
-    }
-
     /** An amoeba at (x, y) (bottom-left) thrown with (vx, vy), in capsule group g (or none); null if there are too many. */
     private Enemy makeAmoeba(float x, float y, float vx, float vy, Enemy.Group g) {
         int n = 0;
@@ -3281,7 +2143,7 @@ public class GameScreen extends ScreenAdapter {
      */
     boolean sceneryStops(float x, float y, float w, float h) {
         for (Hazard hz : hazards) if (!hz.dead && hz.type == Hazard.Type.TOWER && hz.touches(x, y, w, h)) return true;
-        if (podTouches(x, y, w, h)) return true;
+        if (eioneusRoom.podTouches(x, y, w, h)) return true;
         for (Enemy e : enemies) {
             if (e.dead) continue;
             if ((e.type == Enemy.Type.BLOCK_SMALL || e.type == Enemy.Type.BLOCK_BIG) && overlap(x, y, w, h, e.x, e.y, e.w, e.h)) return true;
@@ -3310,218 +2172,6 @@ public class GameScreen extends ScreenAdapter {
         b.vx = vx;
         b.beam = true;
         eBullets.add(b);
-    }
-
-    /** Stage 3's last room: hold, the Laser Guards' fight, their retreat, the walls dissolving. */
-    private void updateRoom(float dt) {
-        if (level.holdT < 0f || roomState == ROOM_DONE) return;
-        roomT += dt;
-        switch (roomState) {
-            case ROOM_NONE:
-                if (scrollT >= level.holdT) { roomState = ROOM_FIGHT; roomT = 0f; }
-                break;
-            case ROOM_FIGHT:
-                if (roomT >= level.holdTime) { roomState = ROOM_RETREAT; roomT = 0f; }
-                break;
-            case ROOM_RETREAT:
-                if (roomT >= Enemy.GUARD_RETREAT_TIME + 0.4f) { roomState = ROOM_DEMAT; roomT = 0f; a.play("power", 0.4f); }
-                break;
-            default: {                                    // ROOM_DEMAT: the walls lose their pixels, faster and faster
-                float f = Math.min(1f, roomT / WALL_DEMAT_TIME);
-                dissolveWalls(f * f);
-                if (f >= 1f) {
-                    for (Level.DematWall dw : level.dematWalls) level.setWallGone(dw, true);
-                    roomState = ROOM_DONE;
-                }
-                break;
-            }
-        }
-    }
-
-    /** (Re)loads the dematwall pictures and their collision: whole (gone = false) or already dissolved. */
-    private void resetWalls(boolean gone) {
-        int n = level.dematWalls.size();
-        if (wallPix == null) { wallPix = new Pixmap[n]; wallTex = new Texture[n]; wallOrder = new int[n][]; wallCleared = new int[n]; }
-        for (int i = 0; i < n; i++) {
-            Level.DematWall dw = level.dematWalls.get(i);
-            level.setWallGone(dw, gone);
-            if (wallPix[i] != null) wallPix[i].dispose();
-            if (wallTex[i] != null) wallTex[i].dispose();
-            wallPix[i] = new Pixmap(Gdx.files.internal(dw.image));
-            wallPix[i].setBlending(Pixmap.Blending.None);
-            wallTex[i] = new Texture(wallPix[i]);
-            int pw = wallPix[i].getWidth(), ph = wallPix[i].getHeight(), k = 0;
-            int[] order = new int[pw * ph];
-            for (int y = 0; y < ph; y++)
-                for (int x = 0; x < pw; x++) if ((wallPix[i].getPixel(x, y) & 0xff) != 0) order[k++] = y * pw + x;
-            order = java.util.Arrays.copyOf(order, k);
-            for (int j = k - 1; j > 0; j--) { int r = MathUtils.random(j); int tmp = order[j]; order[j] = order[r]; order[r] = tmp; }
-            wallOrder[i] = order;
-            wallCleared[i] = gone ? k : 0;
-        }
-    }
-
-    /** Clears the walls' pixels (in random order) until the part f (0..1) of them is gone. */
-    private void dissolveWalls(float f) {
-        for (int i = 0; i < wallPix.length; i++) {
-            int[] order = wallOrder[i];
-            int want = Math.min(order.length, Math.round(order.length * f));
-            if (want <= wallCleared[i]) continue;
-            int pw = wallPix[i].getWidth();
-            while (wallCleared[i] < want) {
-                int q = order[wallCleared[i]++];
-                wallPix[i].drawPixel(q % pw, q / pw, 0);
-            }
-            wallTex[i].draw(wallPix[i], 0, 0);
-        }
-    }
-
-    /** The dematwalls (not part of the stage art), until they have dissolved completely. */
-    void drawWalls() {
-        if (wallTex == null) return;
-        for (int i = 0; i < wallTex.length; i++) {
-            if (wallCleared[i] >= wallOrder[i].length) continue;
-            Level.DematWall dw = level.dematWalls.get(i);
-            batch.draw(wallTex[i], dw.x, dw.y, dw.w, dw.h);
-        }
-    }
-
-    /** Seconds until the Laser Guards' next volley (they all fire together). */
-    private float guardVolleyT = Enemy.GUARD_FIRE_MAX;
-
-    /**
-     * The Laser Guards fire together: once none of their lasers is on screen any more, the next volley comes after
-     * Enemy.GUARD_FIRE_MIN..MAX seconds, or as soon as one of them is lined up with a ship (but not straight after the
-     * last one). A volley = every guard on screen stops for Enemy.GUARD_WIND_UP seconds, then fires.
-     */
-    private void updateGuardVolley(float dt) {
-        boolean any = false, lined = false;
-        for (Enemy e : enemies) {
-            if (e.dead || e.type != Enemy.Type.LASER_GUARD || !inView(e.x + e.w / 2f, e.y + e.h / 2f, 6f)) continue;
-            if (e.windT > 0f || guardBeamOnScreen(e)) return;   // a volley is still going on
-            any = true;
-            lined |= e.lined;
-        }
-        if (!any || roomRetreating()) return;
-        boolean chaser = false;
-        for (Enemy e : enemies) if (!e.dead && e.type == Enemy.Type.LASER_GUARD && e.chasing) chaser = true;
-        if (!chaser) pickGuardChasers();                 // (the first ones, before the first volley)
-        guardVolleyT -= dt;
-        if (guardVolleyT > 0f && !(lined && guardVolleyT < Enemy.GUARD_FIRE_MIN - 0.8f)) return;
-        guardVolleyT = MathUtils.random(Enemy.GUARD_FIRE_MIN, Enemy.GUARD_FIRE_MAX);
-        for (Enemy e : enemies) {
-            if (e.dead || e.type != Enemy.Type.LASER_GUARD || !inView(e.x + e.w / 2f, e.y + e.h / 2f, 6f)) continue;
-            e.windT = Enemy.GUARD_WIND_UP;               // all stop now, and fire together
-        }
-        pickGuardChasers();                              // ...and after the volley, new ones chase the ship
-    }
-
-    /**
-     * Picks which Laser Guards chase the ship until the next volley: one at random, or sometimes
-     * (Enemy.GUARD_TWO_CHASERS) two: the side-wall one (horizontal laser) and the ceiling or the floor one, never both.
-     */
-    private void pickGuardChasers() {
-        ArrayList<Enemy> gs = new ArrayList<>(), upDown = new ArrayList<>();
-        Enemy wall = null;
-        for (Enemy e : enemies) {
-            if (e.dead || e.type != Enemy.Type.LASER_GUARD) continue;
-            e.chasing = false;
-            gs.add(e);
-            if (e.guardSide == Enemy.GUARD_WALL) wall = e; else upDown.add(e);
-        }
-        if (gs.isEmpty()) return;
-        if (wall != null && !upDown.isEmpty() && MathUtils.random() < Enemy.GUARD_TWO_CHASERS) {
-            wall.chasing = true;
-            upDown.get(MathUtils.random(upDown.size() - 1)).chasing = true;
-        } else gs.get(MathUtils.random(gs.size() - 1)).chasing = true;
-    }
-
-    /** Is one of this Laser Guard's beams still on screen? (It stands still until it is gone.) */
-    boolean guardBeamOnScreen(Enemy e) {
-        for (Bullet b : eBullets)
-            if (!b.dead && b.guard == e && b.x < scrollX + W && b.x + b.w > scrollX && b.y < scrollY + H && b.y + b.h > scrollY) return true;
-        return false;
-    }
-
-    /** A Laser Guard fires: the beam starts at the gun and grows out of it (see steerGuardBeams). */
-    void guardBeam(Enemy e) {
-        e.guardMuzzle(muzzleTmp);
-        if (!inView(muzzleTmp[0], muzzleTmp[1], 0f)) return;
-        Bullet b = new Bullet(Bullet.Kind.ENEMY, muzzleTmp[0], muzzleTmp[1], 1f, 1f);
-        b.guard = e;
-        b.beamDir = e.guardSide;
-        b.beamFront = b.beamTail = e.guardSide == Enemy.GUARD_WALL ? muzzleTmp[0] : muzzleTmp[1];
-        b.beamAttached = true;
-        b.beamSide = e.guardSide == Enemy.GUARD_WALL ? muzzleTmp[1] : muzzleTmp[0];
-        b.terrainGrace = 9999f;                      // (rock is handled by steerGuardBeams)
-        eBullets.add(b);
-        placeGuardBeam(b);
-    }
-    private final float[] muzzleTmp = new float[2];
-
-    /**
-     * Laser Guard beams behave like the ships' laser: they stay in line with the gun (sweeping along as the guard
-     * slides); while attached (Enemy.GUARD_BEAM_TIME) the tail stays at the muzzle and the front grows; then the beam
-     * lets go and flies on. The front stops at rock or the screen edge; the beam is gone when its tail gets there too.
-     */
-    private void steerGuardBeams(float dt) {
-        for (Bullet b : eBullets) {
-            if (b.dead || b.guard == null) continue;
-            Enemy e = b.guard;
-            boolean gunThere = !e.dead && !roomRetreating();
-            if (gunThere) e.guardMuzzle(muzzleTmp);
-            if (b.beamAttached && (!gunThere || b.t >= Enemy.GUARD_BEAM_TIME)) b.beamAttached = false;
-            float dir = b.beamDir == Enemy.GUARD_FLOOR ? 1f : -1f;   // up, or down / left
-            boolean horiz = b.beamDir == Enemy.GUARD_WALL;
-            if (gunThere) b.beamSide = horiz ? muzzleTmp[1] : muzzleTmp[0];
-            float step = Enemy.GUARD_BEAM_SPEED * dt;
-            if (b.beamAttached) b.beamTail = horiz ? muzzleTmp[0] : muzzleTmp[1];
-            else b.beamTail += dir * step;
-            float nf = b.beamFront + dir * step, th = omenLaserTex != null ? omenLaserTex[0].getHeight() : 5f;
-            boolean blocked = horiz ? level.hits(Math.min(nf, b.beamFront), b.beamSide - th / 2f, step, th) || nf < scrollX
-                    : level.hits(b.beamSide - th / 2f, Math.min(nf, b.beamFront), th, step) || nf < scrollY || nf > scrollY + H;
-            if (!blocked) b.beamFront = nf;
-            if ((b.beamTail - b.beamFront) * dir >= 0f && !b.beamAttached) b.dead = true;   // tail caught up: gone
-            placeGuardBeam(b);
-        }
-    }
-
-    /** The beam's hit box from its front, tail and line. */
-    private void placeGuardBeam(Bullet b) {
-        float th = omenLaserTex != null ? omenLaserTex[0].getHeight() : 5f;
-        float lo = Math.min(b.beamFront, b.beamTail), len = Math.max(1f, Math.abs(b.beamFront - b.beamTail));
-        if (b.beamDir == Enemy.GUARD_WALL) { b.x = lo; b.w = len; b.y = b.beamSide - th / 2f; b.h = th; }
-        else { b.y = lo; b.h = len; b.x = b.beamSide - th / 2f; b.w = th; }
-    }
-
-    /** Omen's laser: starts one pattern wide, centred on (cx, cy), and flies up (or down). */
-    void omenLaser(float cx, float cy, boolean up) {
-        if (!inView(cx, cy, 0f)) return;
-        float bw = omenLaserTex != null ? omenLaserTex[0].getWidth() : 8f, bh = omenLaserTex != null ? omenLaserTex[0].getHeight() : 5f;
-        Bullet b = new Bullet(Bullet.Kind.ENEMY, cx - bw / 2f, up ? cy : cy - bh, bw, bh);
-        b.vy = up ? Enemy.OMEN_LASER_SPEED : -Enemy.OMEN_LASER_SPEED;
-        b.omenLaser = true;
-        b.anchorX = cx;
-        b.startW = bw;
-        b.terrainGrace = 0.15f;   // (it starts on top of the Omen, right against the rock)
-        eBullets.add(b);
-    }
-
-    /**
-     * Omen's laser widens as it flies, both ends moving apart, up to Enemy.OMEN_LASER_MAX_W. Like the Ripple on the
-     * vertical stages: an end stops at rock and at the screen edge, and pulls back in a narrower passage.
-     */
-    private void growOmenLaser(Bullet b, float dt) {
-        float step = Enemy.OMEN_LASER_GROW * dt / 2f;
-        float mid = b.anchorX, half = b.startW / 2f, maxHalf = Enemy.OMEN_LASER_MAX_W / 2f;
-        float right = b.x + b.w, left = b.x;
-        float y = b.y + 1f, h = b.h - 2f;
-        if (right - 2f > mid + half && level.hits(right - 2f, y, 2f, h)) right = Math.max(mid + half, right - step);
-        else if (right + step <= Math.min(scrollX + W, mid + maxHalf) && !level.hits(right, y, step, h)) right += step;
-        if (left + 2f < mid - half && level.hits(left, y, 2f, h)) left = Math.min(mid - half, left + step);
-        else if (left - step >= Math.max(scrollX, mid - maxHalf) && !level.hits(left - step, y, step, h)) left -= step;
-        b.x = left;
-        b.w = right - left;
     }
 
     void enemyBullet(float cx, float cy, float ang, float speed) {

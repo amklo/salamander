@@ -97,7 +97,7 @@ final class Collisions {
         if (w <= 0f || h <= 0f) return false;
         if (g.level.hits(x, y, w, h)) return true;
         if (bossBlocksLaser(x, y, w, h)) return true;
-        if (g.podTouches(x, y, w, h)) return true;      // Eioneus's gun pods
+        if (g.eioneusRoom.podTouches(x, y, w, h)) return true;      // Eioneus's gun pods
         for (Enemy e : g.enemies) {
             if (e.dead || e.withered || e.intangible()) continue;
             if (e.type == Enemy.Type.HEATHEN) {   // Lavinia: the Heathens' pillars (not their gaps)
@@ -134,7 +134,7 @@ final class Collisions {
      */
     boolean bossBlocksLaser(float x, float y, float w, float h) {
         if (g.boss == null) return false;
-        if (g.boss.ghost) return !g.boss.dying && g.bossShotTouches(x, y, w, h);   // (Op 4: only its weak spots stop a laser)
+        if (g.boss.ghost) return !g.boss.dying && g.op4.bossShotTouches(x, y, w, h);   // (Op 4: only its weak spots stop a laser)
         if (g.touchesBoss(x, y, w, h) || g.boss.ringTouches(x, y, w, h)) return true;
         return g.boss.hasHatch && g.overlap(x, y, w, h, g.boss.x + g.boss.hatchX, g.boss.y + g.boss.hatchY, g.boss.hatchW, g.boss.hatchH);
     }
@@ -308,7 +308,7 @@ final class Collisions {
                     if (k >= 0) {
                         if (laser) { if (b.hits.contains(e.heathenBarKey[k])) continue; b.hits.add(e.heathenBarKey[k]); } else b.dead = true;
                         e.heathenBarHp[k] -= Math.max(1, Math.round(b.dmg));
-                        if (e.heathenBarHp[k] <= 0) g.breakHeathenBar(e, k, b.owner);
+                        if (e.heathenBarHp[k] <= 0) g.lavinia.breakHeathenBar(e, k, b.owner);
                         else { g.a.play("hit", 0.15f); g.hitSpark(b, e.heathenBarX(k), e.heathenBarY(), Enemy.HEATHEN_BAR_W, Enemy.HEATHEN_BAR_H); }
                         if (b.dead) break;
                         continue;
@@ -326,7 +326,7 @@ final class Collisions {
                     g.hitSpark(b, e.x, e.y, e.w, e.h);
                     break;
                 }
-                if (laser && !b.seg && e.type == Enemy.Type.BLOCK_BIG && !b.hits.contains(e)) g.reflectLaser(b, e);   // (and it still hurts it)
+                if (laser && !b.seg && e.type == Enemy.Type.BLOCK_BIG && !b.hits.contains(e)) g.lavinia.reflectLaser(b, e);   // (and it still hurts it)
                 if (laser) { if (b.hits.contains(e)) continue; b.hits.add(e); } else b.dead = true;
                 if (e.indestructible()) {   // can't be destroyed: the shot just stops on it
                     g.a.play("hit", 0.1f);
@@ -348,10 +348,10 @@ final class Collisions {
             // a laser stops just in front of the boss (laserBlocked): look a little past its end
             float hx = bx, hy = by, hw = bw, hh = bh;
             if (laser) { if (b.vert) { hy -= LASER_REACH; hh += 2f * LASER_REACH; } else { hx -= LASER_REACH; hw += 2f * LASER_REACH; } }
-            if (g.barBossShot(b, hx, hy, hw, hh, laser)) continue;   // a bar-wall boss: a bar or orb took it
-            if (g.podShot(b, hx, hy, hw, hh, laser)) continue;       // Eioneus's gun pods: a bar took it, or the pod stopped it
-            if (g.kierkeBossShot(b, hx, hy, hw, hh, laser)) continue;   // Kierke's machine wall: a barrel, a ball, the core or armour
-            if (g.boss != null && !g.boss.dying && (g.bossShotTouches(hx, hy, hw, hh)   // (Tetran's rings stop a laser but aren't hurt)
+            if (g.barBosses.barBossShot(b, hx, hy, hw, hh, laser)) continue;   // a bar-wall boss: a bar or orb took it
+            if (g.eioneusRoom.podShot(b, hx, hy, hw, hh, laser)) continue;       // Eioneus's gun pods: a bar took it, or the pod stopped it
+            if (g.kierkeBoss.kierkeBossShot(b, hx, hy, hw, hh, laser)) continue;   // Kierke's machine wall: a barrel, a ball, the core or armour
+            if (g.boss != null && !g.boss.dying && (g.op4.bossShotTouches(hx, hy, hw, hh)   // (Tetran's rings stop a laser but aren't hurt)
                     || g.boss.hasHatch && g.overlap(hx, hy, hw, hh, g.boss.x + g.boss.hatchX, g.boss.y + g.boss.hatchY, g.boss.hatchW, g.boss.hatchH))) {
                 // Bosses with an eye only take damage on the eye, and not while it is fully closed;
                 // other bosses take damage anywhere. A laser hurts it once per beam.
@@ -360,7 +360,7 @@ final class Collisions {
                 boolean onEye = g.boss.hasEye && g.overlap(hx, hy, hw, hh, ex, ey, g.boss.eyeW, g.boss.eyeH);
                 boolean onCore = g.boss.coreTouches(hx, hy, hw, hh);
                 boolean onHatch = g.boss.hasHatch && g.overlap(hx, hy, hw, hh, g.boss.x + g.boss.hatchX, g.boss.y + g.boss.hatchY, g.boss.hatchW, g.boss.hatchH);
-                boolean weak = g.barBossNow() ? false   // bar-wall boss: only its bars / orbs (barBossShot), the body just stops shots
+                boolean weak = g.barBosses.barBossNow() ? false   // bar-wall boss: only its bars / orbs (barBossShot), the body just stops shots
                         : g.boss.hasHatch ? onHatch || g.boss.hatchBroken()   // Lavinia: the hatch (open or closed), or anywhere while it is broken
                         : g.boss.weakW > 0f ? g.boss.weakTouches(hx, hy, hw, hh)   // (Op 4's sphere: its eye)
                         : g.boss.hasCore ? onCore : !g.boss.hasEye || (onEye && !g.boss.eyeShut());   // core: the only weak spot
@@ -413,7 +413,7 @@ final class Collisions {
             // (Albert, 2026-10-30: no enemy bullet passes scenery; one fired from inside rock only gets out of that rock)
             if (rock && (b.t >= b.terrainGrace || b.leftRock)) { b.dead = true; continue; }
             if (b.guard == null && !b.omenLaser && g.sceneryStops(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }
-            if (g.kierkeBossNow() && !g.boss.dying && g.kierkeTouches(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }   // (Kierke's wall: no shot gets through)
+            if (g.kierkeBoss.kierkeBossNow() && !g.boss.dying && g.kierkeBoss.kierkeTouches(b.x, b.y, b.w, b.h)) { b.dead = true; continue; }   // (Kierke's wall: no shot gets through)
             for (Hazard h : g.hazards) {
                 if (h.type == Hazard.Type.FANG && h.touches(b.x, b.y, b.w, b.h)) b.dead = true;
             }
@@ -541,13 +541,13 @@ final class Collisions {
             hurt(p, false);
             if (p.dead) return;
         }
-        if (g.podTouches(hx, hy, hw, hh)) {             // Eioneus's gun pods (the shot-away inside of a column is free)
+        if (g.eioneusRoom.podTouches(hx, hy, hw, hh)) {             // Eioneus's gun pods (the shot-away inside of a column is free)
             hurt(p, false);
             if (p.dead) return;
         }
         collideMeteors(p);
         if (p.dead) return;
-        g.collideSparks(p);
+        g.lavinia.collideSparks(p);
         for (GameScreen.Capsule c : g.caps) {
             if (!c.dead() && g.overlap(p.x + 2f, p.y, 28f, 16f, c.x, c.y, g.capW, g.capH)) {
                 c.x = -99999f;   // consumed (culled next frame)

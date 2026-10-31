@@ -86,7 +86,7 @@ public class Boss {
         if (hatchState == HATCH_CLOSED) {                 // opens, and a Rage comes out
             hatchState = HATCH_OPENED;
             hatchT = HATCH_OPEN;
-            g.launchRage(x + hatchX - 15f, y + hatchY + hatchH / 2f - 7.5f);
+            g.lavinia.launchRage(x + hatchX - 15f, y + hatchY + hatchH / 2f - 7.5f);
         } else {
             hatchState = HATCH_CLOSED;
             hatchT = HATCH_PERIOD - HATCH_OPEN;
@@ -516,8 +516,8 @@ public class Boss {
             if (appearT >= GUNS_APPEAR) appearing = false;
             return;
         }
-        if ((gunsLaserT -= dt) <= 0f) { gunsLaserT = GUNS_LASER_EVERY; g.gunLasers(this); }
-        if ((gunsCreatureT -= dt) <= 0f) { gunsCreatureT = GUNS_CREATURE_EVERY; g.gunCreature(this); }
+        if ((gunsLaserT -= dt) <= 0f) { gunsLaserT = GUNS_LASER_EVERY; g.bossGuns.gunLasers(this); }
+        if ((gunsCreatureT -= dt) <= 0f) { gunsCreatureT = GUNS_CREATURE_EVERY; g.bossGuns.gunCreature(this); }
     }
 
     /**
@@ -577,7 +577,7 @@ public class Boss {
             eioTop = eioTop < eioWant ? Math.min(eioWant, eioTop + EIO_STEP) : Math.max(eioWant, eioTop - EIO_STEP);
         }
         y = g.scrollY + H - eioTop - h;
-        if ((eioBeamT -= dt) <= 0f) { eioBeamT = EIO_BEAM_EVERY; g.eioneusLasers(this); }
+        if ((eioBeamT -= dt) <= 0f) { eioBeamT = EIO_BEAM_EVERY; g.bossGuns.eioneusLasers(this); }
     }
 
     public Boss(int kind, float x, int hp, float w, float h) {

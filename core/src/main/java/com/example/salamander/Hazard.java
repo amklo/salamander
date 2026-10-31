@@ -356,7 +356,7 @@ public class Hazard {
             float sx = x - g.scrollX;
             if (gunHoComing) {                                // open: the Gun Ho comes out of the middle
                 timer -= dt;
-                if (timer <= 0f) { gunHoComing = false; g.hatchGunHo(x + w / 2f, y); hatchShutT = GUNHO_HATCH_SHUT; }
+                if (timer <= 0f) { gunHoComing = false; g.lavinia.hatchGunHo(x + w / 2f, y); hatchShutT = GUNHO_HATCH_SHUT; }
                 return;
             }
             if (hatchShutT > 0f && (hatchShutT -= dt) <= 0f) open = false;

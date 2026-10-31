@@ -74,7 +74,7 @@ final class GameRenderer {
         g.batch.setProjectionMatrix(g.cam.combined);
         g.batch.begin();
         float camL = Math.round(g.scrollX), camB = Math.round(g.scrollY);
-        boolean dark = g.lightsOut();   // Lavinia: the lights are off (only what moves is seen)
+        boolean dark = g.lavinia.lightsOut();   // Lavinia: the lights are off (only what moves is seen)
         if (g.level.background != null && !dark) {   // map property "background"; stage 1 is plain black space
             g.batch.draw(g.bgTex, camL, camB, W, H, (int) (g.scrollX * 0.25f), 0, W, H, false, false);
         }
@@ -86,8 +86,8 @@ final class GameRenderer {
             drawFangs();      // teeth first, so the ground hides the part that is pulled in
             drawTerrain();
         }
-        g.drawSparks();
-        g.drawPods();           // Eioneus's gun pods
+        g.lavinia.drawSparks();
+        g.eioneusRoom.drawPods();           // Eioneus's gun pods
         g.drawDissolving();     // pictures breaking up (dissolveDeath)
         drawGround();         // bases and destroyed enemies that stay: under everything in play
         drawHazards();
@@ -95,7 +95,7 @@ final class GameRenderer {
         drawCapsules();
         drawEnemies();
         if (g.boss != null) drawBoss();
-        g.drawGunLasers();
+        g.bossGuns.drawGunLasers();
         drawBullets();
         for (Player p : g.players) if (g.alive(p)) drawPlayer(p);
         if (g.debugHitbox) for (Player p : g.players) if (g.alive(p)) drawHitbox(p);
@@ -216,14 +216,14 @@ final class GameRenderer {
     /** Stage art (image layers), the "terrain" tile layer, and the bricks that are still standing. */
     void drawTerrain() {
         float camL = Math.round(g.scrollX), camB = Math.round(g.scrollY);
-        for (int i = 0; i < g.artTex.length && !g.terrainGone; i++) {   // (Op 4's end: dissolved)
+        for (int i = 0; i < g.artTex.length && !g.op4.terrainGone; i++) {   // (Op 4's end: dissolved)
             Level.Art t = g.level.art.get(i);
             if (t.x > camL + W || t.x + t.w < camL || t.y > camB + H || t.y + t.h < camB) continue;
             g.batch.draw(g.artTex[i], t.x, t.y, t.w, t.h);
         }
-        if (!g.terrainGone) drawWeb(camL);                 // (Kierke: the web flickers as the screen scrolls)
-        if (!g.terrainGone) drawBgLights(camL, camB);      // (Op 4: the background lights, still under every sprite)
-        g.drawWalls();                                     // stage 3: the end room's wall (until it has dissolved)
+        if (!g.op4.terrainGone) drawWeb(camL);                 // (Kierke: the web flickers as the screen scrolls)
+        if (!g.op4.terrainGone) drawBgLights(camL, camB);      // (Op 4: the background lights, still under every sprite)
+        g.laviniaRoom.drawWalls();                                     // stage 3: the end room's wall (until it has dissolved)
         float s = g.level.cell;
         int c0 = Math.max(0, (int) (camL / s) - 1), c1 = Math.min(g.level.gCols - 1, (int) ((camL + W) / s) + 1);
         int r0 = Math.max(0, (int) (camB / s) - 1), r1 = Math.min(g.level.gRows - 1, (int) ((camB + H) / s) + 1);
@@ -478,19 +478,19 @@ final class GameRenderer {
                 continue;
             }
             if (e.type == Enemy.Type.BLOCK_SMALL || e.type == Enemy.Type.BLOCK_BIG) {
-                TextureRegion br = e.type == Enemy.Type.BLOCK_BIG ? g.blockBigR : g.blockSmallR;
+                TextureRegion br = e.type == Enemy.Type.BLOCK_BIG ? g.lavinia.blockBigR : g.lavinia.blockSmallR;
                 if (br != null) g.batch.draw(br, e.x, e.y);
                 continue;
             }
             if (e.type == Enemy.Type.LED_ZEP) {         // the picture walks left on the floor: mirrored heading right, upside down on the ceiling
-                if (g.ledZepF != null) {
-                    TextureRegion f = g.ledZepF[e.zepState == 0 ? 0 : g.ledZepF.length - 1];   // frame 0 on the ground, frame 1 in the air (Albert)
+                if (g.lavinia.ledZepF != null) {
+                    TextureRegion f = g.lavinia.ledZepF[e.zepState == 0 ? 0 : g.lavinia.ledZepF.length - 1];   // frame 0 on the ground, frame 1 in the air (Albert)
                     g.batch.draw(f, e.zepRight ? e.x + e.w : e.x, e.zepCeil ? e.y + e.h : e.y, e.zepRight ? -e.w : e.w, e.zepCeil ? -e.h : e.h);
                 }
                 continue;
             }
             if (e.type == Enemy.Type.LASER_GUN) {       // the gun (mirrored pointing left), then its pulse
-                if (g.laserGunR != null) g.batch.draw(g.laserGunR, e.lgunLeft ? e.x + e.w : e.x, e.y, e.lgunLeft ? -e.w : e.w, e.h);
+                if (g.lavinia.laserGunR != null) g.batch.draw(g.lavinia.laserGunR, e.lgunLeft ? e.x + e.w : e.x, e.y, e.lgunLeft ? -e.w : e.w, e.h);
                 if (e.beamW > 0f && g.omenLaserTex != null) {
                     Texture lt = g.omenLaserTex[(int) (e.t * Enemy.OMEN_LASER_FLASH) % g.omenLaserTex.length];
                     g.batch.draw(lt, e.beamX, e.beamY, e.beamW, e.beamH, 0, 0, Math.round(e.beamW), lt.getHeight(), e.lgunLeft, false);
@@ -503,12 +503,12 @@ final class GameRenderer {
                     int th = lt.getHeight();
                     g.batch.draw(lt, e.beamX + e.beamW, e.beamY, 0f, 0f, e.beamH, e.beamW, 1f, 1f, 90f, 0, 0, Math.round(e.beamH), th, false, false);
                 }
-                if (g.rageR != null) g.batch.draw(g.rageR, e.x, e.y);
+                if (g.lavinia.rageR != null) g.batch.draw(g.lavinia.rageR, e.x, e.y);
                 continue;
             }
             if (e.type == Enemy.Type.HEATHEN) {         // the pillar; a bar that was shot away is painted over in black
-                if (g.heathenR == null) continue;
-                g.batch.draw(g.heathenR[e.heathenKind], e.x, e.y);
+                if (g.lavinia.heathenR == null) continue;
+                g.batch.draw(g.lavinia.heathenR[e.heathenKind], e.x, e.y);
                 for (int k = 0; k < Enemy.HEATHEN_BARS; k++) {
                     if (e.heathenBarHp[k] > 0) continue;
                     g.batch.setColor(Color.BLACK);
@@ -578,7 +578,7 @@ final class GameRenderer {
                 continue;
             }
             if (e.type == Enemy.Type.GAMMA) {
-                TextureRegion[] gfr = e.gammaRed && g.gammaRedF != null ? g.gammaRedF : g.gammaF;
+                TextureRegion[] gfr = e.gammaRed && g.lavinia.gammaRedF != null ? g.lavinia.gammaRedF : g.gammaF;
                 if (gfr != null) g.batch.draw(gfr[Enemy.GAMMA_ORDER[(int) (Math.max(0f, e.t) / Enemy.GAMMA_FRAME) % Enemy.GAMMA_ORDER.length] % gfr.length], e.x, e.y, e.w, e.h);
                 continue;
             }
@@ -665,23 +665,23 @@ final class GameRenderer {
     }
 
     void drawBoss() {
-        if (g.kierkeBossNow()) { g.drawKierkeBoss(); return; }
+        if (g.kierkeBoss.kierkeBossNow()) { g.kierkeBoss.drawKierkeBoss(); return; }
         if (g.boss.dissolve && g.boss.dying) return;        // (breaking up: drawDissolving shows it)
-        if (g.boss.appearing) { if (g.gunsAppear != null) g.gunsAppear.draw(g.batch, g.boss.x, g.boss.y); return; }
+        if (g.boss.appearing) { if (g.op4.gunsAppear != null) g.op4.gunsAppear.draw(g.batch, g.boss.x, g.boss.y); return; }
         drawTentacles();                                // under the body
         if (g.boss.flash > 0f) g.batch.setColor(1f, 0.55f, 0.55f, 1f);
         if (g.boss.dying && (int) (g.boss.dieT * 20f) % 2 == 0) g.batch.setColor(1f, 1f, 1f, 0.5f);
         g.batch.draw(g.curBossR(), g.boss.x, g.boss.y, g.boss.w, g.boss.h);
         if (g.boss.hasCore) {                              // in its hole, with the blocks still left
-            g.batch.draw(g.coreR, g.boss.x + g.boss.coreX, g.boss.y + g.boss.coreY, g.boss.coreW, g.boss.coreH);
-            g.drawCoreBlocks();
+            g.batch.draw(g.brain.coreR, g.boss.x + g.boss.coreX, g.boss.y + g.boss.coreY, g.boss.coreW, g.boss.coreH);
+            g.brain.drawCoreBlocks();
         }
-        if (g.boss.hasHatch && g.hatchF != null) {
-            TextureRegion f = g.hatchF[Math.min(g.boss.hatchState, g.hatchF.length - 1)];
+        if (g.boss.hasHatch && g.lavinia.hatchF != null) {
+            TextureRegion f = g.lavinia.hatchF[Math.min(g.boss.hatchState, g.lavinia.hatchF.length - 1)];
             g.batch.draw(f, g.boss.x + g.boss.hatchX, g.boss.y + g.boss.hatchY);
         }
-        if (g.boss.hasEye && g.eyeF != null) {
-            TextureRegion f = g.eyeF[g.boss.eyeFrame()];
+        if (g.boss.hasEye && g.brain.eyeF != null) {
+            TextureRegion f = g.brain.eyeF[g.boss.eyeFrame()];
             g.batch.draw(f, g.boss.x + g.boss.eyeX, g.boss.y + g.boss.eyeY, f.getRegionWidth(), f.getRegionHeight());
         }
         g.batch.setColor(Color.WHITE);

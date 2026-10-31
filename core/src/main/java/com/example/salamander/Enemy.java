@@ -268,7 +268,7 @@ public class Enemy {
             if (whipAlong >= WHIP_DEPTH) {
                 whipAlong = WHIP_DEPTH; whipState = 1; whipTimer = WHIP_HOLD;
                 // as it stops: one expanding laser (like the Omen's) toward the far side of the screen
-                if (vertical && canShoot(g)) g.omenLaser(x + w / 2f, whipFromBottom ? y + h : y, whipFromBottom);
+                if (vertical && canShoot(g)) g.laviniaRoom.omenLaser(x + w / 2f, whipFromBottom ? y + h : y, whipFromBottom);
             }
         } else if (whipState == 1) {
             whipTimer -= dt;
@@ -1402,7 +1402,7 @@ public class Enemy {
                         omenShots = 0;
                         omenT = OMEN_DELAY - OMEN_REPEAT;
                     }
-                    g.omenLaser(x + w / 2f, ceiling ? y + 2f : y + h - 2f, !ceiling);   // from its orange top, away from the rock
+                    g.laviniaRoom.omenLaser(x + w / 2f, ceiling ? y + 2f : y + h - 2f, !ceiling);   // from its orange top, away from the rock
                 }
                 break;
             }
@@ -1647,7 +1647,7 @@ public class Enemy {
         if (!canShoot(g)) return;                         // waits until it is on screen
         if (windT > 0f) {                                 // stopped, about to fire
             windT -= dt;
-            if (windT <= 0f) g.guardBeam(this);
+            if (windT <= 0f) g.laviniaRoom.guardBeam(this);
             return;
         }
         Player tp = g.target(x + w / 2f, y + h / 2f);
@@ -1658,7 +1658,7 @@ public class Enemy {
         } else if (Math.abs(guardGoal - guardPos()) < 1f) {   // got there: pick the next random spot
             guardGoal = MathUtils.random(moveMin + half, moveMax - half);
         }
-        boolean firing = g.guardBeamOnScreen(this);       // stands still while its laser is on screen
+        boolean firing = g.laviniaRoom.guardBeamOnScreen(this);       // stands still while its laser is on screen
         float d = guardGoal - guardPos(), speed = chasing ? GUARD_ALIGN_SPEED : GUARD_SPEED;
         float step = firing ? 0f : Math.signum(d) * Math.min(Math.abs(d), speed * dt);
         if (guardSide == GUARD_WALL) y += step; else x += step;
@@ -2039,7 +2039,7 @@ public class Enemy {
         oeSx += MathUtils.cos(oeAng) * OEATER_SPEED * dt;
         oeSy += MathUtils.sin(oeAng) * OEATER_SPEED * dt;
         x = g.scrollX + oeSx; y = g.scrollY + oeSy;
-        if (t > 0.5f) g.eatOption(this);
+        if (t > 0.5f) g.op4.eatOption(this);
     }
 
     /** Its frame: 0 = white, 1 = red. */
