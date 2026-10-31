@@ -32,7 +32,7 @@ public class GameScreen extends ScreenAdapter {
     private static final int SW = SalamanderGame.SCREEN_W, SH = SalamanderGame.SCREEN_H, HUD_H = SalamanderGame.HUD_H;
     static final float RESPAWN_DELAY = 1.8f;
     /** Player 2's ship and options are tinted so the two ships can be told apart. */
-    private static final Color P2_TINT = new Color(1f, 0.7f, 0.4f, 1f);
+    static final Color P2_TINT = new Color(1f, 0.7f, 0.4f, 1f);
 
     enum State { INTRO, PLAY, PAUSE, DEAD, CLEAR, GAMEOVER, WIN }
 
@@ -44,14 +44,14 @@ public class GameScreen extends ScreenAdapter {
         boolean wrapped;
         boolean dead() { return x < -9999f; }
     }
-    private static class Explosion { float x, y, t, scale; }
+    static class Explosion { float x, y, t, scale; }
 
     final SalamanderGame game;
     final Assets a;
-    private final SpriteBatch batch;
-    private final OrthographicCamera cam = new OrthographicCamera();
-    private final OrthographicCamera hud = new OrthographicCamera(SW, SH);
-    private final FitViewport vp;
+    final SpriteBatch batch;
+    final OrthographicCamera cam = new OrthographicCamera();
+    final OrthographicCamera hud = new OrthographicCamera(SW, SH);
+    final FitViewport vp;
 
     final int levelIdx;
     final Level level;
@@ -77,14 +77,16 @@ public class GameScreen extends ScreenAdapter {
     final PlayerWeapons weapons = new PlayerWeapons(this);
     /** Bullets against targets, and the ships against everything (see Collisions). */
     final Collisions collisions = new Collisions(this);
+    /** Draws each frame (see GameRenderer). */
+    final GameRenderer renderer = new GameRenderer(this);
 
     State state = State.INTRO;
-    private float stateT, checkpointT;
+    float stateT, checkpointT;
     private int nextSpawn;
     Boss boss;
     private boolean bossSpawned;
     /** F1 / H toggles the hitbox overlay (static so it survives stage changes). */
-    private static boolean debugHitbox;
+    static boolean debugHitbox;
     /** D on the title screen: every stage (and every newly joined ship) starts with the debug loadout. */
     static boolean debugLoadout;
     public static final int STAGES = 7;
@@ -104,7 +106,7 @@ public class GameScreen extends ScreenAdapter {
     final ArrayList<Bullet> pBullets = new ArrayList<>();
     final ArrayList<Enemy> enemies = new ArrayList<>();
     /** Kierke chains on their way: started (its start reached Enemy.CHAIN_START_X), time since, balls grown, the last ball. */
-    private static final class ChainRun { Level.Chain c; boolean started; float t, lastX, lastY; int made; Enemy root; }
+    static final class ChainRun { Level.Chain c; boolean started; float t, lastX, lastY; int made; Enemy root; }
     private final ArrayList<ChainRun> chainRuns = new ArrayList<>();
     final ArrayList<Hazard> hazards = new ArrayList<>();
 
@@ -122,122 +124,122 @@ public class GameScreen extends ScreenAdapter {
     private float[] storm;
     /** Rocks spawned in this storm since the last big one (a big one comes about every Meteor.BIG_EVERY small ones). */
     private int stormSmallRun;
-    private final ArrayList<Explosion> fx = new ArrayList<>();
+    final ArrayList<Explosion> fx = new ArrayList<>();
     private final HashMap<Integer, Enemy.Group> groups = new HashMap<>();
 
     // art
-    private final Texture bgTex, starTex;
+    final Texture bgTex, starTex;
     final float capW, capH;                 // power capsule size, from sprites/PowerCapsule.png
     /** Legacy (sprites/legacy.png): 7 frames of 16x16, white with a black outline (see Enemy.legacyFrame). */
-    private final TextureRegion[] legacyF;
-    private static final Color LEGACY_GREEN = new Color(0x73 / 255f, 1f, 0x73 / 255f, 1f);   // the old fly-by wave
+    final TextureRegion[] legacyF;
+    static final Color LEGACY_GREEN = new Color(0x73 / 255f, 1f, 0x73 / 255f, 1f);   // the old fly-by wave
     /** Hovering Legacy colour cycle (MSX): magenta, magenta, blue, magenta, magenta, red; LEGACY_COLOUR_TIME s each. */
-    private static final Color[] LEGACY_COLOURS;
+    static final Color[] LEGACY_COLOURS;
     static {
         Color m = new Color(224 / 255f, 82 / 255f, 186 / 255f, 1f), b = new Color(82 / 255f, 115 / 255f, 1f, 1f),
                 r = new Color(1f, 39 / 255f, 39 / 255f, 1f);
         LEGACY_COLOURS = new Color[]{m, m, b, m, m, r};
     }
-    private static final float LEGACY_COLOUR_TIME = 2f / 60f;
+    static final float LEGACY_COLOUR_TIME = 2f / 60f;
     /** Player 2's ship (sprites/player_red.png, same layout as player.png). */
-    private final TextureRegion[] playerRedF;
-    private final TextureRegion[] playerF, optionF, walkF, capF, boomF, lavaF;
+    final TextureRegion[] playerRedF;
+    final TextureRegion[] playerF, optionF, walkF, capF, boomF, lavaF;
     /** sprites/powercapsule_green.png (same layout as PowerCapsule.png); the normal capsule when it is missing. */
-    private final TextureRegion[] capGreenF;
-    private final TextureRegion hudER, hudBoxR, hudBoxOffR;
-    private final TextureRegion[] bamdaF, armF;
-    private final TextureRegion[] hudSlotR, hudShipR;
+    final TextureRegion[] capGreenF;
+    final TextureRegion hudER, hudBoxR, hudBoxOffR;
+    final TextureRegion[] bamdaF, armF;
+    final TextureRegion[] hudSlotR, hudShipR;
     /** Bio turrets: frame 0 points diagonally left, frame 1 points up. Red ones carry a power capsule. */
-    private final TextureRegion[] bioRedF, bioBlueF;
+    final TextureRegion[] bioRedF, bioBlueF;
     /**
      * Stage 1 and Kierke walkers: "bio walker red/blue.png", 5 frames played forward then backward (no left / right facing).
      * Red ones carry a power capsule. null on the other stages, which keep walker.png.
      */
-    private final TextureRegion[] bioWalkRedF, bioWalkBlueF;
-    private static final float BIO_WALK_FPS = 8f;
+    final TextureRegion[] bioWalkRedF, bioWalkBlueF;
+    static final float BIO_WALK_FPS = 8f;
     /** Enemy bullets spin this many quarter turns per second. */
-    private static final float EBULLET_SPIN = 12f;
+    static final float EBULLET_SPIN = 12f;
     /** Celtic Frost (sprites/celtic frost.png). */
-    private final TextureRegion frostR;
+    final TextureRegion frostR;
     /** Possessed (sprites/possessed_red.png / possessed_cyan.png, 16x16), drawn as they are. */
-    private TextureRegion possRedR, possCyanR;
+    TextureRegion possRedR, possCyanR;
     /** Whiplash (sprites/whiplash.png, 15x16), drawn as it is. */
-    private TextureRegion whipR;
+    TextureRegion whipR;
     /** Battleaxe (sprites/battleaxe.png, 16x16), drawn as it is. */
-    private TextureRegion axeR;
+    TextureRegion axeR;
     /** Kierke chain balls (sprites/chain_balls.png, 26x8): the 8x8, 6x6 and 4x4 ball. */
-    private TextureRegion[] chainR;
+    TextureRegion[] chainR;
     /** Aberrant (sprites/aberrant.png, 2 frames of 16x16: alive, withered); nest (sprites/nest.png, 38x22); nest bug (sprites/nest_bug.png). */
-    private TextureRegion[] aberrantF;
-    private TextureRegion nestR;
+    TextureRegion[] aberrantF;
+    TextureRegion nestR;
     /** Creeping Death (sprites/creeping death.png: 4 frames, white; any black pixels made see-through) and its colours. */
-    private TextureRegion[] creepF;
-    private static final Color CREEP_CYAN = new Color(82 / 255f, 224 / 255f, 1f, 1f), CREEP_GREEN = new Color(115 / 255f, 1f, 115 / 255f, 1f),
+    TextureRegion[] creepF;
+    static final Color CREEP_CYAN = new Color(82 / 255f, 224 / 255f, 1f, 1f), CREEP_GREEN = new Color(115 / 255f, 1f, 115 / 255f, 1f),
             CREEP_RED = new Color(1f, 39 / 255f, 39 / 255f, 1f), CREEP_DARK_GREEN = new Color(39 / 255f, 155 / 255f, 39 / 255f, 1f);
     /** Ug (sprites/ug.png, 3 frames of 16x16). */
-    private TextureRegion[] ugF;
+    TextureRegion[] ugF;
     /** Gamma (sprites/gamma.png, 4 frames of 16x16). */
-    private TextureRegion[] gammaF;
+    TextureRegion[] gammaF;
     /** Kierke green mine: sprites/green_mine.png, 2 frames of 16x16. */
-    private TextureRegion[] greenMineF;
+    TextureRegion[] greenMineF;
     /** Op 4's option eater (sprites/option_eater.png: white, red; see Enemy.updateOptionEater). */
-    private TextureRegion[] optionEaterF;
+    TextureRegion[] optionEaterF;
     /** Op 4 (stage 6): Exodus (cyan / red, 3 frames), artillery (green / red), base, dome, blue asteroid, moai, orb, ring. */
-    private TextureRegion[] exodusCyanF, exodusRedF, base6F;
+    TextureRegion[] exodusCyanF, exodusRedF, base6F;
     /**
      * Background lights (Op 4: stage_6_back_ground_lights.png, 3 frames of 7x7; Lavinia: stage_3_..., 3 frames of 8x8):
      * sprites/stage_<N>_back_ground_lights.png, square frames in a row; each shown level.bgLightsFrame s.
      */
-    private TextureRegion[] bgLightsF;
-    private String bgLightsFile;
-    private int bgLightsSize;
-    private float bgLightsClock;
-    private TextureRegion artilleryGreenR, artilleryRedR, blueAsteroidR, orbR, ring6R;
+    TextureRegion[] bgLightsF;
+    String bgLightsFile;
+    int bgLightsSize;
+    float bgLightsClock;
+    TextureRegion artilleryGreenR, artilleryRedR, blueAsteroidR, orbR, ring6R;
     /** Artillery's frames (artillery_green / _red.png: 2 frames of 16x16 side by side; Albert, 2026-10-30), cycled every ART_FRAME s. */
-    private TextureRegion[] artilleryGreenF, artilleryRedF;
-    private static final float ART_FRAME = 0.4f;
+    TextureRegion[] artilleryGreenF, artilleryRedF;
+    static final float ART_FRAME = 0.4f;
     /** Op 4 moai: mouth shut, mouth open (sprites/moai.png, 2 frames of 50x38). */
-    private TextureRegion[] moaiF;
+    TextureRegion[] moaiF;
     /** The green flyers of the Eioneus / Op 4 domes (sprites/green_flyer.png, 4 frames of 16x16; the domes use domeF). */
     /** Eioneus laser batteries (sprites/laser_battery_small.png, laser_battery_big.png; their dark background is see-through). */
-    private TextureRegion batterySmallR, batteryBigR;
+    TextureRegion batterySmallR, batteryBigR;
     /** Eioneus gremlins (sprites/gremlin_yellow.png, gremlin_red.png: 3 frames of 16x16, frame 0 = aiming). */
-    private TextureRegion[] gremlinYellowF, gremlinRedF;
+    TextureRegion[] gremlinYellowF, gremlinRedF;
     /** Eioneus bases (sprites/eioneus_base_core.png, the middle of the base: 4 frames of 20x21) and flying mines (sprites/flying_mines.png, flying_mines_red.png: 5 frames of 16x16; black = see-through). */
-    private TextureRegion[] baseF;
-    private TextureRegion[] mineWhiteF, mineRedF;
+    TextureRegion[] baseF;
+    TextureRegion[] mineWhiteF, mineRedF;
     private static final Color BEAM_RED = new Color(1f, 39 / 255f, 39 / 255f, 1f), BEAM_BLUE = new Color(82 / 255f, 115 / 255f, 1f, 1f);
-    private TextureRegion[] greenF;
+    TextureRegion[] greenF;
     /** SHIELD (sprites/shield.png): 8x16 frames, looped. null = picture not there yet (drawn as a plain bar). */
-    private final TextureRegion[] shieldF;
+    final TextureRegion[] shieldF;
     /** sprites/shield_red.png: the same field once it has Player.SHIELD_LOW hits or fewer left (null = keep shield.png). */
-    private final TextureRegion[] shieldRedF;
-    private static final float SHIELD_FPS = 12f;
+    final TextureRegion[] shieldRedF;
+    static final float SHIELD_FPS = 12f;
     /** Missing Link (sprites/missing_link.png): 7 frames of a barrel roll, looped. */
-    private final TextureRegion[] linkF;
+    final TextureRegion[] linkF;
     /** Amoeba (sprites/amoeba.png): 3 frames of 16x16, looped. */
-    private final TextureRegion[] amoebaF;
+    final TextureRegion[] amoebaF;
     /** Rugal (sprites/rugal.png): level, diving, climbing. */
-    private final TextureRegion[] rugalF;
+    final TextureRegion[] rugalF;
     /** sprites/rugal_red.png: a Rugal that carries a power capsule (same frames as rugal.png). */
-    private final TextureRegion[] rugalRedF;
+    final TextureRegion[] rugalRedF;
     /** Stage 2 dome flyer (sprites/green_flyer.png): 4 frames of 16x16, already green. null = not on this stage. */
-    private final TextureRegion[] domeFlyerF;
+    final TextureRegion[] domeFlyerF;
     /** At most this many amoebas float around at once (the towers stop spitting until some are gone). */
     private static final int AMOEBA_MAX = 16;
     /**
      * Stage 3 Gun Ho (sprites/Gun Ho.png, faces left): frame 0 (gunHoR), and, when the picture holds two frames side by
      * side (wider than tall; Albert, 2026-10-30), frame 1 (gunHoFireR), shown while it lines up to fire (null: one frame).
      */
-    private TextureRegion gunHoR, gunHoFireR;
+    TextureRegion gunHoR, gunHoFireR;
     /** Stage 3 Omen (sprites/Omen.png, floor version; drawn upside down on the ceiling). */
-    private TextureRegion omenR;
+    TextureRegion omenR;
     /** Gun Ho's shot (sprites/Gun Ho bullet.png); its size is the hit box. Missing: a drawn red / yellow beam. */
-    private TextureRegion gunHoBulletR;
+    TextureRegion gunHoBulletR;
     /** Omen's laser: sprites/enemy laser red.png and blue.png (same pattern), repeated sideways, flashing. */
-    private Texture[] omenLaserTex;
+    Texture[] omenLaserTex;
     /** Stage 3 Laser Guard (sprites/Laser Guard.png, pointing down: the ceiling version). */
-    private Texture laserGuardTex;
+    Texture laserGuardTex;
 
     /**
      * Stage 3's last room (map objects "hold" + "dematwall"): the scrolling stops at the hold for level.holdTime
@@ -258,42 +260,42 @@ public class GameScreen extends ScreenAdapter {
     /** The guards slide back into their walls (and stop firing) once the room's time is up. */
     boolean roomRetreating() { return roomState >= ROOM_RETREAT; }
     /** Gun Ho's laser beam: red edges, yellow core (the colours of its shot in the original). */
-    private static final Color GUNHO_BEAM_EDGE = new Color(0xf7 / 255f, 0x20 / 255f, 0x20 / 255f, 1f);
-    private static final Color GUNHO_BEAM_CORE = new Color(0xd8 / 255f, 0xd8 / 255f, 0x20 / 255f, 1f);
+    static final Color GUNHO_BEAM_EDGE = new Color(0xf7 / 255f, 0x20 / 255f, 0x20 / 255f, 1f);
+    static final Color GUNHO_BEAM_CORE = new Color(0xd8 / 255f, 0xd8 / 255f, 0x20 / 255f, 1f);
     final TextureRegion rockR, shotR, laserR, missR, ebR, ffieldR, pix, bossR;
     // ---- vertical stage (stage 2)
     /**
      * sprites/player_blue_vertical.png: the ship pointing up (vertical stages). Three frames side by side: banking
      * left, level, banking right (a picture with a single frame is used for all three).
      */
-    private final TextureRegion[] playerVF;
+    final TextureRegion[] playerVF;
     /** Player 2's vertical ship (sprites/player_red_vertical.png, same layout). */
-    private final TextureRegion[] playerVRedF;
+    final TextureRegion[] playerVRedF;
     /** Wall turrets: [0] = sideways, [1] = diagonal (pointing down), facing right. */
-    private final TextureRegion[] wallTurretRedF, wallTurretGreenF;
+    final TextureRegion[] wallTurretRedF, wallTurretGreenF;
     /** sprites/dome.png: two frames side by side, closed and open (facing right, for the left wall). */
-    private final TextureRegion[] domeF;
+    final TextureRegion[] domeF;
     /** Exact shapes of the dome frames: [frame: closed, open][0 = as drawn (left wall), 1 = mirrored (right wall)]. */
     PixelMask[][] domeMasks;
-    private final TextureRegion rockEyeR, ringR;
+    final TextureRegion rockEyeR, ringR;
     /** Asteroid storm rocks: sprites/rock_small.png (4 frames of 15x15) and sprites/rock_big.png (null = no storms). */
-    private final TextureRegion[] rockSmallF;
-    private final TextureRegion rockBigR;
+    final TextureRegion[] rockSmallF;
+    final TextureRegion rockBigR;
     /** Side volcanoes' red rocks: sprites/rock_small_red.png (the 4 rock_small pictures in the stage's rock red). */
-    private final TextureRegion[] rockRedF;
+    final TextureRegion[] rockRedF;
     /** Exact shape of the eye rock (sprites/rock_eye.png, its dark background made see-through). */
     PixelMask rockEyeMask;
     /** sprites/rubbles.png: what is left of a destroyed eye rock (solid like terrain), and its exact shape. */
     final TextureRegion rubbleR;
     PixelMask rubbleMask;
     /** The map's "brickArt" picture (null = bricks use brick_pattern.png). */
-    private Texture brickArtTex;
+    Texture brickArtTex;
     // map stages: pre-rendered terrain strips, brick maze picture, bamda sprites
-    private Texture[] artTex;
-    private Texture brickTex;
+    Texture[] artTex;
+    Texture brickTex;
     private final java.util.HashMap<String, PixelMask> masks = new java.util.HashMap<>();
     private PixelMask bossMask;
-    private static final Color[] STAR_TINT = {new Color(0.7f, 0.8f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f),
+    static final Color[] STAR_TINT = {new Color(0.7f, 0.8f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f),
             new Color(0.9f, 0.9f, 1f, 1f), new Color(0.9f, 0.9f, 1f, 1f), new Color(0.8f, 0.85f, 1f, 1f),
             new Color(0.9f, 0.9f, 1f, 1f), new Color(0.7f, 1f, 0.8f, 1f)};   // (stage 2 on: plain white stars, like the original)
 
@@ -476,8 +478,8 @@ public class GameScreen extends ScreenAdapter {
             bgLightsSize = a.tex(bgLightsFile).getHeight();
             bgLightsF = a.strip(bgLightsFile, bgLightsSize);
         }
-        unbakeBgLights();
-        loadWeb();
+        renderer.unbakeBgLights();
+        renderer.loadWeb();
         brickTex = a.texFile("maps/brick_pattern.png");
         brickTex.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         for (Level.Tooth t : level.teeth) {
@@ -529,7 +531,7 @@ public class GameScreen extends ScreenAdapter {
         return best;
     }
 
-    private int playersInGame() {
+    int playersInGame() {
         int n = 0;
         for (Player p : players) if (p != null && !p.out) n++;
         return n;
@@ -588,9 +590,9 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Mid-game joiners pick a ship type first: -1 = not choosing, else the type under the cursor. */
-    private final int[] choosing = {-1, -1};
+    final int[] choosing = {-1, -1};
     /** Mid-game joiners then pick their guard: 0 = not yet (still on the ship type), else Player.SHIELD / FFIELD. */
-    private final int[] choosingGuard = {0, 0};
+    final int[] choosingGuard = {0, 0};
 
     /**
      * Player 2 joins by pressing fire, picks a ship type (left / right, fire to launch) and enters;
@@ -819,7 +821,7 @@ public class GameScreen extends ScreenAdapter {
         switch (state) {
             case INTRO:
                 checkJoins();
-                if (stateT > INTRO_BANNER + INTRO_BLACK + INTRO_HUD) setState(State.PLAY);
+                if (stateT > GameRenderer.INTRO_BANNER + GameRenderer.INTRO_BLACK + GameRenderer.INTRO_HUD) setState(State.PLAY);
                 break;
             case PLAY:
                 if (Controls.pressed(Action.PAUSE)) {
@@ -869,7 +871,7 @@ public class GameScreen extends ScreenAdapter {
                 if (stateT > 1f && Controls.pressed(Action.CONFIRM)) game.setScreen(new TitleScreen(game));
                 break;
         }
-        draw();
+        renderer.draw();
     }
 
     private void submitScores() {
@@ -877,8 +879,8 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Game over menu entries (Albert, 2026-10-27); gameOverSel = the one under the cursor. */
-    private static final String[] GAMEOVER_MENU = {"CONTINUE", "END"};
-    private int gameOverSel;
+    static final String[] GAMEOVER_MENU = {"CONTINUE", "END"};
+    int gameOverSel;
 
     /**
      * Game over menu. CONTINUE: every player who was in the game is back with a full set of ships (score kept, as with
@@ -911,8 +913,8 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Pause menu entries; pauseSel = the one under the cursor. */
-    private static final String[] PAUSE_MENU = {"CONTINUE", "TITLE SCREEN"};
-    private int pauseSel;
+    static final String[] PAUSE_MENU = {"CONTINUE", "TITLE SCREEN"};
+    int pauseSel;
 
     /** Returns true when the game was left (back to the title screen). */
     private boolean updatePauseMenu() {
@@ -965,7 +967,7 @@ public class GameScreen extends ScreenAdapter {
     // =============================================================== the pixel-by-pixel death (Dissolver)
 
     /** Pictures breaking up where they are (dissolveDeath): the copy, where it is (world, bottom-left), clock, length. */
-    private static final class Dissolving { Dissolver d; float x, y, t, time; }
+    static final class Dissolving { Dissolver d; float x, y, t, time; }
     private final ArrayList<Dissolving> dissolving = new ArrayList<>();
 
     /**
@@ -1000,7 +1002,7 @@ public class GameScreen extends ScreenAdapter {
         dissolveDeath(frame, e.x, e.y, time);
     }
 
-    private void drawDissolving() {
+    void drawDissolving() {
         for (Dissolving d : dissolving) d.d.draw(batch, d.x, d.y);
     }
 
@@ -1925,7 +1927,7 @@ public class GameScreen extends ScreenAdapter {
 
     // ---- boss eye: "sprites/boss eye.png" holds the frames side by side (closed -> open), separated by
     // empty columns. The boss sprite marks the eye's centre with a small pure green (0,255,0) square.
-    private TextureRegion[] eyeF;
+    TextureRegion[] eyeF;
     private float eyeOX, eyeOY;
     private static final String EYE_FILE = "sprites/boss eye.png";
 
@@ -1976,7 +1978,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** sprites/bossN_core.png (null = this boss has no separate core), and where it sits on the body. */
-    private TextureRegion coreR;
+    TextureRegion coreR;
     private PixelMask coreMask;
     private int coreOX, coreOY;
 
@@ -2025,7 +2027,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Draws the core blocks still left, at their spots in the core (each block's picture centred on its bar). */
-    private void drawCoreBlocks() {
+    void drawCoreBlocks() {
         if (blockR == null) return;
         int ch = coreR.getRegionHeight();
         float bw = blockR.getRegionWidth(), bh = blockR.getRegionHeight();
@@ -2254,7 +2256,7 @@ public class GameScreen extends ScreenAdapter {
         return true;
     }
 
-    private void drawKierkeBoss() {
+    void drawKierkeBoss() {
         if (boss.flash > 0f) batch.setColor(1f, 0.55f, 0.55f, 1f);
         if (boss.dying && (int) (boss.dieT * 20f) % 2 == 0) batch.setColor(1f, 1f, 1f, 0.5f);
         batch.draw(kMainR, boss.x + K_MAIN_X, boss.y);       // (behind the wall)
@@ -2277,7 +2279,7 @@ public class GameScreen extends ScreenAdapter {
     // the shield is blown away. Destroying the middle orb beats the boss. The rest of the body only stops shots.
     // Positions are top-left in the boss picture (x right, y down), found by matching the pictures.
     /** One bar-wall boss: its picture, the boss part it is (-1 = the stage's only boss), bars, orbs, middle column, shield. */
-    private static final class BarBoss {
+    static final class BarBoss {
         final int level, part;
         final String file;
         /** Per column: its bars, lowest (first in line) first. */
@@ -2492,7 +2494,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** The picture of the boss being fought (or coming next). */
-    private TextureRegion curBossR() {
+    TextureRegion curBossR() {
         if (barBossNow()) return barR;                   // (a bar-wall boss: the picture with the parts shot away)
         return bossPartR != null ? bossPartR[Math.min(bossPart, bossPartR.length - 1)] : bossR;
     }
@@ -2610,9 +2612,9 @@ public class GameScreen extends ScreenAdapter {
     private int op4State;
     private float op4T, oeaterT, gmine5T;
     /** The terrain has dissolved (its art isn't drawn, nothing to run into); a beaten boss is breaking up. */
-    private boolean terrainGone, bossDissolving;
+    boolean terrainGone, bossDissolving;
     /** The gun units coming together pixel by pixel (null when they are whole). */
-    private Dissolver gunsAppear;
+    Dissolver gunsAppear;
 
     /** Is this Op 4, with its two bosses (boss5a, boss5b)? */
     private boolean op4End() { return levelIdx == 5 && bossPartR != null; }
@@ -2960,7 +2962,7 @@ public class GameScreen extends ScreenAdapter {
         return false;
     }
 
-    private void drawPods() {
+    void drawPods() {
         if (!podsShown()) return;
         int ph = podPm.getHeight();
         float bh = podBarR.getRegionHeight();
@@ -2976,7 +2978,7 @@ public class GameScreen extends ScreenAdapter {
     // places (GUN_EMITTERS: x, y top-down in boss5b.png), lasers grow down at GUN_LASER_SPEED px/s until they are
     // GUN_LASER_LEN px long, then fall on down the screen: the enemies' red / blue laser (Albert; dotted on the MSX).
     // A green creature comes out of the middle (GUN_MOUTH) and goes for the nearest ship (the Op 4 green flyer).
-    private static final class GunLaser { float sx, top, bottom, t, ex, ey, speed, len; }
+    static final class GunLaser { float sx, top, bottom, t, ex, ey, speed, len; }
     private final ArrayList<GunLaser> gunLasers = new ArrayList<>();
     private static final float[][] GUN_EMITTERS = {{18f, 136f}, {42f, 120f}, {90f, 152f}, {170f, 152f}, {218f, 120f}};
     private static final float[] GUN_MOUTH = {125f, 180f};
@@ -3050,7 +3052,7 @@ public class GameScreen extends ScreenAdapter {
      * The bosses' falling lasers (the gun units, Eioneus): the enemies' laser (sprites/enemy laser red / blue.png,
      * flashing), turned upright as the Rages fire it.
      */
-    private void drawGunLasers() {
+    void drawGunLasers() {
         if (gunLasers.isEmpty() || omenLaserTex == null) return;
         for (GunLaser l : gunLasers) {
             float b1 = Math.min(H, l.top), b0 = Math.max(0f, l.bottom), len = b1 - b0;
@@ -3063,7 +3065,7 @@ public class GameScreen extends ScreenAdapter {
         }
     }
 
-    private int stageBonus() { return 2000 + 1000 * (levelIdx + 1); }
+    int stageBonus() { return 2000 + 1000 * (levelIdx + 1); }
 
     // =============================================================== shooting helpers (used by enemies/bosses)
 
@@ -3073,27 +3075,27 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Op 4 moai rings flash between yellow and white this many times a second (Albert). */
-    private static final float RING_FLASH = 15f;
+    static final float RING_FLASH = 15f;
     /** Points for shooting down an Op 4 moai ring. */
     static final int RING_SCORE = 10;
 
     /** Op 4 moai rings: the yellow ones (#e0e027, as on the MSX); ring_laser.png is white. */
-    private static final Color RING_YELLOW = new Color(0xe0 / 255f, 0xe0 / 255f, 0x27 / 255f, 1f);
+    static final Color RING_YELLOW = new Color(0xe0 / 255f, 0xe0 / 255f, 0x27 / 255f, 1f);
     /** The red rings (they leave a capsule) flash between AMOEBA_RED and this. */
-    private static final Color RING_RED_DARK = new Color(0xb0 / 255f, 0x20 / 255f, 0x20 / 255f, 1f);
+    static final Color RING_RED_DARK = new Color(0xb0 / 255f, 0x20 / 255f, 0x20 / 255f, 1f);
 
     /** Red amoeba colour (#ff2727): the white of amoeba.png is tinted with it. */
-    private static final Color AMOEBA_RED = new Color(1f, 0x27 / 255f, 0x27 / 255f, 1f);
+    static final Color AMOEBA_RED = new Color(1f, 0x27 / 255f, 0x27 / 255f, 1f);
     /**
      * Amoebas all change colour together (as on the MSX): yellow, cream, white, green, AMOEBA_COLOUR_TIME s each
      * (3 frames at 60 fps). amoebaClock runs while playing.
      */
-    private static final Color[] AMOEBA_COLOURS = {new Color(224 / 255f, 224 / 255f, 39 / 255f, 1f),
+    static final Color[] AMOEBA_COLOURS = {new Color(224 / 255f, 224 / 255f, 39 / 255f, 1f),
             new Color(224 / 255f, 224 / 255f, 155 / 255f, 1f), new Color(1f, 1f, 1f, 1f), new Color(115 / 255f, 1f, 115 / 255f, 1f)};
-    private static final float AMOEBA_COLOUR_TIME = 0.05f;
-    private float amoebaClock;
+    static final float AMOEBA_COLOUR_TIME = 0.05f;
+    float amoebaClock;
     /** Other capsule carriers are tinted light red. */
-    private static final Color CARRIER_TINT = new Color(1f, 0.45f, 0.45f, 1f);
+    static final Color CARRIER_TINT = new Color(1f, 0.45f, 0.45f, 1f);
 
     /** A tower spits out an amoeba at (x, y) (bottom-left), thrown with (vx, vy). A red one leaves a power capsule. */
     /** Lavinia (both styles): a Gun Ho hops out of a floor hatch (bottom-left x, y). */
@@ -3106,7 +3108,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Heathens (Lavinia): the three pictures (gap at the top / centre / bottom), and the pillars' shapes without the bars. */
-    private TextureRegion[] heathenR;
+    TextureRegion[] heathenR;
     private PixelMask[] heathenMasks;
     private static final String[] HEATHEN_PICS = {"heathen_top", "heathen_center", "heathen_bottom"};
 
@@ -3137,7 +3139,7 @@ public class GameScreen extends ScreenAdapter {
         }
     }
 
-    private TextureRegion blockSmallR, blockBigR, rageR, laserGunR;
+    TextureRegion blockSmallR, blockBigR, rageR, laserGunR;
 
     /**
      * Lavinia's darkness (as in the MSX recording): from a "dark_zone" on, the stage's lights are off - no background,
@@ -3194,7 +3196,7 @@ public class GameScreen extends ScreenAdapter {
         }
     }
 
-    private void drawSparks() {
+    void drawSparks() {
         if (sparkItems.isEmpty()) return;
         if (sparkR == null) {
             String f = Gdx.files.internal("sprites/item_spark.png").exists() ? "item_spark" : "spark";
@@ -3204,7 +3206,7 @@ public class GameScreen extends ScreenAdapter {
         if (((int) (sparkT * 8f)) % 4 == 3) return;   // a little twinkle
         for (float[] s : sparkItems) batch.draw(sparkR, s[0], s[1], SPARK_SIZE, SPARK_SIZE);
     }
-    private TextureRegion[] ledZepF, gammaRedF;
+    TextureRegion[] ledZepF, gammaRedF;
     /** Lavinia Led Zeps: seconds to the next one. */
     private float ledZepT = 1f;
 
@@ -3227,7 +3229,7 @@ public class GameScreen extends ScreenAdapter {
         enemies.add(e);
     }
     /** The Lavinia warship's hatch: closed, open, destroyed. */
-    private TextureRegion[] hatchF;
+    TextureRegion[] hatchF;
 
     /** The Lavinia warship launches a Rage out of its hatch (bottom-left of the Rage). */
     void launchRage(float x, float y) {
@@ -3375,7 +3377,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** The dematwalls (not part of the stage art), until they have dissolved completely. */
-    private void drawWalls() {
+    void drawWalls() {
         if (wallTex == null) return;
         for (int i = 0; i < wallTex.length; i++) {
             if (wallCleared[i] >= wallOrder[i].length) continue;
@@ -3612,7 +3614,7 @@ public class GameScreen extends ScreenAdapter {
     }
 
     /** Ripple laser picture: the 6 rows at each end of ripple.png stay as drawn, the straight middle rows stretch. */
-    private void drawRipple(Bullet b) {
+    void drawRipple(Bullet b) {
         if (b.diag) {   // aimed diagonally: the whole picture, stretched to len, turned to where it flies
             int th = rippleTex.getHeight(), tw = rippleTex.getWidth();
             float cx = b.x + b.w / 2f, cy = b.y + b.h / 2f;
@@ -3651,988 +3653,5 @@ public class GameScreen extends ScreenAdapter {
 
     static boolean overlap(float ax, float ay, float aw, float ah, float bx, float by, float bw, float bh) {
         return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
-    }
-
-
-    // =============================================================== drawing
-
-    /**
-     * The star field (parallax 0.6), except over the map's "noStars" range (Level.noStarsLo..Hi along the scrolling),
-     * which stays plain black.
-     */
-    private void drawStars(float camL, float camB) {
-        if (Float.isNaN(level.noStarsLo)) { starRect(camL, camB, 0, 0, (int) W, (int) H); return; }
-        float cam = level.vertical ? camB : camL, len = level.vertical ? H : W;
-        int a = (int) MathUtils.clamp(level.noStarsLo - cam, 0f, len), b = (int) MathUtils.clamp(level.noStarsHi - cam, 0f, len);
-        if (level.vertical) { starRect(camL, camB, 0, 0, (int) W, a); starRect(camL, camB, 0, b, (int) W, (int) H - b); }
-        else { starRect(camL, camB, 0, 0, a, (int) H); starRect(camL, camB, b, 0, (int) W - b, (int) H); }
-    }
-
-    /** The part of the star field over the screen rectangle x0, y0 (from the bottom-left), w x h. */
-    private void starRect(float camL, float camB, int x0, int y0, int w, int h) {
-        if (w <= 0 || h <= 0) return;
-        int u = (int) (scrollX * 0.6f) + x0, v = (int) (-scrollY * 0.6f) + (int) H - y0 - h;   // (texture rows run down)
-        batch.draw(starTex, camL + x0, camB + y0, w, h, u, v, w, h, false, false);
-    }
-
-    /**
-     * The start of a stage, as in the MSX recordings: the operation banner alone on a black screen for INTRO_BANNER s,
-     * black for INTRO_BLACK s, then the HUD on a black playfield for INTRO_HUD s; then the stage comes in.
-     */
-    private static final float INTRO_BANNER = 2f, INTRO_BLACK = 0.6f, INTRO_HUD = 1f;
-
-    /** The intro: the banner (white, MSX-style letters; lines 76 / 92 / 116 px below the top as on the MSX), or the HUD alone. */
-    private void drawIntro() {
-        batch.setProjectionMatrix(hud.combined);
-        batch.begin();
-        if (stateT < INTRO_BANNER) {
-            float top = HUD_H + H;
-            String sub = bossTest >= 0 ? "BOSS TEST" : level.subtitle;
-            say(level.bannerTitle, top - 76f - 7f, PixelFont.BOLD, 1, HUD_WHITE);
-            if (!sub.isEmpty()) say(sub, top - 92f - 7f, PixelFont.BOLD, 1, bossTest >= 0 ? Color.ORANGE : HUD_WHITE);
-            if (!level.planet.isEmpty()) say(level.planet, top - 116f - 7f, PixelFont.BOLD, 1, HUD_WHITE);
-        } else if (stateT >= INTRO_BANNER + INTRO_BLACK) {
-            drawHud();
-        }
-        batch.end();
-    }
-
-    private void draw() {
-        ScreenUtils.clear(0, 0, 0, 1);
-        vp.apply();
-        if (state == State.INTRO) { drawIntro(); return; }
-        // the playfield fills the screen above the HUD strip: world scrollY lands on screen row HUD_H
-        cam.position.set(Math.round(scrollX) + SW / 2f, Math.round(scrollY) + H - SH / 2f, 0f);
-        cam.update();
-        batch.setProjectionMatrix(cam.combined);
-        batch.begin();
-        float camL = Math.round(scrollX), camB = Math.round(scrollY);
-        boolean dark = lightsOut();   // Lavinia: the lights are off (only what moves is seen)
-        if (level.background != null && !dark) {   // map property "background"; stage 1 is plain black space
-            batch.draw(bgTex, camL, camB, W, H, (int) (scrollX * 0.25f), 0, W, H, false, false);
-        }
-        batch.setColor(STAR_TINT[levelIdx]);
-        if (!dark) drawStars(camL, camB);
-        batch.setColor(Color.WHITE);
-
-        if (!dark) {
-            drawFangs();      // teeth first, so the ground hides the part that is pulled in
-            drawTerrain();
-        }
-        drawSparks();
-        drawPods();           // Eioneus's gun pods
-        drawDissolving();     // pictures breaking up (dissolveDeath)
-        drawGround();         // bases and destroyed enemies that stay: under everything in play
-        drawHazards();
-        drawMeteors();
-        drawCapsules();
-        drawEnemies();
-        if (boss != null) drawBoss();
-        drawGunLasers();
-        drawBullets();
-        for (Player p : players) if (alive(p)) drawPlayer(p);
-        if (debugHitbox) for (Player p : players) if (alive(p)) drawHitbox(p);
-        for (Explosion e : fx) {
-            int f = Math.min(4, (int) (e.t * 14f));
-            float s = 24f * e.scale;
-            batch.draw(boomF[f], e.x - s / 2f, e.y - s / 2f, s, s);
-        }
-        batch.end();
-
-        batch.setProjectionMatrix(hud.combined);
-        batch.begin();
-        drawHud();
-        batch.end();
-    }
-
-    // ---- animated web (Kierke, from the MSX recording): maps/stage<N>_web.png, the size of the map art. Its
-    // pixels are the web pixels that flicker: in the MSX the web's strands hop 1 px back and forth as the screen
-    // scrolls, one cycle per 8 px of scrolling (8 states, one per pixel scrolled; the recording: a state every ~3
-    // frames at 20 px/s). Each pixel is lit for 4 states in a row and dark for the other 4: its colour is the colour
-    // when lit, its alpha = 255 - 16 * phase - (8 if the map art doesn't show it): phase 0..7 = the first state it is
-    // lit in. The state is (camera x - WEB_PHASE0) mod 8 (the MSX's 8 px scroll steps fall on x = 5 mod 8 in the map).
-    private static final int WEB_PHASE0 = 5;
-    private int[] webX, webY, webPh, webRgba;
-    private boolean[] webArt;
-    private final Color webColor = new Color();
-
-    private void loadWeb() {
-        String f = "maps/stage" + (levelIdx + 1) + "_web.png";
-        if (!Gdx.files.internal(f).exists()) return;
-        Pixmap pm = new Pixmap(Gdx.files.internal(f));
-        int n = 0;
-        for (int x = 0; x < pm.getWidth(); x++) for (int y = 0; y < pm.getHeight(); y++) if ((pm.getPixel(x, y) & 0xff) != 0) n++;
-        webX = new int[n]; webY = new int[n]; webPh = new int[n]; webRgba = new int[n]; webArt = new boolean[n];
-        int i = 0;
-        for (int x = 0; x < pm.getWidth(); x++)                 // (sorted by x, for drawing only what is on screen)
-            for (int y = 0; y < pm.getHeight(); y++) {
-                int c = pm.getPixel(x, y), al = c & 0xff;
-                if (al == 0) continue;
-                int v = 255 - al;
-                webX[i] = x; webY[i] = y;                         // (row from the top, like the art)
-                webPh[i] = (v / 16) & 7; webArt[i] = v % 16 == 0; webRgba[i] = c | 0xff;
-                i++;
-            }
-        pm.dispose();
-    }
-
-    /** The web's flickering pixels for the current scroll position (lit, or black over the art's pixel). */
-    private void drawWeb(float camL) {
-        if (webX == null || webX.length == 0) return;
-        int state = Math.floorMod(Math.round(camL) - WEB_PHASE0, 8);
-        int lo = 0, hi = webX.length;                         // first pixel at x >= camL - 1
-        while (lo < hi) { int m = (lo + hi) >>> 1; if (webX[m] < camL - 1) lo = m + 1; else hi = m; }
-        float top = level.art.isEmpty() ? level.worldH : level.art.get(0).y + level.art.get(0).h;   // the art's top edge
-        for (int i = lo; i < webX.length && webX[i] <= camL + W; i++) {
-            boolean lit = Math.floorMod(state - webPh[i], 8) < 4;
-            if (lit) Color.rgba8888ToColor(webColor, webRgba[i]);
-            else if (webArt[i]) webColor.set(0f, 0f, 0f, 1f);
-            else continue;
-            batch.setColor(webColor);
-            batch.draw(pix, webX[i], top - 1f - webY[i], 1f, 1f);
-        }
-        batch.setColor(Color.WHITE);
-    }
-
-    /**
-     * The background lights are also painted in the stage art (one frame each); a light's own pixels are taken out of
-     * the art where a "back_ground_lights" object is, so only the animation shows. Only pixels that match one of the
-     * sprite's frames there are taken out, so a light moved onto other art in Tiled doesn't punch a hole in it.
-     */
-    private void unbakeBgLights() {
-        if (bgLightsF == null || level.bgLights.isEmpty()) return;
-        float n = bgLightsSize;
-        for (int i = 0; i < artTex.length; i++) {
-            Level.Art t = level.art.get(i);
-            boolean any = false;
-            for (float[] L : level.bgLights)
-                if (!(L[0] + n <= t.x || L[0] >= t.x + t.w || L[1] + n <= t.y || L[1] >= t.y + t.h)) { any = true; break; }
-            if (any) artTex[i] = a.made(t.image + "#no_bg_lights", () -> unbakeBgLights(t));
-        }
-    }
-
-    /** A copy of the art picture t with the lights' pixels taken out (t has at least one light on it). */
-    private Texture unbakeBgLights(Level.Art t) {
-        Pixmap lp = new Pixmap(Gdx.files.internal("sprites/" + bgLightsFile + ".png"));
-        Pixmap pm = new Pixmap(Gdx.files.internal(t.image));
-        pm.setBlending(Pixmap.Blending.None);
-        int n = bgLightsSize;
-        for (float[] L : level.bgLights) {
-            if (L[0] + n <= t.x || L[0] >= t.x + t.w || L[1] + n <= t.y || L[1] >= t.y + t.h) continue;
-            int ax = Math.round(L[0] - t.x), ay = Math.round(t.y + t.h - L[1] - n);   // (art rows run down)
-            for (int yy = 0; yy < n; yy++)
-                for (int xx = 0; xx < n; xx++) {
-                    int c = pm.getPixel(ax + xx, ay + yy);
-                    if ((c & 0xff) == 0) continue;
-                    for (int f = 0; f < bgLightsF.length; f++) {
-                        int lc = lp.getPixel(f * n + xx, yy);
-                        if ((lc & 0xff) != 0 && (lc | 0xff) == (c | 0xff)) { pm.drawPixel(ax + xx, ay + yy, 0); break; }
-                    }
-                }
-        }
-        Texture tx = new Texture(pm);
-        tx.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        pm.dispose(); lp.dispose();
-        return tx;
-    }
-
-    /** The background lights on screen: each cycles its frames, level.bgLightsFrame s apiece (from the frame the map gives it). */
-    private void drawBgLights(float camL, float camB) {
-        if (bgLightsF == null) return;
-        int step = (int) (bgLightsClock / level.bgLightsFrame), n = bgLightsSize;
-        for (float[] L : level.bgLights) {
-            if (L[0] > camL + W || L[0] + n < camL || L[1] > camB + H || L[1] + n < camB) continue;
-            batch.draw(bgLightsF[Math.floorMod((int) L[2] + step, bgLightsF.length)], L[0], L[1]);
-        }
-    }
-
-    /** Stage art (image layers), the "terrain" tile layer, and the bricks that are still standing. */
-    private void drawTerrain() {
-        float camL = Math.round(scrollX), camB = Math.round(scrollY);
-        for (int i = 0; i < artTex.length && !terrainGone; i++) {   // (Op 4's end: dissolved)
-            Level.Art t = level.art.get(i);
-            if (t.x > camL + W || t.x + t.w < camL || t.y > camB + H || t.y + t.h < camB) continue;
-            batch.draw(artTex[i], t.x, t.y, t.w, t.h);
-        }
-        if (!terrainGone) drawWeb(camL);                 // (Kierke: the web flickers as the screen scrolls)
-        if (!terrainGone) drawBgLights(camL, camB);      // (Op 4: the background lights, still under every sprite)
-        drawWalls();                                     // stage 3: the end room's wall (until it has dissolved)
-        float s = level.cell;
-        int c0 = Math.max(0, (int) (camL / s) - 1), c1 = Math.min(level.gCols - 1, (int) ((camL + W) / s) + 1);
-        int r0 = Math.max(0, (int) (camB / s) - 1), r1 = Math.min(level.gRows - 1, (int) ((camB + H) / s) + 1);
-        if (level.terrain != null) {
-            for (int r = r0; r <= r1; r++)
-                for (int c = c0; c <= c1; c++) {
-                    int gid = level.terrain[r * level.gCols + c];
-                    if (gid != 0) drawTile(gid, c * s, r * s, s);
-                }
-        }
-        if (level.bricks != null && brickArtTex != null) {   // each brick shows its own piece of the map's brick picture
-            int top = brickArtTex.getHeight(), cs = (int) s;
-            for (int r = r0; r <= r1; r++)
-                for (int c = c0; c <= c1; c++) {
-                    int i = r * level.gCols + c;
-                    float alpha = level.bricks[i] ? 1f : level.brickGrow[i];
-                    if (alpha <= 0f) continue;
-                    if (alpha < 1f) batch.setColor(1f, 1f, 1f, alpha);
-                    batch.draw(brickArtTex, c * s, r * s, s, s, c * cs, top - (r + 1) * cs, cs, cs, false, false);
-                    if (alpha < 1f) batch.setColor(Color.WHITE);
-                }
-        } else if (level.bricks != null) {
-            float p = brickTex.getWidth();   // the brick pattern repeats seamlessly across the wall
-            for (int r = r0; r <= r1; r++)
-                for (int c = c0; c <= c1; c++) {
-                    int i = r * level.gCols + c;
-                    float alpha = level.bricks[i] ? 1f : level.brickGrow[i];   // materializing bricks fade in
-                    if (alpha <= 0f) continue;
-                    float x = c * s, y = r * s;
-                    if (alpha < 1f) batch.setColor(1f, 1f, 1f, alpha);
-                    batch.draw(brickTex, x, y, s, s, x / p, -y / p, (x + s) / p, -(y + s) / p);
-                    if (alpha < 1f) batch.setColor(Color.WHITE);
-                }
-        }
-        if (debugHitbox) {   // H: show the solid cells of the map (terrain + collision layers)
-            batch.setColor(1f, 0.15f, 0.15f, 0.35f);
-            for (int r = r0; r <= r1; r++)
-                for (int c = c0; c <= c1; c++)
-                    if (level.solidTerrainCell(c, r)) batch.draw(pix, c * s, r * s, s, s);
-            batch.setColor(Color.WHITE);
-        }
-    }
-
-    private final java.util.HashMap<Integer, TextureRegion> tileRegions = new java.util.HashMap<>();
-
-    /** Draws one map tile (with Tiled's flip flags) at world position (x, y). */
-    private void drawTile(int gid, float x, float y, float size) {
-        int id = gid & TiledMap.GID_MASK;
-        TextureRegion r = tileRegions.get(id);
-        if (r == null) {
-            TiledMap.Tileset ts = level.tiled.tilesetFor(id);
-            if (ts == null || ts.image == null) return;
-            int local = id - ts.firstGid, cols = Math.max(1, ts.columns);
-            r = new TextureRegion(a.texFile(ts.image), (local % cols) * ts.tileWidth, (local / cols) * ts.tileHeight,
-                    ts.tileWidth, ts.tileHeight);
-            tileRegions.put(id, r);
-        }
-        boolean fh = (gid & TiledMap.FLIP_H) != 0, fv = (gid & TiledMap.FLIP_V) != 0;
-        batch.draw(r, fh ? x + size : x, fv ? y + size : y, fh ? -size : size, fv ? -size : size);
-    }
-
-    private void drawFangs() {
-        for (Hazard h : hazards) {
-            if ((h.type != Hazard.Type.FANG && h.type != Hazard.Type.TOWER) || h.x > scrollX + W + 40f || h.x + h.w < scrollX) continue;
-            if (h.flipV) batch.draw(a.texFile(h.image), h.x, h.y + h.h, h.w, -h.h);   // flipped in Tiled
-            else batch.draw(a.texFile(h.image), h.x, h.y, h.w, h.h);
-        }
-    }
-
-    /** Claw arm: base and orange ball, blue ball, then the claw turned toward where it reaches. */
-    private void drawArm(Hazard h) {
-        int n = h.armX.length - 1;
-        for (int i = 0; i < n; i++) {
-            if (!h.armBallOut(i)) continue;
-            TextureRegion r = armF[h.bossArm || i == h.armWeak ? 1 : 0];   // blue ball(s), else orange
-            batch.draw(r, Math.round(h.armX[i] - 8f), Math.round(h.armY[i] - 8f));
-        }
-        float dx = h.armX[n] - h.armX[n - 1], dy = h.armY[n] - h.armY[n - 1];
-        float turn = dx * dx + dy * dy < 0.01f ? 0f        // still inside the boss: as it rests
-                : (MathUtils.atan2(dy, dx) - MathUtils.atan2(h.restDY, h.restDX)) * MathUtils.radiansToDegrees;
-        batch.draw(armF[h.fromCeil || h.bossArm ? 3 : 2], Math.round(h.armX[n] - 8f), Math.round(h.armY[n] - 8f), 8f, 8f, 16f, 16f, 1f, 1f, turn);
-    }
-
-    private void drawHazards() {
-        for (Hazard h : hazards) {
-            if (h.type == Hazard.Type.FANG || h.type == Hazard.Type.TOWER) continue;   // drawn behind the terrain
-            if (h.x > scrollX + W + 40f || h.x + Math.max(40f, h.w + 60f) < scrollX) continue;
-            if (level.vertical && (h.y > scrollY + H + 40f || h.y + h.h < scrollY - 40f)) continue;
-            switch (h.type) {
-                case DOME: {                                 // facing right on the left wall, mirrored on the right wall
-                    TextureRegion f = domeF[h.open ? 1 : 0];
-                    float fw = f.getRegionWidth(), fh = f.getRegionHeight();
-                    if (h.domeSide == Hazard.DOME_FLOOR)      // turned a quarter to face up (matches PixelMask.rotatedCCW)
-                        batch.draw(f, h.x + h.w, h.y, 0f, 0f, fw, fh, 1f, 1f, 90f);
-                    else if (h.domeSide == Hazard.DOME_CEIL)  // turned a quarter to face down (PixelMask.rotatedCW)
-                        batch.draw(f, h.x, h.y + h.h, 0f, 0f, fw, fh, 1f, 1f, -90f);
-                    else batch.draw(f, h.fromCeil ? h.x + h.w : h.x, h.y, h.fromCeil ? -h.w : h.w, h.h);
-                    break;
-                }
-                case EYE:
-                    batch.draw(rockEyeR, h.x, h.y, h.w, h.h);
-                    break;
-                case RUBBLE:
-                    batch.draw(rubbleR, h.x, h.y, h.w, h.h);
-                    break;
-                case ROCK:
-                    batch.draw(rockR, h.x, h.y, 16, 16);
-                    break;
-                case ARM:
-                    if (!h.bossArm) drawArm(h);              // boss arms are drawn with the boss, in front of it
-                    break;
-                case BAMDA:
-                    batch.draw(bamdaF[h.frame], h.x, h.y);
-                    break;
-                default: // volcano: glowing crater (a side volcano is just its rock tip in the map art)
-                    if (h.spit != 0) break;
-                    float pulse = 0.5f + 0.5f * MathUtils.sin(h.t * 6f);
-                    batch.setColor(1f, 0.4f + 0.3f * pulse, 0.1f, 1f);
-                    batch.draw(pix, h.x - 6f, h.y, 12, 2);
-                    batch.setColor(Color.WHITE);
-                    break;
-            }
-        }
-    }
-
-    private void drawMeteors() {
-        float cl = Math.round(scrollX), cb = Math.round(scrollY);   // (the camera is on whole pixels)
-        for (Meteor m : meteors) {
-            if (m.dead) continue;
-            float x = cl + Math.round(m.sx), y = cb + Math.round(m.sy);
-            if (m.red) batch.draw(rockRedF[m.frame], x, y);
-            else if (m.big) batch.draw(rockBigR, x, y);
-            else batch.draw(rockSmallF[(int) (m.t * Meteor.SMALL_FPS) % rockSmallF.length], x, y);
-        }
-    }
-
-    private void drawCapsules() {
-        for (Capsule c : caps) {
-            TextureRegion[] fr = c.green ? capGreenF : capF;
-            TextureRegion f = fr[(int) (c.t * 6f) % fr.length];
-            batch.draw(f, c.x, c.y, f.getRegionWidth(), f.getRegionHeight());
-        }
-    }
-
-    /**
-     * The ground (Albert, 2026-10-29): the bases (Eioneus, Op 4), alive or destroyed, and every destroyed enemy that
-     * stays (withered roots): drawn before capsules, hazards and every enemy still in play, so nothing hides under them.
-     */
-    private void drawGround() {
-        for (Enemy e : enemies) {                     // Op 4 bases are ground too (the whole picture)
-            if (e.dead || e.type != Enemy.Type.SEED || !e.seedOp4 || base6F == null) continue;
-            batch.draw(base6F[Math.min(e.seedFrame(), base6F.length - 1)], e.x, e.y, e.w, e.h);
-        }
-        if (baseF != null)                            // Eioneus bases are ground: under every other enemy
-            for (Enemy e : enemies) {
-                if (e.dead || e.type != Enemy.Type.SEED || e.seedOp4) continue;
-                TextureRegion sr = baseF[Math.min(e.seedFrame(), baseF.length - 1)];   // closed / opening / open / destroyed
-                float sw = sr.getRegionWidth(), sh = sr.getRegionHeight();
-                batch.draw(sr, e.x + (e.w - sw) / 2f, e.y + (e.h - sh) / 2f, sw, sh);
-            }
-        for (Enemy e : enemies) {                     // destroyed ones that stay (the bases are drawn above)
-            if (e.dead || !e.withered || e.type == Enemy.Type.SEED) continue;
-            if (e.type == Enemy.Type.ABERRANT && aberrantF != null) batch.draw(aberrantF[1], e.x, e.y, e.w, e.h);
-        }
-    }
-
-    private void drawEnemies() {
-        for (Enemy e : enemies) {
-            if (e.withered) continue;                     // (ground: drawGround)
-            TextureRegion r;
-            switch (e.type) {
-                case LEGACY: {
-                    // all frames in a loop, whichever way it is heading (Albert, 2026-10-29): 0 1 2 ... 6 0 1 ...
-                    int k = (int) (Math.max(0f, e.t) * Enemy.LEGACY_FPS) % legacyF.length;
-                    r = legacyF[k];
-                    break;
-                }
-                case WALKER: r = walkF[(int) (e.t * 6f) % walkF.length]; break;
-                case FROST: r = frostR; break;
-                case LINK: r = linkF[e.linkSwing > 0f ? e.linkFrame() : (int) (e.t * Enemy.LINK_FPS) % linkF.length]; break;
-                case RUGAL: r = rugalF[Math.min(e.rugalFrame(), rugalF.length - 1)]; break;
-                case AMOEBA: r = amoebaF[(int) (e.t * Enemy.AMOEBA_FPS) % amoebaF.length]; break;
-                case DOME_FLYER: {                       // forward, then backward: 0 1 2 3 2 1 0 ...
-                    if (domeFlyerF == null) { r = amoebaF[0]; break; }
-                    int n = domeFlyerF.length, cycle = Math.max(1, 2 * n - 2), k = (int) (e.t * Enemy.DOME_FLYER_FPS) % cycle;
-                    r = domeFlyerF[k < n ? k : cycle - k];
-                    break;
-                }
-                default: r = null; break;
-            }
-            boolean red = e.group != null && e.group.carrier;
-            if (e.type == Enemy.Type.WALKER && bioWalkRedF != null) {   // stage 1 bio walker: ping-pong walk cycle
-                TextureRegion[] fr = red ? bioWalkRedF : bioWalkBlueF;
-                int n = fr.length, cycle = 2 * n - 2;                 // 0 1 2 3 4 3 2 1 0 ...
-                int k = (int) (e.t * BIO_WALK_FPS) % cycle;
-                TextureRegion f = fr[k < n ? k : cycle - k];
-                int dir = e.vx < 0f ? -1 : 1;
-                float rot = (e.ceiling ? -1 : 1) * dir * e.climb * 45f;   // still tilts at steps
-                batch.draw(f, e.x, e.y, e.w / 2f, e.h / 2f, e.w, e.h, 1f, e.ceiling ? -1f : 1f, rot);
-                continue;
-            }
-            if (e.type == Enemy.Type.LASER_GUARD) {
-                if (laserGuardTex != null) drawLaserGuard(e);
-                continue;
-            }
-            if (e.type == Enemy.Type.OMEN) {          // no animation; upside down on the ceiling
-                if (omenR != null) batch.draw(omenR, e.x, e.ceiling ? e.y + e.h : e.y, e.w, e.ceiling ? -e.h : e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.GUN_HO) {        // faces left; mirrored when it turns to a ship behind it
-                // frame 1 while it lines up with a ship to fire; after the shot (and before) frame 0
-                boolean firing = e.gunState == Enemy.GUNHO_AIMING || e.gunState == Enemy.GUNHO_FIRING;   // (until its last shot)
-                TextureRegion gr = firing && gunHoFireR != null ? gunHoFireR : gunHoR;
-                if (gr != null) batch.draw(gr, e.faceRight ? e.x + e.w : e.x, e.y, e.faceRight ? -e.w : e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.TURRET_WALL) {   // stage 2 wall turret: red = carries a capsule
-                TextureRegion f = (red ? wallTurretRedF : wallTurretGreenF)[e.aim == Enemy.WALL_SIDE ? 0 : 1];
-                boolean flipX = e.wallRight, flipY = e.aim == Enemy.WALL_UP;   // (the diagonal frame points down)
-                batch.draw(f, flipX ? e.x + e.w : e.x, flipY ? e.y + e.h : e.y, flipX ? -e.w : e.w, flipY ? -e.h : e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.POSSESSED) {       // red or cyan picture, as it is
-                TextureRegion pr = e.possRed ? possRedR : possCyanR;
-                if (pr != null) batch.draw(pr, e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.ABERRANT) {       // alive / withered (blue)
-                if (aberrantF != null) batch.draw(aberrantF[e.withered ? 1 : 0], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.NEST) {           // the 38x22 picture around the 32x17 nest; floor nests upside down
-                if (nestR == null) continue;
-                float pw = nestR.getRegionWidth(), ph = nestR.getRegionHeight();
-                if (e.nestDown) batch.draw(nestR, e.x - 3f, e.y - 3f, pw, ph);
-                else batch.draw(nestR, e.x - 3f, e.y - 2f + ph, pw, -ph);
-                continue;
-            }
-            if (e.type == Enemy.Type.SEED) continue;  // (drawn first, under the other enemies)
-            if (e.type == Enemy.Type.FLYING_MINE) {
-                TextureRegion[] mf = e.mineRed && mineRedF != null ? mineRedF : mineWhiteF;
-                if (mf != null) batch.draw(mf[Math.min(e.mineFrame(), mf.length - 1)], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.GREMLIN) {        // turned a quarter to stand on its wall (feet to the rock)
-                TextureRegion[] gf = e.gremRed ? gremlinRedF : gremlinYellowF;
-                if (gf == null) continue;
-                TextureRegion fr = gf[Math.min(e.gremlinFrame(), gf.length - 1)];
-                float ox = e.w / 2f, oy = e.h / 2f;
-                if (e.gremRight) batch.draw(fr, e.x, e.y, ox, oy, e.w, e.h, 1f, 1f, 90f);
-                else batch.draw(fr, e.x, e.y, ox, oy, e.w, e.h, 1f, -1f, 90f);   // (the right-wall picture mirrored)
-                continue;
-            }
-            if (e.type == Enemy.Type.BLOCK_SMALL || e.type == Enemy.Type.BLOCK_BIG) {
-                TextureRegion br = e.type == Enemy.Type.BLOCK_BIG ? blockBigR : blockSmallR;
-                if (br != null) batch.draw(br, e.x, e.y);
-                continue;
-            }
-            if (e.type == Enemy.Type.LED_ZEP) {         // the picture walks left on the floor: mirrored heading right, upside down on the ceiling
-                if (ledZepF != null) {
-                    TextureRegion f = ledZepF[e.zepState == 0 ? 0 : ledZepF.length - 1];   // frame 0 on the ground, frame 1 in the air (Albert)
-                    batch.draw(f, e.zepRight ? e.x + e.w : e.x, e.zepCeil ? e.y + e.h : e.y, e.zepRight ? -e.w : e.w, e.zepCeil ? -e.h : e.h);
-                }
-                continue;
-            }
-            if (e.type == Enemy.Type.LASER_GUN) {       // the gun (mirrored pointing left), then its pulse
-                if (laserGunR != null) batch.draw(laserGunR, e.lgunLeft ? e.x + e.w : e.x, e.y, e.lgunLeft ? -e.w : e.w, e.h);
-                if (e.beamW > 0f && omenLaserTex != null) {
-                    Texture lt = omenLaserTex[(int) (e.t * Enemy.OMEN_LASER_FLASH) % omenLaserTex.length];
-                    batch.draw(lt, e.beamX, e.beamY, e.beamW, e.beamH, 0, 0, Math.round(e.beamW), lt.getHeight(), e.lgunLeft, false);
-                }
-                continue;
-            }
-            if (e.type == Enemy.Type.RAGE) {            // its laser (the Laser Guards' pattern turned upright), then the Rage
-                if (e.beamH > 0f && omenLaserTex != null) {
-                    Texture lt = omenLaserTex[(int) (e.t * Enemy.OMEN_LASER_FLASH) % omenLaserTex.length];
-                    int th = lt.getHeight();
-                    batch.draw(lt, e.beamX + e.beamW, e.beamY, 0f, 0f, e.beamH, e.beamW, 1f, 1f, 90f, 0, 0, Math.round(e.beamH), th, false, false);
-                }
-                if (rageR != null) batch.draw(rageR, e.x, e.y);
-                continue;
-            }
-            if (e.type == Enemy.Type.HEATHEN) {         // the pillar; a bar that was shot away is painted over in black
-                if (heathenR == null) continue;
-                batch.draw(heathenR[e.heathenKind], e.x, e.y);
-                for (int k = 0; k < Enemy.HEATHEN_BARS; k++) {
-                    if (e.heathenBarHp[k] > 0) continue;
-                    batch.setColor(Color.BLACK);
-                    batch.draw(pix, e.heathenBarX(k), e.heathenBarY(), Enemy.HEATHEN_BAR_W, Enemy.HEATHEN_BAR_H);
-                    batch.setColor(Color.WHITE);
-                }
-                continue;
-            }
-            if (e.type == Enemy.Type.LASER_BATTERY) {  // the battery (flipped like its object), then its beam
-                TextureRegion br = e.batBig ? batteryBigR : batterySmallR;
-                if (br != null && !e.batWall) {
-                    boolean fx = e.batBig ? e.batCeiling : !e.batRight, fy = e.batCeiling || (!e.batBig && !e.batRight);
-                    batch.draw(br, fx ? e.x + e.w : e.x, fy ? e.y + e.h : e.y, fx ? -e.w : e.w, fy ? -e.h : e.h);
-                }
-                if (e.beamOn() && omenLaserTex != null) {   // the Laser Guards' beam: the pattern along it, flashing red / blue
-                    Texture lt = omenLaserTex[(int) (e.t * Enemy.OMEN_LASER_FLASH) % omenLaserTex.length];
-                    int th = lt.getHeight();
-                    if (e.beamW > e.beamH) batch.draw(lt, e.beamX, e.beamY, e.beamW, e.beamH, 0, 0, Math.round(e.beamW), th, !e.batRight, false);
-                    else batch.draw(lt, e.beamX + e.beamW, e.beamY, 0f, 0f, e.beamH, e.beamW, 1f, 1f, 90f, 0, 0, Math.round(e.beamH), th, false, false);
-                }
-                continue;
-            }
-            if (e.type == Enemy.Type.EXODUS) {
-                TextureRegion[] xf = e.exRed ? exodusRedF : exodusCyanF;
-                if (xf != null) batch.draw(xf[e.exodusFrame() % xf.length], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.ARTILLERY) {      // the picture points up: turned to point away from its wall
-                TextureRegion[] af = e.artRed && artilleryRedF != null ? artilleryRedF : artilleryGreenF;
-                TextureRegion ar = af == null ? null : af[(int) (Math.max(0f, e.t) / ART_FRAME) % af.length];
-                if (ar != null && (e.artFloor || e.artCeil)) batch.draw(ar, e.x, e.artCeil ? e.y + e.h : e.y, e.w, e.artCeil ? -e.h : e.h);   // up / hanging down
-                else if (ar != null) batch.draw(ar, e.x, e.y, e.w / 2f, e.h / 2f, e.w, e.h, 1f, 1f, e.artRight ? 90f : -90f);
-                continue;
-            }
-            if (e.type == Enemy.Type.BLUE_ASTEROID) {
-                if (blueAsteroidR != null) batch.draw(blueAsteroidR, e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.MOAI) {           // faces right on the left wall; mirrored on the right wall
-                if (moaiF != null) {
-                    TextureRegion mr = moaiF[e.moaiOpen && moaiF.length > 1 ? 1 : 0];
-                    batch.draw(mr, e.moaiRight ? e.x + e.w : e.x, e.y, e.moaiRight ? -e.w : e.w, e.h);
-                }
-                continue;
-            }
-            if (e.type == Enemy.Type.ORB) {
-                if (orbR != null) batch.draw(orbR, e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.BLUE_DOME) {      // stage 2's dome.png: open while it is letting a burst out; mirrored on the right wall
-                if (domeF == null) continue;
-                TextureRegion dr = domeF[e.wave != null && e.wave.active() ? 1 : 0];
-                if (e.domeRight) batch.draw(dr, e.x + e.w, e.y, -e.w, e.h);   // (its back to the wall on the right)
-                else batch.draw(dr, e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.GREEN_FLYER) {
-                if (greenF != null) batch.draw(greenF[(int) (Math.max(0f, e.t) / Enemy.GREEN_FRAME) % greenF.length], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.OPTION_EATER) {    // white / red, swapped every OEATER_FLASH s
-                if (optionEaterF != null) batch.draw(optionEaterF[e.oeFrame() % optionEaterF.length], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.GREEN_MINE) {      // 2 frames, swapped every GMINE_FRAME s
-                if (greenMineF != null) batch.draw(greenMineF[(int) (Math.max(0f, e.t) / Enemy.GMINE_FRAME) % greenMineF.length], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.GAMMA) {
-                TextureRegion[] gfr = e.gammaRed && gammaRedF != null ? gammaRedF : gammaF;
-                if (gfr != null) batch.draw(gfr[Enemy.GAMMA_ORDER[(int) (Math.max(0f, e.t) / Enemy.GAMMA_FRAME) % Enemy.GAMMA_ORDER.length] % gfr.length], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.UG) {             // cycles its 3 frames
-                if (ugF != null) batch.draw(ugF[((int) (Math.max(0f, e.t) / Enemy.UG_FRAME) + (int) e.phase) % ugF.length], e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.CREEPING_DEATH) { // frames back and forth, flickering between its two colours
-                if (creepF == null) continue;
-                int n = creepF.length, step = (int) (Math.max(0f, e.t) / Enemy.CREEP_FRAME) % (2 * n - 2);
-                boolean second = ((int) (Math.max(0f, e.t) / Enemy.CREEP_FLASH) & 1) == 1;
-                batch.setColor(e.creepRed ? (second ? CREEP_DARK_GREEN : CREEP_RED) : (second ? CREEP_GREEN : CREEP_CYAN));
-                batch.draw(creepF[step < n ? step : 2 * n - 2 - step], e.x, e.y, e.w, e.h);
-                batch.setColor(Color.WHITE);
-                continue;
-            }
-            if (e.type == Enemy.Type.CHAIN) {          // grows 4, 6, 8 px, centred on its place
-                if (chainR == null) continue;
-                int k = e.t < Enemy.CHAIN_GROW / 2f ? 2 : e.t < Enemy.CHAIN_GROW ? 1 : 0;
-                TextureRegion cr = chainR[k];
-                float cw = cr.getRegionWidth(), ch = cr.getRegionHeight();
-                batch.draw(cr, e.x + (e.w - cw) / 2f, e.y + (e.h - ch) / 2f, cw, ch);
-                continue;
-            }
-            if (e.type == Enemy.Type.BATTLEAXE) {
-                if (axeR != null) batch.draw(axeR, e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.WHIPLASH) {
-                if (whipR != null) batch.draw(whipR, e.x, e.y, e.w, e.h);
-                continue;
-            }
-            if (r == null) {                           // bio turret: red = carries a capsule; mirrored to aim right
-                TextureRegion f = (red ? bioRedF : bioBlueF)[e.aim == 0 ? 1 : 0];
-                boolean flipX = e.aim > 0, ceil = e.type == Enemy.Type.TURRET_CEIL;
-                batch.draw(f, flipX ? e.x + e.w : e.x, ceil ? e.y + e.h : e.y, flipX ? -e.w : e.w, ceil ? -e.h : e.h);
-                continue;
-            }
-            if (e.type == Enemy.Type.FROST || e.type == Enemy.Type.DOME_FLYER || e.type == Enemy.Type.GREEN_FLYER) red = false;   // keeps its own colours (the group still carries a capsule)
-            if (e.type == Enemy.Type.RUGAL && red && rugalRedF != null) {   // red Rugal: its own picture
-                r = rugalRedF[Math.min(e.rugalFrame(), rugalRedF.length - 1)];
-                red = false;
-            }
-            if (e.type == Enemy.Type.LEGACY) {          // fly-by: always green; hovering: the MSX colour cycle
-                if (e.hover) {
-                    int k = (int) (amoebaClock / LEGACY_COLOUR_TIME + e.phase * 3f) % LEGACY_COLOURS.length;
-                    batch.setColor(LEGACY_COLOURS[k]);
-                } else batch.setColor(LEGACY_GREEN);
-                batch.draw(r, e.x, e.y, e.w, e.h);
-                batch.setColor(Color.WHITE);
-                continue;
-            }
-            if (red) batch.setColor(e.type == Enemy.Type.AMOEBA ? AMOEBA_RED : CARRIER_TINT);
-            else if (e.type == Enemy.Type.AMOEBA) {
-                batch.setColor(AMOEBA_COLOURS[(int) (amoebaClock / AMOEBA_COLOUR_TIME) % AMOEBA_COLOURS.length]);
-                red = true;                               // (resets the colour after drawing)
-            }
-            if (e.type == Enemy.Type.WALKER) {
-                // mirrored when walking right, upside down on the ceiling, tilted 45 degrees at steps
-                // (front up while climbing a step, front down while dropping off one)
-                int dir = e.vx < 0f ? -1 : 1;
-                float rot = (e.ceiling ? -1 : 1) * dir * e.climb * 45f;
-                batch.draw(r, e.x, e.y, e.w / 2f, e.h / 2f, e.w, e.h, dir > 0 ? -1f : 1f, e.ceiling ? -1f : 1f, rot);
-            } else batch.draw(r, e.x, e.y, e.w, e.h);
-            if (red) batch.setColor(Color.WHITE);
-        }
-    }
-
-    /**
-     * Laser Guard: pointing down on the ceiling, flipped on the floor, turned a quarter (pointing left) on the right-hand
-     * wall. While it retreats only the part still outside its wall is drawn (its gun end).
-     */
-    private void drawLaserGuard(Enemy e) {
-        Texture t = laserGuardTex;
-        int sw = t.getWidth(), sh = t.getHeight();
-        int vis = Math.max(0, Math.round(sh * (1f - e.retreat)));   // rows still showing, counted from the gun end
-        if (vis == 0) return;
-        if (e.guardSide == Enemy.GUARD_CEIL)
-            batch.draw(t, e.x, e.wallLine - vis, sw, vis, 0, sh - vis, sw, vis, false, false);
-        else if (e.guardSide == Enemy.GUARD_FLOOR)
-            batch.draw(t, e.x, e.wallLine, sw, vis, 0, sh - vis, sw, vis, false, true);
-        else   // turned clockwise: the gun end (bottom rows) on the left, against the wall on the right
-            batch.draw(t, e.wallLine - vis, e.y + sw, 0f, 0f, sw, vis, 1f, 1f, -90f, 0, sh - vis, sw, vis, false, false);
-    }
-
-    private void drawBoss() {
-        if (kierkeBossNow()) { drawKierkeBoss(); return; }
-        if (boss.dissolve && boss.dying) return;        // (breaking up: drawDissolving shows it)
-        if (boss.appearing) { if (gunsAppear != null) gunsAppear.draw(batch, boss.x, boss.y); return; }
-        drawTentacles();                                // under the body
-        if (boss.flash > 0f) batch.setColor(1f, 0.55f, 0.55f, 1f);
-        if (boss.dying && (int) (boss.dieT * 20f) % 2 == 0) batch.setColor(1f, 1f, 1f, 0.5f);
-        batch.draw(curBossR(), boss.x, boss.y, boss.w, boss.h);
-        if (boss.hasCore) {                              // in its hole, with the blocks still left
-            batch.draw(coreR, boss.x + boss.coreX, boss.y + boss.coreY, boss.coreW, boss.coreH);
-            drawCoreBlocks();
-        }
-        if (boss.hasHatch && hatchF != null) {
-            TextureRegion f = hatchF[Math.min(boss.hatchState, hatchF.length - 1)];
-            batch.draw(f, boss.x + boss.hatchX, boss.y + boss.hatchY);
-        }
-        if (boss.hasEye && eyeF != null) {
-            TextureRegion f = eyeF[boss.eyeFrame()];
-            batch.draw(f, boss.x + boss.eyeX, boss.y + boss.eyeY, f.getRegionWidth(), f.getRegionHeight());
-        }
-        batch.setColor(Color.WHITE);
-        if (boss.arms != null) for (Hazard arm : boss.arms) if (!arm.dead) drawArm(arm);   // over the brain, as in the original
-    }
-
-    /** Tetran's tentacles: drawn before (under) the body. */
-    private void drawTentacles() {
-        if (!boss.tetran || boss.dying) return;
-        float rs = Boss.RING_SIZE;
-        for (int k = 0; k < Boss.TENTACLES; k++)   // the inner rings, from the centre to the root (under the body)
-            for (int j = 0; j < Boss.INNER_RINGS; j++)
-                batch.draw(ringR, Math.round(boss.innerX[k][j] - rs / 2f), Math.round(boss.innerY[k][j] - rs / 2f), rs, rs);
-        for (int k = 0; k < Boss.TENTACLES; k++)
-            for (int i = 0; i < boss.ringCount; i++)
-                batch.draw(ringR, Math.round(boss.ringX[k][i] - rs / 2f), Math.round(boss.ringY[k][i] - rs / 2f), rs, rs);
-    }
-
-    private void drawBullets() {
-        for (Bullet b : pBullets) {
-            switch (b.kind) {
-                case LASER:
-                    if (b.seg) {   // aimed laser piece: a short bit of beam, turned to its direction, centred on its box
-                        float lh = laserR.getRegionHeight(), ll = PlayerWeapons.AIM_PIECE_LEN;
-                        batch.draw(laserR, b.x + b.w / 2f - ll / 2f, b.y + b.h / 2f - lh / 2f, ll / 2f, lh / 2f, ll, lh, 1f, 1f,
-                                MathUtils.atan2(b.vy, b.vx) * MathUtils.radiansToDegrees);
-                    } else if (b.vert) batch.draw(laserR, b.x + b.w, b.y, 0f, 0f, b.h, b.w, 1f, 1f, 90f);   // turned to point up
-                    else batch.draw(laserR, b.x, b.y, b.w, b.h);
-                    break;
-                case RIPPLE: drawRipple(b); break;
-                case MISSILE:   // tilted 45 degrees nose-up while climbing, nose-down while dropping
-                    if (b.chasing) {   // HOMING on its way to a target: turned to where it is going, never upside down
-                        float mw = missR.getRegionWidth(), mh = missR.getRegionHeight();
-                        batch.draw(missR, b.x + b.w / 2f - mw / 2f, b.y + b.h / 2f - mh / 2f, mw / 2f, mh / 2f, mw, mh, 1f,
-                                b.vx < 0f ? -1f : 1f, MathUtils.atan2(b.vy, b.vx) * MathUtils.radiansToDegrees);
-                    } else if (b.vert) {   // vertical stage: turned to where it is going (centred on its little hit box)
-                        float mw = missR.getRegionWidth(), mh = missR.getRegionHeight();
-                        batch.draw(missR, b.x + b.w / 2f - mw / 2f, b.y + b.h / 2f - mh / 2f, mw / 2f, mh / 2f, mw, mh, 1f,
-                                b.up ? -1f : 1f, MathUtils.atan2(b.vy, b.vx) * MathUtils.radiansToDegrees);
-                    } else if (!b.grounded)  // still flying to the floor / ceiling: nose 45 degrees down / up
-                        batch.draw(missR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, b.up ? -1f : 1f, b.up ? 45f : -45f);
-                    else if (b.up)       // upward missile: drawn upside down; "climbing" a lower ceiling means going down
-                        batch.draw(missR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, -1f, -b.climb * 45f);
-                    else if (b.climb == FloorCrawler.LEVEL) batch.draw(missR, b.x, b.y, b.w, b.h);
-                    else batch.draw(missR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, 1f, b.climb * 45f);
-                    break;
-                default:
-                    float sw = shotR.getRegionWidth(), sh = shotR.getRegionHeight();
-                    if (b.vy == 0f && b.vx > 0f) batch.draw(shotR, b.x, b.y, sw, sh);
-                    else batch.draw(shotR, b.x + b.w / 2f - sw / 2f, b.y + b.h / 2f - sh / 2f, sw / 2f, sh / 2f, sw, sh,
-                            1f, 1f, MathUtils.atan2(b.vy, b.vx) * MathUtils.radiansToDegrees);   // centred, turned to its direction
-                    break;
-            }
-        }
-        for (Bullet b : eBullets) {
-            if (b.reflected) batch.draw(laserR, b.x, b.y, b.w, b.h);   // a ship's laser, bounced back by a big block
-            else if (b.kind == Bullet.Kind.LAVA) batch.draw(lavaF[(int) (b.t * 10f) % lavaF.length], b.x, b.y, 8, 8);
-            else if (b.guard != null && omenLaserTex != null) {   // Laser Guard: the pattern along the beam, flashing
-                Texture t = omenLaserTex[(int) (b.t * Enemy.OMEN_LASER_FLASH) % omenLaserTex.length];
-                int th = t.getHeight();
-                if (b.beamDir == Enemy.GUARD_WALL) {
-                    int srcX = Math.round(b.x - b.beamTail);
-                    batch.draw(t, b.x, b.y, b.w, b.h, srcX, 0, Math.round(b.w), th, false, false);
-                } else {   // turned a quarter to run up / down
-                    int srcX = Math.round(b.y - b.beamTail);
-                    batch.draw(t, b.x + th, b.y, 0f, 0f, b.h, th, 1f, 1f, 90f, srcX, 0, Math.round(b.h), th, false, false);
-                }
-            } else if (b.omenLaser && omenLaserTex != null) {   // the pattern repeated sideways, flashing red / blue
-                Texture t = omenLaserTex[(int) (b.t * Enemy.OMEN_LASER_FLASH) % omenLaserTex.length];
-                int srcX = Math.round(b.x - (b.anchorX - t.getWidth() / 2f));   // pattern anchored to the middle
-                batch.draw(t, b.x, b.y, b.w, b.h, srcX, 0, Math.round(b.w), t.getHeight(), false, b.vy < 0f);
-            } else if (b.ring != 0 && ring6R != null) {   // Op 4 moai ring, centred on its 12x12 hit box
-                if (b.ring == 3) batch.setColor(((int) (b.t * RING_FLASH) & 1) == 0 ? AMOEBA_RED : RING_RED_DARK);   // red: flashes red / dark red
-                else if (((int) (b.t * RING_FLASH) & 1) == 0) batch.setColor(RING_YELLOW);   // flashes yellow / white
-                batch.draw(ring6R, b.x - 2f, b.y - 2f, 16f, 16f);
-                batch.setColor(Color.WHITE);
-            } else if (b.beam && gunHoBulletR != null) {   // Gun Ho's shot: its own picture (mirrored when flying right)
-                batch.draw(gunHoBulletR, b.vx > 0f ? b.x + b.w : b.x, b.y, b.vx > 0f ? -b.w : b.w, b.h);
-            } else if (b.beam) {   // (no gun ho bullet.png: a drawn laser, red edges, yellow core)
-                batch.setColor(GUNHO_BEAM_EDGE);
-                batch.draw(pix, b.x, b.y, b.w, b.h);
-                batch.setColor(GUNHO_BEAM_CORE);
-                batch.draw(pix, b.x + 1f, b.y + 1f, b.w - 2f, Math.max(1f, b.h - 2f));
-                batch.setColor(Color.WHITE);
-            } else {   // spins in quarter turns around its centre (whole 90 degree steps keep the pixel art crisp)
-                float rot = 90f * ((int) (b.t * EBULLET_SPIN) % 4);
-                batch.draw(ebR, b.x, b.y, b.w / 2f, b.h / 2f, b.w, b.h, 1f, 1f, -rot);
-            }
-        }
-    }
-
-    /**
-     * The camera is snapped to whole pixels (Math.round(scrollX)). Things that keep a fixed position
-     * on screen while the stage scrolls (ships, options) have fractional world X, so drawing them at
-     * that X makes them hop back and forth by a pixel against the snapped camera. Snapping their
-     * screen offset instead keeps them perfectly still.
-     */
-    private float snapX(float worldX) { return Math.round(scrollX) + Math.round(worldX - scrollX); }
-
-    private float snapY(float worldY) { return Math.round(scrollY) + Math.round(worldY - scrollY); }
-
-    private void drawPlayer(Player p) {
-        Color tint = p.index == 1 ? P2_TINT : Color.WHITE;   // (player 2's options; its ship has its own red sprites)
-        float px = snapX(p.x), py = snapY(p.y);
-        boolean blinkPhase = (int) (p.invuln * 20f) % 2 == 0;
-        boolean ffieldHit = p.ffieldHitT > 0f;          // the F.FIELD took the hit: it blinks, the ship stays solid
-        boolean blink = p.invuln > 0f && !ffieldHit && p.shieldHitT <= 0f && blinkPhase;   // a guard took it: no blink
-        if (!blink) {
-            boolean p2 = p.index == 1;
-            if (level.vertical) {   // pointing up, banking left / right while moving sideways; centred on the hit box
-                TextureRegion[] vf = p2 ? playerVRedF : playerVF;
-                TextureRegion f = vf[p.tilt == Player.TILT_LEFT ? 0 : p.tilt == Player.TILT_RIGHT ? 2 : 1];
-                batch.draw(f, px + Math.round(16.5f - f.getRegionWidth() / 2f), py + Player.VART_B);
-            } else {
-                TextureRegion[] hf = p2 ? playerRedF : playerF;
-                batch.draw(hf[Math.min(p.tilt, hf.length - 1)], px, py, 32, 16);
-            }
-        }
-        batch.setColor(tint);
-        for (int i = 0; i < p.options; i++) {
-            // The option's logical box is 12x12 (centre at +6, +6); the 16x10 art is centred on it.
-            // On a vertical stage it is turned 90 degrees (10 wide, 16 tall) around that same centre.
-            TextureRegion f = optionF[(int) (stateT * 8f + i) % optionF.length];
-            float ox = snapX(optX(p, i)) - 2f, oy = snapY(optY(p, i)) + 1f;
-            if (level.vertical)
-                batch.draw(f, ox, oy, 8f, 5f, f.getRegionWidth(), f.getRegionHeight(), 1f, 1f, 90f);
-            else
-                batch.draw(f, ox, oy);
-        }
-        batch.setColor(Color.WHITE);
-        if (p.aiming) {   // dotted line showing the aimed direction (DOUBLE's extra shot, or LASER / RIPPLE)
-            float ang = p.weapon == Player.W_DOUBLE ? weapons.doubleAngle(p) : weapons.aimAngle(p.laserDir), cx = px + 16f, cy = py + 8f;
-            batch.setColor(1f, 0.9f, 0.3f, 0.9f);
-            for (int i = 1; i <= 4; i++) {
-                batch.draw(pix, cx + MathUtils.cos(ang) * (10f + i * 7f) - 1f, cy + MathUtils.sin(ang) * (10f + i * 7f) - 1f, 2f, 2f);
-            }
-            batch.setColor(Color.WHITE);
-        }
-        if (p.shield > 0 && !blink && !(p.shieldHitT > 0f && (int) (p.shieldHitT * 40f) % 2 == 0)) {   // flickers when hit
-            float fx = snapX(p.shieldX()), fy = snapY(p.shieldY());
-            TextureRegion[] ff = p.shield <= Player.SHIELD_LOW && shieldRedF != null ? shieldRedF : shieldF;   // red: nearly used up
-            if (ff != null && level.vertical)       // turned a quarter: lying across the top of the nose
-                batch.draw(ff[(int) (stateT * SHIELD_FPS) % ff.length], fx + Player.shieldW(), fy, 0f, 0f, Player.SHIELD_W, Player.SHIELD_H, 1f, 1f, 90f);
-            else if (ff != null) batch.draw(ff[(int) (stateT * SHIELD_FPS) % ff.length], fx, fy, Player.SHIELD_W, Player.SHIELD_H);
-            else { batch.setColor(0.4f, 0.9f, 1f, 0.8f); batch.draw(pix, fx + 2f, fy, 4f, Player.SHIELD_H); batch.setColor(Color.WHITE); }
-        }
-        if ((p.ffield > 0 || ffieldHit) && !(ffieldHit && blinkPhase)) {
-            batch.setColor(1f, 1f, 1f, 0.35f + 0.1f * Math.max(p.ffield, 1));
-            batch.draw(ffieldR, px - 6f, py - 8f, 40, 32);
-            batch.setColor(Color.WHITE);
-        }
-        if (p.invuln > 1f && playersInGame() > 1) {   // "1P" / "2P" tag just after (re)entering
-            PixelFont.drawShadow(batch, pix, (p.index + 1) + "P", px, py + 20f, 32, Align.center, PixelFont.SMALL, 1,
-                    p.index == 1 ? P2_TINT : Color.CYAN);
-        }
-    }
-
-    /** Debug overlay: the player's collision box as a translucent fill with a solid outline. */
-    private void drawHitbox(Player p) {
-        float x = snapX(p.x) + Player.HIT_OX, y = snapY(p.y) + Player.HIT_OY, w = Player.HIT_W, h = Player.HIT_H;
-        batch.setColor(1f, 0f, 1f, 0.35f);
-        batch.draw(pix, x, y, w, h);
-        batch.setColor(1f, 0f, 1f, 1f);
-        batch.draw(pix, x, y, w, 1f);
-        batch.draw(pix, x, y + h - 1f, w, 1f);
-        batch.draw(pix, x, y, 1f, h);
-        batch.draw(pix, x + w - 1f, y, 1f, h);
-        batch.setColor(Color.WHITE);
-    }
-
-    // ---------------------------------------------------------------- HUD
-    // The original MSX layout: a 24px strip under the playfield, player 1 on the left half, player 2 on
-    // the right. Per player: the 7-slot power meter; ship icon + ships left, stage, and a yellow box
-    // with the name of the highlighted power-up; "1P" + 9-digit score. Graphics: sprites/hud.png.
-
-    private static final Color HUD_WHITE = new Color(0.88f, 0.88f, 0.88f, 1f);
-    private static final Color BOX_TEXT = new Color(0.08f, 0.08f, 0.05f, 1f);
-    /** Tint for HUD pieces that are inactive: the meter of a side nobody plays. */
-    private static final Color DIM_TINT = new Color(0.35f, 0.35f, 0.35f, 1f);
-
-    /** Text in the HUD / overlay coordinate system (bottom-left origin, 256 x 192). */
-    private void text(String s, float x, float y, float w, int align, int style, int scale, Color c) {
-        PixelFont.draw(batch, pix, s, x, y, w, align, style, scale, c);
-    }
-
-    /** Overlay text over the playfield, with a shadow. */
-    private void say(String s, float y, int style, int scale, Color c) {
-        PixelFont.drawShadow(batch, pix, s, 0, y, SW, Align.center, style, scale, c);
-    }
-
-    private void drawHud() {
-        boolean blinkOn = (int) (stateT * 2f) % 2 == 0;
-        batch.setColor(Color.BLACK);
-        batch.draw(pix, 0, 0, SW, HUD_H);               // the strip covers whatever lies below the playfield
-        batch.setColor(Color.WHITE);
-        drawPlayerHud(0, blinkOn);
-        drawPlayerHud(1, blinkOn);
-
-        // boss health bar with "hp/max" in it, along the top of the playfield
-        if (boss != null && !boss.dying && !boss.entering) {
-            float bw = 96f, bh = 7f, bx = SW / 2f - bw / 2f, by = SH - 10f;
-            batch.setColor(0.25f, 0f, 0f, 0.85f);
-            batch.draw(pix, bx, by, bw, bh);
-            batch.setColor(0.88f, 0.13f, 0.13f, 1f);
-            batch.draw(pix, bx, by, bw * Math.max(0f, boss.hp / boss.maxHp), bh);
-            batch.setColor(Color.WHITE);
-            String hp = (int) Math.ceil(boss.hp) + "/" + (int) boss.maxHp;
-            PixelFont.drawShadow(batch, pix, hp, 0, by + 1f, SW, Align.center, PixelFont.SMALL, 1, HUD_WHITE);
-        }
-
-        if (game.volumeMsgT > 0f && state != State.PAUSE) say(game.volumeText(), SH - 22f, PixelFont.SMALL, 1, Color.YELLOW);
-
-        float mid = HUD_H + H / 2f;                      // middle of the playfield
-        switch (state) {
-            case INTRO:                                  // (the banner is drawn by drawIntro)
-                break;
-            case PAUSE:
-                say("PAUSED", mid + 26f, PixelFont.BOLD, 1, HUD_WHITE);
-                for (int i = 0; i < PAUSE_MENU.length; i++) {   // the selected entry in yellow, between arrows
-                    boolean on = i == pauseSel;
-                    say(on ? "> " + PAUSE_MENU[i] + " <" : PAUSE_MENU[i], mid + 8f - i * 11f, PixelFont.NORMAL, 1,
-                            on ? Color.YELLOW : Color.LIGHT_GRAY);
-                }
-                say(game.volumeText(), mid - 22f, PixelFont.SMALL, 1, Color.YELLOW);
-                say("1/2 MUSIC -/+   3/4 SFX -/+", mid - 32f, PixelFont.SMALL, 1, Color.LIGHT_GRAY);
-                say("PAD: BACK + D-PAD", mid - 40f, PixelFont.SMALL, 1, Color.LIGHT_GRAY);
-                break;
-            case CLEAR:
-                say("STAGE " + (levelIdx + 1) + " CLEAR", mid + 6f, PixelFont.BOLD, 1, Color.GREEN);
-                say("BONUS " + stageBonus(), mid - 10f, PixelFont.NORMAL, 1, HUD_WHITE);
-                break;
-            case GAMEOVER:
-                say("GAME OVER", mid + 14f, PixelFont.BOLD, 1, Color.RED);
-                if (stateT > 1f) {
-                    for (int i = 0; i < GAMEOVER_MENU.length; i++) {   // the selected entry in yellow, between arrows
-                        boolean on = i == gameOverSel;
-                        say(on ? "> " + GAMEOVER_MENU[i] + " <" : GAMEOVER_MENU[i], mid - 6f - i * 11f, PixelFont.NORMAL, 1,
-                                on ? Color.YELLOW : Color.LIGHT_GRAY);
-                    }
-                }
-                break;
-            case WIN:
-                say("YOU SAVED THE GALAXY", mid + 14f, PixelFont.NORMAL, 1, Color.CYAN);
-                say(finalScores(), mid - 2f, PixelFont.NORMAL, 1, HUD_WHITE);
-                if (stateT > 1f) say("PRESS ENTER / START", mid - 18f, PixelFont.SMALL, 1, Color.YELLOW);
-                break;
-            default:
-                break;
-        }
-    }
-
-    private String finalScores() {
-        StringBuilder s = new StringBuilder();
-        for (Player p : players) {
-            if (p == null) continue;
-            if (s.length() > 0) s.append("   ");
-            s.append(p.index + 1).append("P ").append(String.format("%06d", p.score));
-        }
-        return s.toString();
-    }
-
-    /** One player's half of the HUD strip. */
-    private void drawPlayerHud(int idx, boolean blinkOn) {
-        Player p = players[idx];
-        int ox = idx * (SW / 2);
-        boolean choosingType = p == null && choosing[idx] >= 0;
-        boolean inPlay = p != null && !p.out;
-
-        // power meter: 7 slots of 14x6, 16px apart
-        int[] slots = p != null ? p.slots : choosingGuard[idx] != 0 ? Player.slotsFor(Math.max(0, choosing[idx]), choosingGuard[idx])
-                : Player.slotsFor(Math.max(0, choosing[idx]));
-        for (int i = 0; i < Player.SLOT_COUNT; i++) {
-            float x = ox + 9 + 16 * i;
-            boolean sel = inPlay && p.meter == i + 1;
-            boolean occupied = inPlay && owned(p, slots[i]);           // can't be taken (any further) right now
-            if (!inPlay && !choosingType) batch.setColor(DIM_TINT);   // nobody flying on this side
-            batch.draw(hudSlotR[(sel ? 1 : 0) + (occupied ? 2 : 0)], x, 17);
-            batch.setColor(Color.WHITE);
-        }
-
-        // ship icon + ships left, stage number, yellow box
-        batch.draw(hudShipR[idx], ox + 8, 8);
-        text(String.valueOf(p == null ? 0 : Math.max(0, Math.min(9, p.lives))), ox + 25, 8, 8, Align.left, PixelFont.BOLD, 1, HUD_WHITE);
-        batch.draw(hudER, ox + 40, 8);
-        text(String.format("%02d", levelIdx + 1), ox + 49, 8, 16, Align.left, PixelFont.BOLD, 1, HUD_WHITE);
-        // the box turns red when the highlighted power-up is occupied (that slot can't be taken right now)
-        boolean selTaken = inPlay && p.selectedPower() != 0 && owned(p, p.selectedPower());
-        batch.draw(selTaken ? hudBoxOffR : hudBoxR, ox + 72, 8);
-        String box = "";
-        if (choosingType) {
-            box = !blinkOn ? "" : choosingGuard[idx] != 0 ? Player.POWER_NAMES[choosingGuard[idx]] : "TYPE " + (choosing[idx] + 1);
-        } else if (inPlay) {
-            int power = p.selectedPower();
-            box = power == 0 ? "" : p.powerLabel(power);
-        } else if (state != State.GAMEOVER && state != State.WIN) {
-            if (!Controls.hasInput(idx)) box = "PAD " + (idx + 1);
-            else if (blinkOn) box = p == null ? "JOIN" : "RETRY";
-        }
-        text(box, ox + 77, 9, 42, Align.center, PixelFont.SMALL, 1, BOX_TEXT);
-
-        // "1P" + score
-        text((idx + 1) + "P", ox + 9, 0, 16, Align.left, PixelFont.BOLD, 1, HUD_WHITE);
-        text(String.format("%09d", p == null ? 0 : Math.min(999999999, p.score)), ox + 41, 0, 72, Align.left, PixelFont.BOLD, 1, HUD_WHITE);
-    }
-
-    /** Is this power-up already active (taken as far as it goes)? */
-    private static boolean owned(Player p, int power) {
-        switch (power) {
-            case Player.SPEED: return false;                   // always open (cycles back to 0)
-            case Player.MISSILE: case Player.TWO_WAY: case Player.HOMING: return p.missile;
-            case Player.DOUBLE: return p.weapon == Player.W_DOUBLE;
-            case Player.LASER: return p.weapon == Player.W_LASER;
-            case Player.RIPPLE: return p.weapon == Player.W_RIPPLE;
-            case Player.OPTION: return p.options >= Player.MAX_OPTIONS;
-            case Player.FFIELD: return p.ffield >= Player.FFIELD_HITS;   // open again once it has taken a hit
-            case Player.SHIELD: return p.shield >= Player.SHIELD_HITS;
-            case Player.EXTRA: return p.lives >= Player.MAX_LIVES;
-            default: return false;
-        }
     }
 }
