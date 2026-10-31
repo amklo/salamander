@@ -4,6 +4,12 @@ All notable changes to this Salamander remake. Newest first.
 
 ## 2026-11-01
 
+### Code: music player split by platform (step 2 towards a web version)
+- **`Bgm` no longer plays sound itself**: it keeps the platform-neutral part (current song, fade-out into the boss music with its silence, pause / resume, volume) and hands the playing to a **`MusicBackend`** (new interface), which the launcher passes to `SalamanderGame`.
+- **`DesktopMusicBackend`** (lwjgl3 module): the old Java Sound / MIDI code moved here unchanged: seamless loop points through a Clip, background preloading of the boss music, MIDI through the JDK synthesizer.
+- **`GdxMusicBackend`** (core): plain libGDX Music, works on any platform (loops back to the start of the file, no MIDI); the default for `new SalamanderGame()` and the base of the desktop one. The web version will get its own backend with loop points.
+- `core` now has no `javax.sound` code, which TeaVM can't compile. Same behaviour on the desktop as before.
+
 ### Changed: libGDX 1.14.2 (first step towards a web version)
 - **libGDX 1.12.1 → 1.14.2** and **gdx-controllers 2.2.3 → 2.2.4** (`build.gradle`), on the branch `web-build`. The web build (gdx-teavm 1.6.1) needs libGDX 1.14.2. No code changes were needed: the game uses none of the APIs that changed between these versions (Pools, Json, `utils.StringBuilder`, TextField / on-screen keyboard, InputMultiplexer). Plan and findings: the project doc `web-build-notes.md`.
 

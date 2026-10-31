@@ -25,6 +25,8 @@ public class SalamanderGame extends Game {
     public SpriteBatch batch;
     public Assets assets;
     public Bgm bgm;
+    /** What plays the music on this platform (given by the launcher). */
+    private final MusicBackend musicBackend;
     public int hiScore;
     private Preferences prefs;
 
@@ -58,11 +60,16 @@ public class SalamanderGame extends Game {
     /** Seconds left to show the volume read-out after a change. */
     public float volumeMsgT;
 
+    /** With plain libGDX music (no loop points, no MIDI): works on every platform. */
+    public SalamanderGame() { this(new GdxMusicBackend()); }
+
+    public SalamanderGame(MusicBackend musicBackend) { this.musicBackend = musicBackend; }
+
     @Override
     public void create() {
         batch = new SpriteBatch();
         assets = new Assets();
-        bgm = new Bgm();
+        bgm = new Bgm(musicBackend);
         prefs = Gdx.app.getPreferences("salamander");
         hiScore = prefs.getInteger("hi", 0);
         easy = prefs.getBoolean("easy", false);

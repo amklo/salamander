@@ -12,6 +12,6 @@ public class Lwjgl3Launcher {
         cfg.setWindowedMode(SalamanderGame.SCREEN_W * 4, SalamanderGame.SCREEN_H * 4);
         cfg.useVsync(true);
         cfg.setForegroundFPS(60);
-        new Lwjgl3Application(new SalamanderGame(), cfg);
+        new Lwjgl3Application(new SalamanderGame(new DesktopMusicBackend()), cfg);
     }
 }

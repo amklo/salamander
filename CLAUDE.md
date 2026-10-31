@@ -31,7 +31,8 @@ and reach the world through it. Many GameScreen fields are package-private for t
 | `GunLasers` (`g.bossGuns`) | Falling boss lasers (Op 4 gun units, Eioneus) and the gun units' creature |
 | `Enemy`, `Boss`, `Hazard`, `Bullet`, `Player`, `Meteor` | Entities (`Enemy` is the largest file, ~2,050 lines) |
 | `Level`, `TiledMap`, `Wave` | Stage loading from Tiled maps, terrain / collision queries; enemy waves out of spawners |
-| `SalamanderGame`, `TitleScreen`, `Controls`, `Assets`, `Bgm`, `PixelFont`, `PixelMask`, `Dissolver` | App, title screen, input, asset loading, music, text, pixel-exact shapes, pixel dissolve effect |
+| `Bgm` (`game.bgm`), `MusicBackend`, `GdxMusicBackend` | Music: `Bgm` keeps the current song, fade-outs into the boss music, pause; a `MusicBackend` (given to `SalamanderGame` by the launcher) makes the sound. `GdxMusicBackend`: plain libGDX Music, any platform. Desktop: `lwjgl3/.../DesktopMusicBackend` (seamless loop points through Java Sound, MIDI). No `javax.*` in core (needed for the web build) |
+| `SalamanderGame`, `TitleScreen`, `Controls`, `Assets`, `PixelFont`, `PixelMask`, `Dissolver` | App, title screen, input, asset loading, text, pixel-exact shapes, pixel dissolve effect |
 
 Stages by index (`levelIdx`): 0 stage 1, 1 stage 2 (vertical), 2 Lavinia, 3 Eioneus, 4 Kierke, 5 Op 4, 6 stage 7.
 
