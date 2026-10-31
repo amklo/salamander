@@ -5,7 +5,7 @@ All art and sound is generated (`tools/generate_assets.py`) and is easy to swap 
 
 ## Open in IntelliJ IDEA
 1. **File ▸ Open…** and pick this folder (the one containing `build.gradle`). Choose *Open as Project* / *Trust Project*.
-2. Wait for the Gradle import to finish (first run downloads Gradle 8.5 and LibGDX 1.12.1 – internet required).
+2. Wait for the Gradle import to finish (first run downloads Gradle 8.5 and LibGDX 1.14.2 – internet required).
 3. Make sure the project JDK is **11 or newer** (File ▸ Project Structure ▸ Project SDK; 17 or 21 is fine).
 4. Run the shared configuration **"Salamander (Gradle run)"** (top-right run dropdown), or open
    `lwjgl3/src/main/java/com/example/salamander/lwjgl3/Lwjgl3Launcher.java` and click the green ▶ next to `main`.

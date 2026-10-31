@@ -2,6 +2,11 @@
 
 All notable changes to this Salamander remake. Newest first.
 
+## 2026-11-01
+
+### Changed: libGDX 1.14.2 (first step towards a web version)
+- **libGDX 1.12.1 → 1.14.2** and **gdx-controllers 2.2.3 → 2.2.4** (`build.gradle`), on the branch `web-build`. The web build (gdx-teavm 1.6.1) needs libGDX 1.14.2. No code changes were needed: the game uses none of the APIs that changed between these versions (Pools, Json, `utils.StringBuilder`, TextField / on-screen keyboard, InputMultiplexer). Plan and findings: the project doc `web-build-notes.md`.
+
 ## 2026-10-30
 
 ### Changed (Tetran, from Albert)

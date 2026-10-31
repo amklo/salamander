@@ -1,6 +1,6 @@
 # Salamander – notes for working on the code
 
-A personal remake of Konami's MSX Salamander in Java + LibGDX 1.12.1 (Gradle, Java 11+). Player-facing docs, controls
+A personal remake of Konami's MSX Salamander in Java + LibGDX 1.14.2 (Gradle, Java 11+). Player-facing docs, controls
 and the Tiled level-editing guide are in `README.md`; this file is the map of the code.
 
 ## Build and run
