@@ -4,6 +4,9 @@ All notable changes to this Salamander remake. Newest first.
 
 ## 2026-11-01
 
+### Added: zip for itch.io
+- **`./gradlew teavm:itchZip`** builds the web version and zips it for an itch.io HTML project: `teavm/build/salamander-web.zip`, `index.html` at the top, without the local test server's `WEB-INF`. Upload steps in README.md ("Putting it on itch.io").
+
 ### Added: web music with loop points (step 4)
 - **`WebMusicBackend`** (teavm module): the browser now loops each song at its loop points (`musicLoop` / `musicLoopEnd`, gapless) like the desktop, instead of starting it over. Uses the browser's Web Audio API (AudioBufferSourceNode `loopStart` / `loopEnd`) on Howler's AudioContext (the one the sound effects use), so the music starts with the first key press like the sounds. Howler's auto-suspend (audio off 30 s after the last sound effect) is switched off.
 - A decoded song takes ~60 MB, so only the current song and the preloaded boss music are kept. If Web Audio fails, a song plays through plain libGDX Music (loops to the start).

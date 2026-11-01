@@ -1,6 +1,7 @@
 // Web version: the game compiled to JavaScript with TeaVM (gdx-teavm).
 //   ./gradlew teavm:gdx_teavm_web_js_run    build it and play it at http://localhost:8080
 //   ./gradlew teavm:gdx_teavm_web_js_build  build only: teavm/build/dist/js/webapp (static files for any web host)
+//   ./gradlew teavm:itchZip                 build it and zip it for itch.io: teavm/build/salamander-web.zip
 plugins {
     id 'com.github.xpenatan.gdx-teavm' version '1.6.1'   // needs libGDX 1.14.2, Gradle 9, Java 17+ to run Gradle
 }
@@ -39,4 +40,17 @@ gdxTeaVM {
         htmlWidth.set(1024)
         htmlHeight.set(768)
     }
+}
+
+// One zip to upload to itch.io (an HTML project, "played in the browser"): the web build with index.html at the top,
+// without WEB-INF (only the local test server uses it).
+tasks.register('itchZip', Zip) {
+    group = 'distribution'
+    description = 'Builds the web version and zips it for itch.io: teavm/build/salamander-web.zip'
+    dependsOn 'gdx_teavm_web_js_build'
+    from(layout.buildDirectory.dir('dist/js/webapp')) {
+        exclude 'WEB-INF/**'
+    }
+    archiveFileName = 'salamander-web.zip'
+    destinationDirectory = layout.buildDirectory
 }

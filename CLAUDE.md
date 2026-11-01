@@ -8,7 +8,7 @@ and the Tiled level-editing guide are in `README.md`; this file is the map of th
 - `./gradlew lwjgl3:dist` – one runnable jar with all assets: `lwjgl3/build/libs/salamander-1.0.0.jar`
   (on a Mac: `java -XstartOnFirstThread -jar salamander-1.0.0.jar`).
 - `./gradlew teavm:gdx_teavm_web_js_run` – web version (TeaVM via gdx-teavm 1.6.1) at http://localhost:8080;
-  `teavm:gdx_teavm_web_js_build` → `teavm/build/dist/js/webapp`. Launcher: `teavm/.../WebLauncher`. Assets are copied
+  `teavm:gdx_teavm_web_js_build` → `teavm/build/dist/js/webapp`; `teavm:itchZip` → `teavm/build/salamander-web.zip` (itch.io upload). Launcher: `teavm/.../WebLauncher`. Assets are copied
   from `assets/` minus editor files (`webAssets` task). Core code must stay TeaVM-friendly: no `javax.*`, no threads,
   no reflection it depends on; platform-specific things go behind an interface (like `MusicBackend`).
 - IntelliJ can write its open copy of a file back over changes made outside it: after editing files outside the IDE,

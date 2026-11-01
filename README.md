@@ -23,6 +23,14 @@ The first build takes a while; the game loads all its assets before the title sc
 that any web server can serve. Music and sound start with the first key press (a browser rule). Gamepads: Safari
 works; Chrome on a Mac may not see the pad at all.
 
+### Putting it on itch.io
+1. `./gradlew teavm:itchZip` → `teavm/build/salamander-web.zip` (the web build with `index.html` at the top).
+2. itch.io ▸ *Create new project* (later: *Edit game*): **Kind of project: HTML**; upload the zip and tick
+   **This file will be played in the browser**.
+3. *Embed options*: size **1024 × 768**, tick **Fullscreen button**.
+4. *Visibility & access*: **Restricted** (only you and people you add can open it), then Save.
+To update it: run `itchZip` again, upload the new zip on the same page and delete the old upload.
+
 ## Controls
 | Key | Action |
 |---|---|
