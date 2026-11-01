@@ -5,8 +5,9 @@ All art and sound is generated (`tools/generate_assets.py`) and is easy to swap 
 
 ## Open in IntelliJ IDEA
 1. **File ▸ Open…** and pick this folder (the one containing `build.gradle`). Choose *Open as Project* / *Trust Project*.
-2. Wait for the Gradle import to finish (first run downloads Gradle 8.5 and LibGDX 1.14.2 – internet required).
-3. Make sure the project JDK is **11 or newer** (File ▸ Project Structure ▸ Project SDK; 17 or 21 is fine).
+2. Wait for the Gradle import to finish (first run downloads Gradle 9.6.1 and LibGDX 1.14.2 – internet required).
+3. Make sure the project JDK is **17 or newer** (File ▸ Project Structure ▸ Project SDK; 21 is fine) – Gradle 9 needs it.
+   Gradle's own JDK is under Settings ▸ Build, Execution, Deployment ▸ Build Tools ▸ Gradle ▸ Gradle JVM.
 4. Run the shared configuration **"Salamander (Gradle run)"** (top-right run dropdown), or open
    `lwjgl3/src/main/java/com/example/salamander/lwjgl3/Lwjgl3Launcher.java` and click the green ▶ next to `main`.
    * macOS: if you run `Lwjgl3Launcher` directly, add the VM option `-XstartOnFirstThread` (Run ▸ Edit Configurations).
@@ -14,6 +15,13 @@ All art and sound is generated (`tools/generate_assets.py`) and is easy to swap 
 
 Command line: `./gradlew lwjgl3:run`
 Build a runnable jar: `./gradlew lwjgl3:dist` → `lwjgl3/build/libs/salamander-1.0.0.jar`
+
+## Play in a web browser
+`./gradlew teavm:gdx_teavm_web_js_run`, then open http://localhost:8080 (stop it with Ctrl+C / the stop button).
+The first build takes a while; the game loads all its assets before the title screen appears.
+`./gradlew teavm:gdx_teavm_web_js_build` only builds it: `teavm/build/dist/js/webapp` is a folder of plain web files
+that any web server can serve. Music and sound start with the first key press (a browser rule). Gamepads: Safari
+works; Chrome on a Mac may not see the pad at all.
 
 ## Controls
 | Key | Action |

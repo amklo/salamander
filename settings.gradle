@@ -1,2 +1,9 @@
+pluginManagement {
+    repositories {
+        mavenCentral()          // the gdx-teavm and TeaVM Gradle plugins are published here
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = 'salamander'
-include 'core', 'lwjgl3'
+include 'core', 'lwjgl3', 'teavm'

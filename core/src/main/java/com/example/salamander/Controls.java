@@ -33,6 +33,8 @@ public final class Controls {
     private static final float STICK_DEADZONE = 0.4f, TRIGGER_PRESSED = 0.5f;
     private static boolean padsAvailable = true;
     private static int padCount;
+    /** The gamepads seen last frame (names), to log when one comes or goes. */
+    private static String padNames = "";
 
     private Controls() {}
 
@@ -79,12 +81,28 @@ public final class Controls {
                     if (padCount < PLAYERS) readPad(c, padCount);   // 1st pad -> player 1, 2nd pad -> player 2
                     padCount++;
                 }
+                logPads(pads);
             } catch (Throwable t) {          // controller backend missing or failed: keyboard only
                 padsAvailable = false;
                 padCount = 0;
                 Gdx.app.error("Controls", "Gamepad support unavailable", t);
             }
         }
+    }
+
+    /** Logs the connected gamepads whenever that list changes (shows in the browser console on the web). */
+    private static void logPads(Array<Controller> pads) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < pads.size; i++) {
+            Controller c = pads.get(i);
+            if (c.isConnected()) sb.append(sb.length() == 0 ? "" : " | ").append(c.getName())
+                    .append(" (").append(c.getAxisCount()).append(" axes, buttons ")
+                    .append(c.getMinButtonIndex()).append("..").append(c.getMaxButtonIndex()).append(')');
+        }
+        String names = sb.toString();
+        if (names.equals(padNames)) return;
+        padNames = names;
+        Gdx.app.log("Controls", names.isEmpty() ? "No gamepads" : "Gamepads: " + names);
     }
 
     private static void readKeyboard(int pl) {

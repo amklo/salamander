@@ -4,6 +4,19 @@ All notable changes to this Salamander remake. Newest first.
 
 ## 2026-11-01
 
+### Added: web music with loop points (step 4)
+- **`WebMusicBackend`** (teavm module): the browser now loops each song at its loop points (`musicLoop` / `musicLoopEnd`, gapless) like the desktop, instead of starting it over. Uses the browser's Web Audio API (AudioBufferSourceNode `loopStart` / `loopEnd`) on Howler's AudioContext (the one the sound effects use), so the music starts with the first key press like the sounds. Howler's auto-suspend (audio off 30 s after the last sound effect) is switched off.
+- A decoded song takes ~60 MB, so only the current song and the preloaded boss music are kept. If Web Audio fails, a song plays through plain libGDX Music (loops to the start).
+- No 30 ms blend at the loop seam as on the desktop (Web Audio jumps sample-exact without it).
+- `Controls` logs the connected gamepads when they change (`Controls: Gamepads: ...`; in the browser console on the web). Gamepads work in Safari; Chrome on the Mac didn't see the PS4 pad at all (other web games too).
+
+### Added: web version (step 3)
+- **New `teavm` module**: the game compiled to JavaScript with TeaVM (gdx-teavm 1.6.1). `./gradlew teavm:gdx_teavm_web_js_run` plays it at http://localhost:8080; `teavm:gdx_teavm_web_js_build` writes plain web files to `teavm/build/dist/js/webapp`. `WebLauncher`: fills the browser window at full (Retina) resolution; hi-score and settings go to the browser's local storage; gamepads through gdx-controllers-web.
+- Assets: a `webAssets` task copies `assets/` without the GIMP `.xcf` files, `.DS_Store`, crash logs and `stage1.grid`.
+- Music in the browser: plain libGDX Music for now (loops back to the start of a song).
+- **WebGL 2** (`useGL30`): the stars, the backgrounds and the Omen laser are textures that repeat and aren't a power of two in size (480 x 272, 8 x 5), which WebGL 1 draws as nothing – the stars were missing in the first browser test.
+- Build: **Gradle 8.5 → 9.6.1** (the gdx-teavm plugin is built for it; Gradle 9 needs JDK 17+ to run), plugin repositories in `settings.gradle`, Gradle memory 512 MB → 1 GB.
+
 ### Code: music player split by platform (step 2 towards a web version)
 - **`Bgm` no longer plays sound itself**: it keeps the platform-neutral part (current song, fade-out into the boss music with its silence, pause / resume, volume) and hands the playing to a **`MusicBackend`** (new interface), which the launcher passes to `SalamanderGame`.
 - **`DesktopMusicBackend`** (lwjgl3 module): the old Java Sound / MIDI code moved here unchanged: seamless loop points through a Clip, background preloading of the boss music, MIDI through the JDK synthesizer.

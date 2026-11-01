@@ -1,0 +1,42 @@
+// Web version: the game compiled to JavaScript with TeaVM (gdx-teavm).
+//   ./gradlew teavm:gdx_teavm_web_js_run    build it and play it at http://localhost:8080
+//   ./gradlew teavm:gdx_teavm_web_js_build  build only: teavm/build/dist/js/webapp (static files for any web host)
+plugins {
+    id 'com.github.xpenatan.gdx-teavm' version '1.6.1'   // needs libGDX 1.14.2, Gradle 9, Java 17+ to run Gradle
+}
+
+// gdx-teavm and TeaVM are Java 17 libraries: this module compiles for Java 17 (the root build.gradle sets 11 for the
+// others; core and lwjgl3 stay at 11).
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+tasks.withType(JavaCompile).configureEach { options.release = 17 }
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
+    implementation 'com.github.xpenatan.gdx-teavm:gdx-controllers-web:1.6.1'   // gamepads (browser Gamepad API)
+}
+
+// The browser downloads every asset before the game starts, so leave out what only the editors use.
+def webAssets = tasks.register('webAssets', Sync) {
+    from(rootProject.file('assets')) {
+        exclude '**/*.xcf', '**/.DS_Store', '**/*.log', 'maps/*.grid'
+    }
+    into layout.buildDirectory.dir('web-assets')
+}
+tasks.configureEach { t ->
+    if (t.name.startsWith('gdx_teavm') || t.name.startsWith('generate')) t.dependsOn(webAssets)
+}
+
+gdxTeaVM {
+    assets.from(files(layout.buildDirectory.dir('web-assets')).builtBy(webAssets))
+
+    js {
+        mainClass.set('com.example.salamander.teavm.WebLauncher')
+        htmlTitle.set('Salamander')
+        htmlWidth.set(1024)
+        htmlHeight.set(768)
+    }
+}
